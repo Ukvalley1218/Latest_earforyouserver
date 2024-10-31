@@ -114,8 +114,10 @@ export const initiatePhonePePayment = async (req, res) => {
       },
       {
         headers: {
-          'X-VERIFY': xVerify
-        }
+          accept: 'text/plain',
+          'Content-Type': 'application/json',
+          'X-VERIFY': xVerify,
+        },
       }
     );
 

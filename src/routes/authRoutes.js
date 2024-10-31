@@ -10,7 +10,8 @@ import {
      updateOrCreateUserCategory,
      deleteUser,
      authUser,
-     getAllUsers
+     getAllUsers,
+     registerUser
 } from '../controllers/authController.js';
 // import { validateUserSignup } from '../middlewares/auth/validators.js';
 import { protect } from '../middlewares/auth/authMiddleware.js'
@@ -18,7 +19,7 @@ import multer from 'multer';
 
 const router = express.Router();
 
-
+router.post('/register', registerUser);
 router.post('/login', protect, authUser);
 
 router.post('/logout', protect, logoutUser);
