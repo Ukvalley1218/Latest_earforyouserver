@@ -87,7 +87,7 @@ export const initiatePhonePePayment = async (req, res) => {
   try {
     const { userId, amount } = req.body;
     const transactionId = 'TXN' + Date.now();
-    const callbackUrl = `https://webhook.site/01e8f4d6-6619-4e56-9cc6-2184cd089133  `;
+    const callbackUrl = `http://localhost:8080/api/v1/payment-callback`;
 
     // Validate minimum amount
     if (amount < 100) {
@@ -114,7 +114,7 @@ export const initiatePhonePePayment = async (req, res) => {
       },
       {
         headers: {
-          'xVerify': xVerify
+          'X-VERIFY': xVerify
         }
       }
     );
@@ -150,10 +150,17 @@ export const handlePhonePeCallback = async (req, res) => {
   let transactionId = 'UNKNOWN';
 
   try {
+
     console.log('Callback Headers:', req.headers);
     console.log('Callback Body:', );
+    console.log('Callback Headers:', req.headers);
+    console.log('Callback Body:', req.body);  // Fix this as well by logging the actual request body
     
-console.log('x-verify:', xerify);
+    // Extract the x-verify header correctly
+    const xVerify = req.headers['x-verify'];
+    console.log('x-verify:', xVerify);
+
+     
     const responseData =req.body
     
     console.log("responseData :",responseData);

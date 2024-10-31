@@ -579,12 +579,18 @@ export const getUserById = async (req, res) => {
 // getAllUsers
 export const getAllUsers = async (req, res) => {
   try {
-    // Find all users
-    const users = await User.find({}, { password: 0, refreshToken: 0 }); // Exclude password and refreshToken fields
+    // Get the logged-in user's ID from request parameters (e.g., /users/:id)
+    const id = req.params.id;
 
-    // If no users are found, return an appropriate message
+    // Find all users except the logged-in user, excluding password and refreshToken fields
+    const users = await User.find(
+      { _id: { $ne: id } }, // Exclude the logged-in user
+      // { password: 0, refreshToken: 0 }
+    );
+
+    // If no other users are found, return an appropriate message
     if (users.length === 0) {
-      return res.status(404).json({ message: 'No users found' });
+      return res.status(404).json({ message: 'No other users found' });
     }
 
     // Return the list of users
@@ -598,6 +604,7 @@ export const getAllUsers = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
 
 
 // Delete User 
