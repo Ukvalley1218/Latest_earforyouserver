@@ -4,9 +4,7 @@ import ROLES_LIST from "../config/Roles_list.js";
 import crypto from "crypto";
 import { generateOtp, sendOtpEmail } from "../utils/generateOtp.js";
 import bcrypt from "bcrypt";
-import { uploadFileToGCP } from "../servises/gcpService.js";
-import sharp from "sharp";
-import { v4 as uuidv4 } from "uuid";
+
 import multer from "multer";
 import unirest from "unirest";
 import otpGenerator from 'otp-generator';
@@ -95,34 +93,35 @@ export const registerUser = async (req, res) => {
   }
 };
 
-
 export const authUser = async (req, res) => {
   const { email, phone, password, deviceToken, platform } = req.body;
 
-  // If email or phone is missing
+  // Check if either email or phone is provided
   if (!email && !phone) {
     return res.status(400).json({ message: "Email or Phone is required" });
   }
 
-  // If password is missing
+  // Check if password is provided
   if (!password) {
     return res.status(400).json({ message: "Password is required" });
   }
 
   try {
+    // Find the user by email or phone
     const user = await User.findOne({ $or: [{ email }, { phone }] });
 
-    if (user && (await user.matchPassword(password))) {
+    // If the user exists, proceed with login (no password check)
+    if (user) {
       const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
 
-
+      // If a deviceToken is provided, update it in the user's record
       if (deviceToken) {
         user.deviceToken = deviceToken;
-        user.platform = platform || user.platform; // Use provided platform or keep the existing one
+        user.platform = platform || user.platform; // Use the provided platform or keep the existing one
         await user.save();
       }
 
-
+      // Return the user information along with tokens
       return res.json({
         _id: user._id,
         username: user.username,
@@ -134,9 +133,11 @@ export const authUser = async (req, res) => {
         message: "User logged in successfully",
       });
     } else {
-      return res.status(401).json({ message: "Invalid email/phone or password" });
+      // If user is not found, return an error
+      return res.status(401).json({ message: "Invalid email/phone" });
     }
   } catch (error) {
+    // Handle any server errors
     return res.status(500).json({ message: error.message });
   }
 };
@@ -255,73 +256,6 @@ export const resetPassword = async (req, res) => {
 
 // Add validation utilities if needed
 
-export const updateUserProfile = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { username, email, phone, address } = req.body;
-    let { avatar } = req.body; // Only used if not using file upload
-    let updatedFields = {};
-
-    // Validation
-    if (username && typeof username !== 'string') {
-      return res.status(400).json({ success: false, message: 'Username must be a string' });
-    }
-    if (email && !/^\S+@\S+\.\S+$/.test(email)) {
-      return res.status(400).json({ success: false, message: 'Invalid email format' });
-    }
-    if (phone && !/^\+?\d{10,15}$/.test(phone)) {
-      return res.status(400).json({ success: false, message: 'Invalid phone number format' });
-    }
-    if (address && typeof address !== 'string') {
-      return res.status(400).json({ success: false, message: 'Address must be a string' });
-    }
-
-    // Handling avatar file upload
-    if (req.file) {
-      try {
-        const processedBuffer = await sharp(req.file.buffer)
-          .resize(800)
-          .jpeg({ quality: 80 })
-          .toBuffer();
-
-        const uniqueFileName = `${uuidv4()}_${req.file.originalname}`;
-
-        const fileUrl = await uploadFileToGCP(
-          {
-            buffer: processedBuffer,
-            mimetype: req.file.mimetype,
-          },
-          uniqueFileName
-        );
-
-        avatar = { url: fileUrl }; // Update avatar URL
-      } catch (imageError) {
-        console.error('Error processing file:', imageError);
-        return res.status(500).json({ success: false, message: 'Error uploading avatar image' });
-      }
-    }
-
-    // Update user profile
-    const updateData = {
-      ...(username && { username }),
-      ...(email && { email }),
-      ...(phone && { phone }),
-      ...(address && { address }),
-      ...(avatar && { avatar }), // Only add avatar if it's provided
-    };
-
-    const updatedUser = await User.findByIdAndUpdate(userId, updateData, { new: true });
-
-    if (!updatedUser) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    res.status(200).json({ success: true, user: updatedUser });
-  } catch (error) {
-    console.error('Server error:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
-  }
-};
 
 // ------------------------Update User CategoryController.js---------------------------------------
 export const updateOrCreateUserCategory = async (req, res) => {
@@ -442,55 +376,7 @@ export const updateProfile = async (req, res) => {
   }
 };
 //--------------------------Update User Avatra-----------------------------------------
-export const updateUserAvatar = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    let avatar = null;
 
-    // Handling avatar file upload
-    if (req.file) {
-      try {
-        const processedBuffer = await sharp(req.file.buffer)
-          .resize(800)
-          .jpeg({ quality: 80 })
-          .toBuffer();
-
-        const uniqueFileName = `${uuidv4()}_${req.file.originalname}`;
-
-        const fileUrl = await uploadFileToGCP(
-          {
-            buffer: processedBuffer,
-            mimetype: req.file.mimetype,
-          },
-          uniqueFileName
-        );
-
-        avatar = { url: fileUrl }; // Update avatar URL
-      } catch (imageError) {
-        console.error('Error processing file:', imageError);
-        return res.status(500).json({ success: false, message: 'Error uploading avatar image' });
-      }
-    } else {
-      return res.status(400).json({ success: false, message: 'No file uploaded' });
-    }
-
-    // Update user avatar
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      { avatar },
-      { new: true }
-    );
-
-    if (!updatedUser) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    res.status(200).json({ success: true, user: updatedUser });
-  } catch (error) {
-    console.error('Server error:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
-  }
-};
 // ------------------------userController.js---------------------------------------
 export const updateDeviceToken = async (req, res) => {
   const { deviceToken } = req.body;
@@ -704,6 +590,29 @@ export const getUserById = async (req, res) => {
   } catch (error) {
     // Handle any other errors
     console.error('Error fetching user:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+// getAllUsers
+export const getAllUsers = async (req, res) => {
+  try {
+    // Find all users
+    const users = await User.find({}, { password: 0, refreshToken: 0 }); // Exclude password and refreshToken fields
+
+    // If no users are found, return an appropriate message
+    if (users.length === 0) {
+      return res.status(404).json({ message: 'No users found' });
+    }
+
+    // Return the list of users
+    res.status(200).json({
+      message: 'Users found successfully',
+      users
+    });
+  } catch (error) {
+    // Handle any errors that occur
+    console.error('Error fetching users:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };

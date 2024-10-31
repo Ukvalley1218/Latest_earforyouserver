@@ -7,17 +7,19 @@ import {
      updateDeviceToken,
      changeUserType ,
      updateProfile,
-     updateUserAvatar,
      updateOrCreateUserCategory,
-     deleteUser
+     deleteUser,
+     authUser,
+     getAllUsers
 } from '../controllers/authController.js';
 // import { validateUserSignup } from '../middlewares/auth/validators.js';
 import { protect } from '../middlewares/auth/authMiddleware.js'
 import multer from 'multer';
+
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() });
 
 
+router.post('/login', protect, authUser);
 
 router.post('/logout', protect, logoutUser);
 
@@ -32,7 +34,7 @@ router.put('/api/user/category/:userId', updateOrCreateUserCategory);
 // updateUserDeatil
 
 router.put('/updateProfile', updateProfile);
-router.put('/updateUserAvatar', upload.single('avatar'), updateUserAvatar); // Assuming you're using multer for file uploads
+
 
 // Route to request OTP 
 router.post('/request-otp', requestOTP);
@@ -44,7 +46,7 @@ router.post('/verify-otp', verifyOTP);
 router.put('/users/:userId', changeUserType);
 router.get('/user/:userId', getUserById);
 
-
+router.get('/users', getAllUsers);
 // Delete User
 router.delete('/deleteUser',protect, deleteUser);
 

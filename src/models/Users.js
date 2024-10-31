@@ -31,6 +31,9 @@ const userSchema = new mongoose.Schema(
       type: Date, // Use Date type for date of birth
       required: false,
     },
+    password:{
+      type:String,
+    },
     gender: {
       type: String,
       enum: ['male', 'female', 'other'], // Enum for gender values
