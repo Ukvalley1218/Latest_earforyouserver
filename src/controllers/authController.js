@@ -579,13 +579,13 @@ export const getUserById = async (req, res) => {
 // getAllUsers
 export const getAllUsers = async (req, res) => {
   try {
-    // Get the logged-in user's ID from request parameters (e.g., /users/:id)
-    const id = req.params.id;
+    // Get the logged-in user's ID (assuming it's stored in req.user)
+    const loggedInUserId = req.user.id;
 
     // Find all users except the logged-in user, excluding password and refreshToken fields
     const users = await User.find(
-      { _id: { $ne: id } }, // Exclude the logged-in user
-      // { password: 0, refreshToken: 0 }
+      { _id: { $ne: loggedInUserId } }, // Exclude the logged-in user
+      { password: 0, refreshToken: 0 }
     );
 
     // If no other users are found, return an appropriate message

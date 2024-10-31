@@ -47,7 +47,7 @@ router.post('/verify-otp', verifyOTP);
 router.put('/users/:userId', changeUserType);
 router.get('/user/:userId', getUserById);
 
-router.get('/users', getAllUsers);
+router.get('/users',protect, getAllUsers);
 // Delete User
 router.delete('/deleteUser',protect, deleteUser);
 
