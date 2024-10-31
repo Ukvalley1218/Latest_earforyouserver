@@ -20,7 +20,7 @@ import multer from 'multer';
 const router = express.Router();
 
 router.post('/register', registerUser);
-router.post('/login', protect, authUser);
+router.post('/login', authUser);
 
 router.post('/logout', protect, logoutUser);
 
