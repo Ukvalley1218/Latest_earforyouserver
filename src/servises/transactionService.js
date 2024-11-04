@@ -5,7 +5,7 @@ import Transaction from './../models/TransactionModal.js'
 import Wallet from './../models/Wallet/Wallet.js'
 
 
-const PHONEPE_API_URL = process.env.PHONEPE_API_URL || 'https://api.phonepe.com/apis/hermes';
+const PHONEPE_API_URL = process.env.PHONEPE_API_URL || 'https://api-preprod.phonepe.com/apis/pg-sandbox';
 const SALT_KEY = process.env.SALT_KEY;
 const SALT_INDEX = process.env.SALT_INDEX;
 
