@@ -20,7 +20,7 @@ const phonepeApi = axios.create({
 
 // Helper function to generate SHA256 hash
 const generateHash = (string) => {
-  return crypto.createHash('sha256').update(string,'utf-8').digest('hex');
+  return crypto.createHash('sha256').update(string, 'utf-8').digest('hex');
 };
 
 // Helper functions for amount conversion
@@ -57,12 +57,11 @@ const validateCallback = (responseData, saltKey, saltIndex, receivedXVerify) => 
     // Generate SHA256 hash of base64 response + salt key
     const string = `${responseData}${saltKey}`;
     const sha256Hash = crypto.createHash('sha256').update(string).digest('hex');
-    const expectedXVerify = `${sha256Hash} ${saltIndex}`;
+    const expectedXVerify = `${sha256Hash}###${saltIndex}`;
 
     console.log('Generated Hash:', sha256Hash);
     console.log('Expected X-Verify:', expectedXVerify);
     console.log('Received X-Verify:', receivedXVerify);
-    
 
     return expectedXVerify === receivedXVerify;
   } catch (error) {
@@ -87,7 +86,7 @@ export const initiatePhonePePayment = async (req, res) => {
   try {
     const { userId, amount } = req.body;
     const transactionId = 'TXN' + Date.now();
-    const callbackUrl = ``;
+    const callbackUrl = 'http://localhost:8080/api/v1/payment-callback';
 
     // Validate minimum amount
     if (amount < 100) {
@@ -122,13 +121,7 @@ export const initiatePhonePePayment = async (req, res) => {
     await logTransaction(transactionId, 'INITIATED');
 
     // Store transaction details
-    await storeTransactionDetails({
-      userId,
-      amount,
-      transactionId,
-      status: 'PENDING',
-      createdAt: new Date()
-    });
+  
 
     return res.status(200).json({
       success: true,
@@ -145,29 +138,32 @@ export const initiatePhonePePayment = async (req, res) => {
   }
 };
 
-// Handle PhonePe callback - FIXED
+// Handle PhonePe callback
 export const handlePhonePeCallback = async (req, res) => {
   let transactionId = 'UNKNOWN';
 
   try {
     console.log('Callback Headers:', req.headers);
-    console.log('Callback Body:', );
+    console.log('Callback Body:', req.body);
     
-console.log('x-verify:', xerify);
-    const responseData =req.body
-    
-    console.log("responseData :",responseData);
-    if (!responseData) {
+    // Get x-verify header (case-insensitive)
+    const xVerifyHeader = req.headers['x-verify'] || req.headers['X-VERIFY'];
+    console.log('X-Verify Header:', xVerifyHeader);
+
+    // Check if we have the base64 response in the request body
+    const base64Response = req.body.checksum;
+    if (!base64Response) {
       throw new Error('No response data in callback');
     }
 
+    console.log("Base64 Response:", base64Response);
 
     // Validate callback signature
     const isValid = validateCallback(
-      responseData,
+      base64Response,
       SALT_KEY,
       SALT_INDEX,
-      req.headers['x-verify']
+      xVerifyHeader
     );
 
     if (!isValid) {
@@ -177,13 +173,17 @@ console.log('x-verify:', xerify);
     // Decode and parse the response
     let decodedResponse;
     try {
-      decodedResponse = JSON.parse(Buffer.from(responseData, 'base64').toString());
+      decodedResponse = JSON.parse(Buffer.from(base64Response, 'base64').toString());
       console.log('Decoded Response:', decodedResponse);
     } catch (error) {
       throw new Error('Failed to decode response: ' + error.message);
     }
 
     // Extract transaction details
+    if (!decodedResponse.data || !decodedResponse.data.merchantTransactionId) {
+      throw new Error('Invalid response format: missing transaction ID');
+    }
+
     transactionId = decodedResponse.data.merchantTransactionId;
     const transaction = await getTransactionDetails(transactionId);
 
@@ -191,10 +191,11 @@ console.log('x-verify:', xerify);
       throw new Error('Transaction not found');
     }
 
+    // Check if transaction expired
     if (isTransactionExpired(transaction)) {
       await updateTransactionStatus(transactionId, 'EXPIRED');
       await logTransaction(transactionId, 'EXPIRED');
-      return res.redirect('/payment/failed?reason=expired');
+      return res.status(200).json({ success: false, message: 'Transaction expired' });
     }
 
     // Process payment status
@@ -221,101 +222,29 @@ console.log('x-verify:', xerify);
         await updateTransactionStatus(transactionId, 'SUCCESS');
         await logTransaction(transactionId, 'SUCCESS');
 
-        return res.redirect('/payment/success');
+        return res.status(200).json({ success: true, message: 'Payment successful' });
       }
 
       case 'PAYMENT_PENDING':
         await updateTransactionStatus(transactionId, 'PENDING');
         await logTransaction(transactionId, 'PENDING');
-        return res.redirect('/payment/pending');
+        return res.status(200).json({ success: true, message: 'Payment pending' });
 
       case 'PAYMENT_DECLINED':
       case 'PAYMENT_ERROR':
       default:
         await updateTransactionStatus(transactionId, 'FAILED');
         await logTransaction(transactionId, 'FAILED');
-        return res.redirect('/payment/failed');
+        return res.status(200).json({ success: false, message: 'Payment failed' });
     }
 
   } catch (error) {
     console.error('PhonePe Callback Error:', error);
     await logTransaction(transactionId, 'CALLBACK_ERROR', error);
-    return res.redirect('/payment/failed?reason=error');
-  }
-};
-
-// Helper functions (unchanged)
-const isTransactionExpired = (transaction) => {
-  return Date.now() - new Date(transaction.createdAt).getTime() > TRANSACTION_EXPIRY_TIME;
-};
-
-const storeTransactionDetails = async (details) => {
-  const { userId, amount, transactionId, status, createdAt } = details;
-
-  let wallet = await Wallet.findOne({ userId });
-
-  if (!wallet) {
-    wallet = new Wallet({
-      userId,
-      balance: 0,
-      recharges: [],
-      transactions: []
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to process callback'
     });
   }
-
-  if (!wallet.transactions) {
-    wallet.transactions = [];
-  }
-
-  wallet.transactions.push({
-    transactionId,
-    amount,
-    status,
-    createdAt
-  });
-
-  await wallet.save();
-  await logTransaction(transactionId, 'STORED');
 };
 
-const getTransactionDetails = async (transactionId) => {
-  const wallet = await Wallet.findOne({ 'transactions.transactionId': transactionId });
-
-  if (!wallet) {
-    throw new Error('Transaction not found');
-  }
-
-  const transaction = wallet.transactions.find(
-    (trans) => trans.transactionId === transactionId
-  );
-
-  if (!transaction) {
-    throw new Error('Transaction not found in wallet');
-  }
-
-  return {
-    ...transaction.toObject(),
-    userId: wallet.userId
-  };
-};
-
-const updateTransactionStatus = async (transactionId, status) => {
-  const wallet = await Wallet.findOne({ 'transactions.transactionId': transactionId });
-
-  if (!wallet) {
-    throw new Error('Transaction not found');
-  }
-
-  const transaction = wallet.transactions.find(
-    (trans) => trans.transactionId === transactionId
-  );
-
-  if (transaction) {
-    transaction.status = status;
-    transaction.lastUpdated = new Date();
-    await wallet.save();
-    await logTransaction(transactionId, `STATUS_UPDATED_TO_${status}`);
-  } else {
-    throw new Error('Transaction not found in wallet');
-  }
-};

@@ -3,6 +3,7 @@ import CallLog from '../models/Talk-to-friend/callLogModel.js';
 import logger from '../logger/winston.logger.js';
 import sendNotification from '../utils/sendNotification.js';
 import User from '../models/Users.js';
+import Wallet from '../models/Wallet/Wallet.js'
 
   
  export const setupWebRTC = (io) => {

@@ -5,7 +5,7 @@ const router = express.Router();
 
 // Deduct balance per minute and credit the receiver
 // Route to initiate PhonePe payment
-router.post('/recharge', initiatePhonePePayment);
+router.post('/recharge', initiatePhonePePayment);   
 
 // Route to handle PhonePe callback after payment
 router.post('/payment-callback', handlePhonePeCallback);
