@@ -10,6 +10,8 @@ const SALT_KEY = process.env.SALT_KEY;
 const SALT_INDEX = process.env.SALT_INDEX;
 
 export const verifyPhonePePayment = async (merchantId, merchantTransactionId) => {
+
+  console.log(merchantId, merchantTransactionId);
   try {
     const url = `/v3/transaction/${merchantId}/${merchantTransactionId}/status`;
     const stringToHash = `/pg/v1/status/${merchantId}/${merchantTransactionId}${SALT_KEY}`;
