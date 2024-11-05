@@ -49,7 +49,7 @@ const userSchema = new mongoose.Schema(
     },
     userType: {
       type: String,
-      enum: ['CALLER', 'RECEIVER','Admin'], // Define the enum values
+      enum: ['CALLER', 'RECEIVER'], // Define the enum values
       default: 'CALLER', // Set default value
     },
     password: {

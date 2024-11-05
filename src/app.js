@@ -36,7 +36,6 @@ initializeSocketIO(io);
 setupWebRTC(io);
 
 
-
 // global middlewares
 app.use(
   cors({

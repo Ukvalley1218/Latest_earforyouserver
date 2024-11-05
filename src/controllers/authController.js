@@ -522,7 +522,7 @@ export const changeUserType = async (req, res) => {
     // Find the user and update the userType
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      { UserType: userType },
+      { userType: userType },
       { new: true, runValidators: true } // Enable validators and return updated document
     );
 

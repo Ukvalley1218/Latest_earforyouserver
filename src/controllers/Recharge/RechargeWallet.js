@@ -1,299 +1,221 @@
-// import axios from 'axios';
-// import crypto from 'crypto';
-// import Wallet from '../../models/Wallet/Wallet.js';
+import axios from 'axios';
+import crypto from 'crypto';
+import Wallet from '../../models/Wallet/Wallet.js';
 
-// // PhonePe test mode configuration
-// const MERCHANT_ID = 'PGTESTPAYUAT77';
-// const SALT_KEY = '14fa5465-f8a7-443f-8477-f986b8fcfde9';
-// const SALT_INDEX = 1;
-// const API_BASE_URL = 'https://api-preprod.phonepe.com/apis/pg-sandbox';
-// const TRANSACTION_EXPIRY_TIME = 30 * 60 * 1000; // 30 minutes
+import sha256 from "sha256";
+import uniqid from "uniqid";
 
-// // Create axios instance with timeout
-// const phonepeApi = axios.create({
-//   baseURL: API_BASE_URL,
-//   timeout: 30000,
-//   headers: {
-//     'Content-Type': 'application/json'
-//   }
-// });
 
-// // Helper function to generate SHA256 hash
-// const generateHash = (string) => {
-//   return crypto.createHash('sha256').update(string, 'utf-8').digest('hex');
-// };
+export const initiatePayment = async (req, res) => {
+  try {
+    const { userId, amount } = req.body;
 
-// // Helper functions for amount conversion
-// const convertToPaise = (rupeeAmount) => {
-//   return Math.round(rupeeAmount * 100);
-// };
+    if (amount < 100) {
+      await logTransaction(transactionId, 'VALIDATION_FAILED', new Error('Amount below minimum'));
+      return res.status(400).json({
+        success: false,
+        message: 'Minimum recharge amount is 100'
+      });
+    }
+    // Transaction amount from query params
+   
 
-// const convertToRupees = (paiseAmount) => {
-//   return Math.round(paiseAmount) / 100;
-// };
-
-// // Function to create payment request payload
-// const createPayloadForPhonePe = (amount, transactionId, callbackUrl) => {
-//   const payload = {
-//     merchantId: MERCHANT_ID,
-//     merchantTransactionId: transactionId,
-//     merchantUserId: 'MUID' + Date.now(),
-//     amount: convertToPaise(amount),
-//     redirectUrl: callbackUrl,
-//     redirectMode: 'POST',
-//     callbackUrl: callbackUrl,
-//     mobileNumber: '',
-//     paymentInstrument: {
-//       type: 'PAY_PAGE'
-//     }
-//   };
-
-//   return Buffer.from(JSON.stringify(payload)).toString('base64');
-// };
-
-// // Validate callback signature - FIXED
-// const validateCallback = (responseData, saltKey, saltIndex, receivedXVerify) => {
-//   try {
-//     // Generate SHA256 hash of base64 response + salt key
-//     const string = `${responseData}${saltKey}`;
-//     const sha256Hash = crypto.createHash('sha256').update(string).digest('hex');
-//     const expectedXVerify = `${sha256Hash}###${saltIndex}`;
-
-//     console.log('Generated Hash:', sha256Hash);
-//     console.log('Expected X-Verify:', expectedXVerify);
-//     console.log('Received X-Verify:', receivedXVerify);
-
-//     return expectedXVerify === receivedXVerify;
-//   } catch (error) {
-//     console.error('Validation Error:', error);
-//     return false;
-//   }
-// };
-
-// // Logger function
-// const logTransaction = async (transactionId, status, error = null) => {
-//   const logData = {
-//     timestamp: new Date(),
-//     transactionId,
-//     status,
-//     error: error ? error.message : null
-//   };
-//   console.log('Transaction Log:', logData);
-// };
-
-// // Initiate PhonePe payment
-// export const initiatePhonePePayment = async (req, res) => {
-//   try {
-//     const { userId, amount } = req.body;
-//     const transactionId = 'TXN' + Date.now();
-//     const callbackUrl = 'https://earforyou-server.onrender.com/api/v1/payment-callback';
-
-//     // Validate minimum amount
-//     if (amount < 100) {
-//       await logTransaction(transactionId, 'VALIDATION_FAILED', new Error('Amount below minimum'));
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Minimum recharge amount is 100'
-//       });
-//     }
-
-//     // Create base64 payload
-//     const base64Payload = createPayloadForPhonePe(amount, transactionId, callbackUrl);
-
-//     // Generate X-VERIFY header
-//     const string = `${base64Payload}/pg/v1/pay${SALT_KEY}`;
-//     const sha256 = generateHash(string);
-//     const xVerify = `${sha256}###${SALT_INDEX}`;
-
-//     // Make API call to PhonePe
-//     const response = await phonepeApi.post(
-//       '/pg/v1/pay',
-//       {
-//         request: base64Payload
-//       },
-//       {
-//         headers: {
-//           'X-VERIFY': xVerify
-//         }
-//       }
-//     );
-
-//     await logTransaction(transactionId, 'INITIATED');
-
-//     // Store transaction details
   
 
-//     return res.status(200).json({
-//       success: true,
-//       paymentUrl: response.data.data.instrumentResponse.redirectInfo.url
-//     });
+    // Generate a unique merchant transaction ID
+    const merchantTransactionId = uniqid();
 
-//   } catch (error) {
-//     console.error('PhonePe Payment Error:', error);
-//     await logTransaction('UNKNOWN', 'ERROR', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Failed to initiate payment'
-//     });
+    // Create the payload for PhonePe
+    const normalPayLoad = {
+      merchantId: process.env.MERCHANT_ID, // Ensure you use the merchant ID from environment variables
+      merchantTransactionId: merchantTransactionId,
+      merchantUserId: userId,
+      amount: amount * 100, // converting to paise
+      redirectUrl: `${process.env.APP_BE_URL}/api/v1/validate/${merchantTransactionId}`,
+      redirectMode: "REDIRECT",
+      mobileNumber: "9999999999",
+      paymentInstrument: {
+        type: "PAY_PAGE",
+      },
+    };
+
+    // Encode the payload to base64
+    const bufferObj = Buffer.from(JSON.stringify(normalPayLoad), "utf8");
+    const base64EncodedPayload = bufferObj.toString("base64");
+
+    // Create the X-VERIFY checksum
+    const stringToHash = base64EncodedPayload + "/pg/v1/pay" + process.env.SALT_KEY;
+    const sha256Hash = sha256(stringToHash);
+    const xVerifyChecksum = `${sha256Hash}###${process.env.SALT_INDEX}`;
+
+    // Make the request to PhonePe
+    const response = await axios.post(
+      `${process.env.PHONE_PE_HOST_URL}/pg/v1/pay`,
+      { request: base64EncodedPayload },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "X-VERIFY": xVerifyChecksum,
+          accept: "application/json",
+        },
+      }
+    );
+
+    // Redirect the user to the payment page
+    return res.status(200).json({
+      success: true,
+      paymentUrl: response.data.data.instrumentResponse.redirectInfo.url
+    });
+  } catch (error) {
+    console.error("Error in payment initiation:", error);
+    return res.status(500).send({ error: "Payment initiation failed" });
+  }
+};
+
+
+
+
+// export const validatePayment = async (req, res) => {
+//   const { merchantTransactionId } = req.params;
+
+//   if (!merchantTransactionId) {
+//     return res.status(400).send("Invalid transaction ID");
 //   }
-// };
-
-// // Handle PhonePe callback
-// export const handlePhonePeCallback = async (req, res) => {
-//   let transactionId = 'UNKNOWN';
 
 //   try {
-//     console.log('Callback Headers:', req.headers);
-//     console.log('Callback Body:', req.body);
-    
-//     // Get x-verify header (case-insensitive)
-//     const xVerifyHeader = req.headers['x-verify'] || req.headers['X-VERIFY'];
-//     console.log('X-Verify Header:', xVerifyHeader);
+//     // Construct the status URL
+//     const statusUrl = `${process.env.PHONE_PE_HOST_URL}/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}`;
 
-//     // Check if we have the base64 response in the request body
-//     const base64Response = req.body.checksum;
-//     if (!base64Response) {
-//       throw new Error('No response data in callback');
-//     }
+//     // Create the X-VERIFY checksum
+//     const stringToHash = `/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}${process.env.SALT_KEY}`;
+//     const sha256Hash = sha256(stringToHash);
+//     const xVerifyChecksum = `${sha256Hash}###${process.env.SALT_INDEX}`;
 
-//     console.log("Base64 Response:", base64Response);
-
-//     // Validate callback signature
-//     const isValid = validateCallback(
-//       base64Response,
-//       SALT_KEY,
-//       SALT_INDEX,
-//       xVerifyHeader
-//     );
-
-//     if (!isValid) {
-//       throw new Error('Invalid callback signature');
-//     }
-
-//     // Decode and parse the response
-//     let decodedResponse;
-//     try {
-//       decodedResponse = JSON.parse(Buffer.from(base64Response, 'base64').toString());
-//       console.log('Decoded Response:', decodedResponse);
-//     } catch (error) {
-//       throw new Error('Failed to decode response: ' + error.message);
-//     }
-
-//     // Extract transaction details
-//     if (!decodedResponse.data || !decodedResponse.data.merchantTransactionId) {
-//       throw new Error('Invalid response format: missing transaction ID');
-//     }
-
-//     transactionId = decodedResponse.data.merchantTransactionId;
-//     const transaction = await getTransactionDetails(transactionId);
-
-//     if (!transaction) {
-//       throw new Error('Transaction not found');
-//     }
-
-//     // Check if transaction expired
-//     if (isTransactionExpired(transaction)) {
-//       await updateTransactionStatus(transactionId, 'EXPIRED');
-//       await logTransaction(transactionId, 'EXPIRED');
-//       return res.status(200).json({ success: false, message: 'Transaction expired' });
-//     }
-
-//     // Process payment status
-//     switch (decodedResponse.code) {
-//       case 'PAYMENT_SUCCESS': {
-//         const { amount } = decodedResponse.data;
-
-//         // Update wallet balance
-//         const wallet = await Wallet.findOne({ userId: transaction.userId });
-//         if (!wallet) {
-//           throw new Error('Wallet not found');
-//         }
-
-//         // Update wallet balance and add recharge record
-//         wallet.balance += convertToRupees(amount);
-//         wallet.recharges.push({
-//           amount: convertToRupees(amount),
-//           rechargeMethod: 'PhonePe',
-//           transactionId,
-//           phonepeTransactionId: decodedResponse.data.transactionId
-//         });
-
-//         await wallet.save();
-//         await updateTransactionStatus(transactionId, 'SUCCESS');
-//         await logTransaction(transactionId, 'SUCCESS');
-
-//         return res.status(200).json({ success: true, message: 'Payment successful' });
-//       }
-
-//       case 'PAYMENT_PENDING':
-//         await updateTransactionStatus(transactionId, 'PENDING');
-//         await logTransaction(transactionId, 'PENDING');
-//         return res.status(200).json({ success: true, message: 'Payment pending' });
-
-//       case 'PAYMENT_DECLINED':
-//       case 'PAYMENT_ERROR':
-//       default:
-//         await updateTransactionStatus(transactionId, 'FAILED');
-//         await logTransaction(transactionId, 'FAILED');
-//         return res.status(200).json({ success: false, message: 'Payment failed' });
-//     }
-
-//   } catch (error) {
-//     console.error('PhonePe Callback Error:', error);
-//     await logTransaction(transactionId, 'CALLBACK_ERROR', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Failed to process callback'
+//     // Make the request to check payment status
+//     const response = await axios.get(statusUrl, {
+//       headers: {
+//         "Content-Type": "application/json",
+//         "X-VERIFY": xVerifyChecksum,
+//         "X-MERCHANT-ID": merchantTransactionId,
+//         accept: "application/json",
+//       },
 //     });
+
+//     console.log("Payment validation response->", response.data);
+
+//     // Handle the response and redirect based on payment status
+//     if (response.data && response.data.code === "PAYMENT_SUCCESS") {
+      
+//       console.log("Payment validation response->", response.data);
+
+//       // Handle the response and redirect based on payment status
+//       if (response.data && response.data.code === "PAYMENT_SUCCESS") {
+//         const userId = response.data.merchantUserId; // Assuming this is included in the response
+//         const amount = response.data.amount; // Assuming this is the amount paid
+  
+//         // Find the user's wallet
+//         let wallet = await Wallet.findOne({ userId });
+  
+//         if (!wallet) {
+//           // Create a new wallet if it doesn't exist
+//           wallet = new Wallet({ userId, balance: 0 }); // Start with zero balance
+//         }
+  
+//         // Update the wallet balance
+//         wallet.balance += amount / 100; // Convert from paise to your currency unit
+  
+//         // Add recharge record
+//         wallet.recharges.push({
+//           amount: amount / 100,
+//           rechargeMethod: 'PhonePe',
+//           transactionId: merchantTransactionId,
+//         });
+  
+//         // Save the wallet
+//         await wallet.save();
+  
+//         return res.send(response.data); // Or redirect to a success page
+//       } else {
+//         // Handle payment failure/pending status
+//         return res.send(response.data); // Or redirect to a failure page
+//       }
+      
+//       return res.send(response.data); // Or redirect to a success page
+//     } else {
+//       // Redirect or respond with payment failure/pending status
+      
+//     }
+//   } catch (error) {
+//     console.error("Error in payment validation:", error);
+//     // Handle any errors and redirect to a failure page
+//     return res.status(500).send({ error: "Payment validation failed" });
 //   }
 // };
 
 
+export const validatePayment = async (req, res) => {
+  const { merchantTransactionId } = req.params;
 
+  if (!merchantTransactionId) {
+    return res.status(400).send("Invalid transaction ID");
+  }
 
-import { verifyPhonePePayment,updateTransaction,updateWalletBalance } from '../../servises/transactionService.js'
-
-
-export const verifyPayment = async (req, res) => {
   try {
-    const { merchantId, merchantTransactionId, phonepeTransactionId, amount, userId } = req.body;
+    // Construct the status URL
+    const statusUrl = `${process.env.PHONE_PE_HOST_URL}/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}`;
 
-    // 1. Check status from PhonePe
-    const checkStatus = await verifyPhonePePayment(merchantId, merchantTransactionId);
+    // Create the X-VERIFY checksum
+    const stringToHash = `/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}${process.env.SALT_KEY}`;
+    const sha256Hash = sha256(stringToHash);
+    const xVerifyChecksum = `${sha256Hash}###${process.env.SALT_INDEX}`;
 
-    // 2. Verify payment details
-    if (checkStatus.success &&
-        checkStatus.data.amount === amount * 100 &&
-        checkStatus.data.merchantId === merchantId &&
-        checkStatus.data.merchantTransactionId === merchantTransactionId) {
+    // Make the request to check payment status
+    const response = await axios.get(statusUrl, {
+      headers: {
+        "Content-Type": "application/json",
+        "X-VERIFY": xVerifyChecksum,
+        "X-MERCHANT-ID": merchantTransactionId,
+        accept: "application/json",
+      },
+    });
 
-      // 3. Update transaction in database
-      await updateTransaction({
-        userId,
-        merchantTransactionId,
-        phonepeTransactionId,
-        amount,
-        status: 'success',
-        responseCode: checkStatus.code,
-        responseMessage: checkStatus.message
-      });
+    console.log("Payment validation response->", response.data);
 
-      // 4. Update user wallet balance
-      await updateWalletBalance(userId, amount);
+    // Check if the payment was successful
+    if (response.data && response.data.code === "PAYMENT_SUCCESS") {
+      // Update the user's wallet
+      const { amount, userId } = response.data.data; // Ensure these values exist in the response
 
-      res.json({
-        status: 'success',
-        message: 'Payment verified successfully',
-        data: checkStatus.data
-      });
+      if (!userId || isNaN(amount)) {
+        return res.status(400).send("Invalid payment data");
+      }
+
+      // Find the user's wallet
+      const wallet = await Wallet.findOne({ userId });
+
+      if (!wallet) {
+        return res.status(404).send("Wallet not found");
+      }
+
+      // Update the wallet balance and add the recharge information
+      const newRecharge = {
+        amount: amount / 100, // converting back from paise to rupees
+        rechargeMethod: "PhonePe",
+        transactionId: merchantTransactionId,
+      };
+
+      wallet.balance += newRecharge.amount; // Ensure balance is updated with a valid number
+      wallet.recharges.push(newRecharge);
+
+      await wallet.save();
+
+      return res.status(200).send({ success: true, message: "Payment validated and wallet updated" });
     } else {
-      throw new Error('Payment verification failed');
+      // Payment failed or is pending
+      return res.status(400).send(response.data);
     }
   } catch (error) {
-    console.error('Payment verification error:', error);
-    res.status(400).json({
-      status: 'error',
-      message: error.message
-    });
+    console.error("Error in payment validation:", error);
+    return res.status(500).send({ error: "Payment validation failed" });
   }
 };
