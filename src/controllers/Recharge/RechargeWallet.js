@@ -111,6 +111,8 @@ export const validatePayment = async (req, res) => {
       let wallet = await Wallet.findOne({ userId });
 
       if (!wallet) {
+
+        
         wallet = await Wallet.create({
           userId: userId,
           balance: 0,
@@ -178,5 +180,40 @@ export const validatePayment = async (req, res) => {
   } catch (error) {
     console.error("Error in payment validation:", error);
     return res.status(500).send({ error: "Payment validation failed" });
+  }
+};
+
+
+
+
+
+export const getRechargeHistory = async (req, res) => {
+  try {
+    const { userId } = req.params; // Assuming userId is passed as a route parameter
+
+    // Find the wallet for the specified userId
+    const wallet = await Wallet.findOne({ userId });
+
+    if (!wallet) {
+      return res.status(404).json({
+        success: false,
+        message: "Wallet not found for this user",
+      });
+    }
+
+    // Return the recharges array from the wallet
+    return res.status(200).json({
+      success: true,
+      message: "Recharge history retrieved successfully",
+      data: wallet.recharges,
+      balance: wallet.balance,
+    });
+  } catch (error) {
+    console.error("Error retrieving recharge history:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve recharge history",
+      error: error.message,
+    });
   }
 };

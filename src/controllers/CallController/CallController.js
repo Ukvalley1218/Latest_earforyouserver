@@ -1,5 +1,36 @@
 import createService from '../../servises/CallServices.js'
 import logger from '../../logger/winston.logger.js';
+import CallLog from '../../models/Talk-to-friend/callLogModel.js';
+
+
+
+
+export const getRecentCalls = async (req, res) => {
+    try {
+      const { callerId } = req.params; // Assuming you pass callerId in the request parameters
+  
+      console.log('Fetching calls for callerId:', callerId);
+  
+      // Retrieve recent call logs, sorting by the most recent calls first
+      const recentCalls = await CallLog.find({ callerId })
+        .sort({ createdAt: -1 }) // Sorting by the `createdAt` field in descending order (most recent first)
+        .limit(10)
+        .exec(); // Ensure the query is executed
+  
+      if (recentCalls.length === 0) {
+        return res.status(404).json({ message: 'No call history found.' });
+      }
+  
+      return res.status(200).json({ recentCalls });
+    } catch (error) {
+      console.error('Error fetching recent call history:', error); // Corrected typo
+      return res.status(500).json({ message: 'Server error, unable to fetch call history.' });
+    }
+  };
+  
+
+
+
 
 /**
  * Initiates a call.
@@ -106,3 +137,5 @@ export const handleMissedCall = async (req, res) => {
         res.status(500).json({ error: 'Error handling missed call' });
     }
 };
+
+

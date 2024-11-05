@@ -5,12 +5,62 @@ import sendNotification from '../utils/sendNotification.js';
 import User from '../models/Users.js';
 import Wallet from '../models/Wallet/Wallet.js'
 
-  
+
+const ADMIN_ID = process.env.ADMIN_ID; // Add this to your environment variables
+const ADMIN_CHARGE_PERCENTAGE = 0.20; // 20% admin charges
+const RATE_PER_MINUTE = 3; // Rate per minute in your currency unit
+
+
  export const setupWebRTC = (io) => {
   // Store active users and their socket connections
   const users = {}; // { userId: [socketId1, socketId2, ...] }
   const activeCalls = {}; // { userId: otherUserId }
   const randomCallQueue = new Set();
+
+  // Helper function to check wallet balance
+  const checkWalletBalance = async (userId) => {
+    try {
+      const wallet = await Wallet.findOne({ userId });
+      return wallet ? wallet.balance : 0;
+    } catch (error) {
+      logger.error(`Error checking wallet balance: ${error.message}`);
+      return 0;
+    }
+  };
+
+  // Helper function to process payment
+  const processPayment = async (callerId, receiverId) => {
+    try {
+      const callerWallet = await Wallet.findOne({ userId: callerId });
+      const receiverWallet = await Wallet.findOne({ userId: receiverId });
+      const adminWallet = await Wallet.findOne({ userId: ADMIN_ID });
+
+      if (!callerWallet || callerWallet.balance < RATE_PER_MINUTE) {
+        return false;
+      }
+
+      const adminCharge = RATE_PER_MINUTE * ADMIN_CHARGE_PERCENTAGE;
+      const receiverAmount = RATE_PER_MINUTE - adminCharge;
+
+      // Update wallets
+      await Wallet.findByIdAndUpdate(callerWallet._id, {
+        $inc: { balance: -RATE_PER_MINUTE }
+      });
+      await Wallet.findByIdAndUpdate(receiverWallet._id, {
+        $inc: { balance: receiverAmount }
+      });
+      await Wallet.findByIdAndUpdate(adminWallet._id, {
+        $inc: { balance: adminCharge }
+      });
+
+      return true;
+    } catch (error) {
+      logger.error(`Error processing payment: ${error.message}`);
+      return false;
+    }
+  };
+
+
   io.on('connection', (socket) => {
     logger.http(`User connected: ${socket.id}`);
 
@@ -26,6 +76,36 @@ import Wallet from '../models/Wallet/Wallet.js'
      // Handle random call request
      socket.on('requestRandomCall', async ({ userId }) => {
       try {
+        const [caller, receiver] = await Promise.all([
+          User.findById(callerId),
+          User.findById(receiverId)
+        ]);
+
+        if (!caller || !receiver) {
+          socket.emit('callError', { message: 'User not found' });
+          return;
+        }
+
+        // Verify user types
+        if (caller.userType !== 'CALLER') {
+          socket.emit('callError', { message: 'You are not authorized to make calls' });
+          return;
+        }
+
+        if (receiver.userType !== 'RECEIVER') {
+          socket.emit('callError', { message: 'Selected user cannot receive calls' });
+          return;
+        }
+
+        // Check wallet balance
+        const balance = await checkWalletBalance(callerId);
+        if (balance < RATE_PER_MINUTE) {
+          socket.emit('callError', { 
+            message: 'Insufficient balance. Please add funds to your wallet.' 
+          });
+          return;
+        }
+
         logger.info(`User ${userId} requesting random call`);
     
         // Check if user is already in a call
@@ -148,7 +228,21 @@ import Wallet from '../models/Wallet/Wallet.js'
     socket.on('acceptRandomCall', async ({ receiverId, callerId }) => {
       try {
         logger.info(`User ${receiverId} accepted random call from User ${callerId}`);
+        const paymentSuccess = await processPayment(callerId, receiverId);
+
+        if (!paymentSuccess) {
+          // Notify both parties about insufficient balance
+          socket.emit('callError', { message: 'Insufficient balance to start the call' });
+          users[callerId]?.forEach((socketId) => {
+            socket.to(socketId).emit('callError', { message: 'Insufficient balance' });
+          });
     
+          // Clean up active calls
+          delete activeCalls[callerId];
+          delete activeCalls[receiverId];
+    
+          return;
+        }
         if (users[callerId]) {
           users[callerId].forEach((socketId) => {
             socket.to(socketId).emit('randomCallAccepted', { 
@@ -157,6 +251,27 @@ import Wallet from '../models/Wallet/Wallet.js'
             });
           });
         }
+
+        const billingInterval = setInterval(async () => {
+          const paymentSuccess = await processPayment(callerId, receiverId);
+    
+          if (!paymentSuccess) {
+            clearInterval(billingInterval); // Stop billing if payment fails
+    
+            // Notify both parties about insufficient balance
+            socket.emit('callError', { message: 'Insufficient balance to continue the call' });
+            users[callerId]?.forEach((socketId) => {
+              socket.to(socketId).emit('callError', { message: 'Insufficient balance' });
+            });
+    
+            // End the call due to insufficient balance
+            // Notify both parties that the call has ended
+            delete activeCalls[callerId];
+            delete activeCalls[receiverId];
+            return;
+          }
+        }, 60000); // Every minute
+
       } catch (error) {
         logger.error(`Error in acceptRandomCall handler: ${error.message}`);
         socket.emit('callError', { message: 'Failed to accept random call' });
@@ -208,6 +323,38 @@ import Wallet from '../models/Wallet/Wallet.js'
     // Initial call request
     socket.on('call', async ({ callerId, receiverId }) => {
       try {
+
+        const [ callerId, receiverId] = await Promise.all([
+          User.findById(callerId),
+          User.findById(receiverId)
+        ]);
+
+        if (!caller || !receiver) {
+          socket.emit('callError', { message: 'User not found' });
+          return;
+        }
+
+        // Verify user types
+        if (caller.userType !== 'CALLER') {
+          socket.emit('callError', { message: 'You are not authorized to make calls' });
+          return;
+        }
+
+        if (receiver.userType !== 'RECEIVER') {
+          socket.emit('callError', { message: 'Selected user cannot receive calls' });
+          return;
+        }
+
+        // Check wallet balance
+        const balance = await checkWalletBalance(callerId);
+        if (balance < RATE_PER_MINUTE) {
+          socket.emit('callError', { 
+            message: 'Insufficient balance. Please add funds to your wallet.' 
+          });
+          return;
+        }
+
+
         logger.info(`User ${callerId} is calling User ${receiverId}`);
 
         // Check if either user is already in a call
@@ -322,6 +469,22 @@ import Wallet from '../models/Wallet/Wallet.js'
       try {
         logger.info(`User ${receiverId} accepted call from User ${callerId}`);
 
+        const paymentSuccess = await processPayment(callerId, receiverId);
+
+        if (!paymentSuccess) {
+          // Notify both parties about insufficient balance
+          socket.emit('callError', { message: 'Insufficient balance to start the call' });
+          users[callerId]?.forEach((socketId) => {
+            socket.to(socketId).emit('callError', { message: 'Insufficient balance' });
+          });
+    
+          // Clean up active calls
+          delete activeCalls[callerId];
+          delete activeCalls[receiverId];
+    
+          return;
+        }
+
         if (users[callerId]) {
           users[callerId].forEach((socketId) => {
             socket.to(socketId).emit('callAccepted', { 
@@ -330,8 +493,30 @@ import Wallet from '../models/Wallet/Wallet.js'
             });
           });
 
+
           // Stop caller tune
           socket.emit('stopCallerTune', { callerId });
+
+
+          const billingInterval = setInterval(async () => {
+            const paymentSuccess = await processPayment(callerId, receiverId);
+      
+            if (!paymentSuccess) {
+              clearInterval(billingInterval); // Stop billing if payment fails
+      
+              // Notify both parties about insufficient balance
+              socket.emit('callError', { message: 'Insufficient balance to continue the call' });
+              users[callerId]?.forEach((socketId) => {
+                socket.to(socketId).emit('callError', { message: 'Insufficient balance' });
+              });
+      
+              // End the call due to insufficient balance
+              // Notify both parties that the call has ended
+              delete activeCalls[callerId];
+              delete activeCalls[receiverId];
+              return;
+            }
+          }, 60000); // Every minute
         }
       } catch (error) {
         logger.error(`Error in acceptCall handler: ${error.message}`);

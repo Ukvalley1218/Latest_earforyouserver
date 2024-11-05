@@ -393,15 +393,15 @@ const generateRandomUsername = (length = 8) => {
 
 
 export const requestOTP = async (req, res) => {
-  const { phone } = req.body;
+  const { phone ,password} = req.body;
 
   try {
-    if (!phone) {
+    if (!phone && !password) {
       return res.status(400).json({ message: "Phone number is required" });
     }
 
     // Ensure phone number is in E.164 format
-    const phoneStr = `+${String(phone).trim()}`;
+    const phoneStr = `${String(phone).trim()}`;
 
     // Check if user exists by phone number
     let user = await User.findOne({ phone: phoneStr });
@@ -415,6 +415,7 @@ export const requestOTP = async (req, res) => {
       // Create new user with phone number and generated username
       user = await User.create({
         phone: phoneStr,
+        password:password,
         username: username, // Store the generated username
         // Other fields can be added as needed
       });
