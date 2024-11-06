@@ -1,7 +1,7 @@
 import axios from 'axios';
 import crypto from 'crypto';
 import Wallet from '../../models/Wallet/Wallet.js';
-
+import User from '../../models/Users.js'
 import sha256 from "sha256";
 import uniqid from "uniqid";
 
@@ -228,7 +228,7 @@ export const getRechargeHistory = async (req, res) => {
 async function sendNotification(userId, title, message) {
   // Assuming you have the FCM device token stored in your database
   const user = await User.findById(userId);
-  const deviceToken = user.deviceToken;
+  const deviceToken = User.deviceToken;
 
   if (!deviceToken) {
     console.error("No device token found for user:", userId);
