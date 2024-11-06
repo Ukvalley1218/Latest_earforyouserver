@@ -228,7 +228,7 @@ export const getRechargeHistory = async (req, res) => {
 async function sendNotification(userId, title, message) {
   // Assuming you have the FCM device token stored in your database
   const user = await User.findById(userId);
-  const deviceToken = User.deviceToken;
+  const deviceToken = user.deviceToken;
 
   if (!deviceToken) {
     console.error("No device token found for user:", userId);

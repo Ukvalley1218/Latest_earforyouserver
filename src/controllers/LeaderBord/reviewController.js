@@ -3,10 +3,8 @@ import User from "../../models/Users.js";
 import mongoose from "mongoose";
 export const createReview = async (req, res) => {
   try {
-    const { rating, comment } = req.body;
-    const userId = req.params.userId; // Extract userId correctly from params
-    const reviewerId = req.user._id; // The logged-in user giving the review
-
+    const { rating, comment,userId,reviewerId } = req.body;
+  
     console.log("rating:", rating, "Comment:", comment, "User ID:", userId, "Reviewer ID:", reviewerId);
 
     // Validate request body
