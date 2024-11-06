@@ -37,7 +37,7 @@ const walletSchema = new mongoose.Schema({
       rechargeMethod: {
         type: String,
         required: true,
-        enum: ['credit_card', 'paypal', 'bank_transfer', 'crypto','PhonePe'], // Add more as needed
+        enum: ['PhonePe','CALL'], // Add more as needed
       },
       rechargeDate: {
         type: Date,

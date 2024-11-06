@@ -1,17 +1,13 @@
 // Utility function to get notification content based on type
 export  const getNotificationContent = (type) => {
     switch (type) {
-        case 'subscriptionActivated':
+        case 'Recharges':
             return {
-                title: 'Subscription Activated',
-                body: 'Your subscription has been successfully activated. Enjoy your benefits!',
+                title: 'Recharge Activated',
+                body: 'Your Recharge has been successfully . Enjoy your benefits!',
             };
-        case 'subscriptionExpired':
-            return {
-                title: 'Subscription Expired',
-                body: 'Your subscription has expired. Please renew it to continue enjoying our services.',
-            };
-        case 'paymentFailed':
+        
+        case 'RechargesFailed':
             return {
                 title: 'Payment Failed',
                 body: 'There was an issue processing your payment. Please update your payment details.',

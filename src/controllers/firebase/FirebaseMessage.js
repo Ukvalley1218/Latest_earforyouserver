@@ -31,3 +31,4 @@ export const sendPushNotification = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Failed to send notification', error });
   }
 };
+

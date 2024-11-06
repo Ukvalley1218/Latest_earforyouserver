@@ -169,6 +169,8 @@ export const validatePayment = async (req, res) => {
 
         wallet.recharges.push(failedRecharge);
         await wallet.save();
+        await sendNotification(userId, "Payment failed", `Your wallet has been failed with ₹${newRecharge.amount}. New balance: ₹${wallet.balance}.`);
+
       }
 
       return res.status(400).send({
@@ -217,3 +219,33 @@ export const getRechargeHistory = async (req, res) => {
     });
   }
 };
+
+
+
+
+// Function to send FCM notification
+async function sendNotification(userId, title, message) {
+  // Assuming you have the FCM device token stored in your database
+  const user = await User.findById(userId);
+  const deviceToken = user.deviceToken;
+
+  if (!deviceToken) {
+    console.error("No device token found for user:", userId);
+    return;
+  }
+
+  const payload = {
+    notification: {
+      title: title,
+      body: message,
+    },
+    token: deviceToken,
+  };
+
+  try {
+    const response = await admin.messaging().send(payload);
+    console.log("Notification sent successfully:", response);
+  } catch (error) {
+    console.error("Error sending notification:", error);
+  }
+}

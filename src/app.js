@@ -103,6 +103,8 @@ import userRoutes from './routes/LeaderBoard/userRoutes.js';
 import SendNotificationRoute from './routes/NotificationRoute/SendNotificationRoute.js'
 import CallRoute from './routes/CallRoute.js'
 import RechargeRoute from './routes/Recharge/RechargeRoute.js'
+import msg91Routes from './routes/OTP/msg91Routes.js'
+
 app.get("/", (req, res) => {
   try {
     res.send("Driverse Server Running Smoothly");
@@ -114,7 +116,7 @@ app.get("/", (req, res) => {
 
 +app.use("/api/", apiLimiter);
 
-
+app.use('/api/v1/msg91', msg91Routes);
 
 app.use('/api/v1/', CallRoute);
 
