@@ -34,7 +34,7 @@ router.put('/category/:userId', updateOrCreateUserCategory);
 
 // updateUserDeatil
 
-router.put('/updateProfile', updateProfile);
+router.put('/updateProfile/:userId', updateProfile);
 router.put('/users/:userId', changeUserType);
 
 // Route to request OTP 

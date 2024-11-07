@@ -306,7 +306,7 @@ export const updateOrCreateUserCategory = async (req, res) => {
 // ------------------------useruserController.js---------------------------------------
 export const updateProfile = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.params;
     const { username, dateOfBirth, gender,Language } = req.body;
 
     // Validation
