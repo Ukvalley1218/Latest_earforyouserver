@@ -101,9 +101,9 @@ export const setupWebRTC = (io) => {
           });
 
           // Send push notification if receiver has a device token
-         
+
           await sendNotification(userId, "Random call matched", `${caller.username} wants to connect with you!`);
-          
+
           logger.info(`Random call matched: ${userId} with ${matchedUserId}`);
 
           // Set a timeout for call acceptance
@@ -402,15 +402,21 @@ export const setupWebRTC = (io) => {
           const endTime = new Date();
           const duration = Math.floor((endTime - startTime) / 1000); // Duration in seconds
 
+          // Helper function to format time to hh:mm:ss
+          const formatTime = (date) => {
+            return date.toLocaleTimeString('en-US', { hour12: false }); // Format as hh:mm:ss
+          };
 
+          // Store the call log with formatted times
           await CallLog.create({
             caller: new mongoose.Types.ObjectId(callerId),
             receiver: new mongoose.Types.ObjectId(receiverId),
-            startTime,
-            endTime,
-            duration,
+            startTime: formatTime(startTime),
+            endTime: formatTime(endTime),
+            duration, // Keep the duration in seconds
             status: 'completed'
           });
+
         }
       } catch (error) {
         logger.error(`Error in endCall handler: ${error.message}`);
