@@ -480,8 +480,9 @@ export const setupWebRTC = (io) => {
           }
     
           // Calculate call duration
-          const callKey = `${callerId}_${receiverId}`;
-          const startTime = callTimings[callKey].startTime;
+          const callerCallKey = `${callerId}_${receiverId}`;
+          const receiverCallKey = `${receiverId}_${callerId}`;
+          const startTime = callTimings[callerCallKey]?.startTime || callTimings[receiverCallKey]?.startTime;
           const endTime = new Date();
           const duration = (endTime - startTime) / 1000; // Calculate duration in seconds
     
