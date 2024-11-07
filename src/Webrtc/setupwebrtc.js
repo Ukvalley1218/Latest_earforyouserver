@@ -10,10 +10,11 @@ export const setupWebRTC = (io) => {
   // Store active users and their socket connections
   const users = {}; // { userId: [socketId1, socketId2, ...] }
   const activeCalls = {}; // { userId: otherUserId }
+  const callTimings = {};
   const randomCallQueue = new Set();
   io.on('connection', (socket) => {
     logger.http(`User connected: ${socket.id}`);
-
+  
     socket.on('join', async ({ userId }) => {
       if (!users[userId]) {
         users[userId] = [];
@@ -145,15 +146,38 @@ export const setupWebRTC = (io) => {
     });
 
     // Handle random call acceptance
+    // socket.on('acceptRandomCall', async ({ receiverId, callerId }) => {
+    //   try {
+    //     logger.info(`User ${receiverId} accepted random call from User ${callerId}`);
+
+    //     if (users[callerId]) {
+    //       users[callerId].forEach((socketId) => {
+    //         socket.to(socketId).emit('randomCallAccepted', {
+    //           receiverId,
+    //           socketId: socket.id
+    //         });
+    //       });
+    //     }
+    //   } catch (error) {
+    //     logger.error(`Error in acceptRandomCall handler: ${error.message}`);
+    //     socket.emit('callError', { message: 'Failed to accept random call' });
+    //   }
+    // });
     socket.on('acceptRandomCall', async ({ receiverId, callerId }) => {
       try {
         logger.info(`User ${receiverId} accepted random call from User ${callerId}`);
 
+        // Store call start time
+        const callKey = `${callerId}_${receiverId}`;
+        callTimings[callKey] = {
+          startTime: new Date()
+        };
+
         if (users[callerId]) {
           users[callerId].forEach((socketId) => {
-            socket.to(socketId).emit('randomCallAccepted', {
-              receiverId,
-              socketId: socket.id
+            socket.to(socketId).emit('randomCallAccepted', { 
+              receiverId, 
+              socketId: socket.id 
             });
           });
         }
@@ -162,7 +186,6 @@ export const setupWebRTC = (io) => {
         socket.emit('callError', { message: 'Failed to accept random call' });
       }
     });
-
     // Handle random call rejection
     socket.on('rejectRandomCall', async ({ receiverId, callerId }) => {
       try {
@@ -318,15 +341,41 @@ export const setupWebRTC = (io) => {
     });
 
     // Handle call acceptance
+    // socket.on('acceptCall', async ({ receiverId, callerId }) => {
+    //   try {
+    //     logger.info(`User ${receiverId} accepted call from User ${callerId}`);
+
+    //     if (users[callerId]) {
+    //       users[callerId].forEach((socketId) => {
+    //         socket.to(socketId).emit('callAccepted', {
+    //           receiverId,
+    //           socketId: socket.id
+    //         });
+    //       });
+
+    //       // Stop caller tune
+    //       socket.emit('stopCallerTune', { callerId });
+    //     }
+    //   } catch (error) {
+    //     logger.error(`Error in acceptCall handler: ${error.message}`);
+    //     socket.emit('callError', { message: 'Failed to accept call' });
+    //   }
+    // });
     socket.on('acceptCall', async ({ receiverId, callerId }) => {
       try {
         logger.info(`User ${receiverId} accepted call from User ${callerId}`);
 
+        // Store call start time
+        const callKey = `${callerId}_${receiverId}`;
+        callTimings[callKey] = {
+          startTime: new Date()
+        };
+
         if (users[callerId]) {
           users[callerId].forEach((socketId) => {
-            socket.to(socketId).emit('callAccepted', {
-              receiverId,
-              socketId: socket.id
+            socket.to(socketId).emit('callAccepted', { 
+              receiverId, 
+              socketId: socket.id 
             });
           });
 
@@ -338,7 +387,6 @@ export const setupWebRTC = (io) => {
         socket.emit('callError', { message: 'Failed to accept call' });
       }
     });
-
     // Handle call rejection
     socket.on('rejectCall', async ({ receiverId, callerId }) => {
       try {
