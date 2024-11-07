@@ -151,9 +151,6 @@ export const setupWebRTC = (io) => {
     socket.on('acceptRandomCall', async ({ receiverId, callerId }) => {
       try {
         logger.info(`User ${receiverId} accepted random call from User ${callerId}`);
-       
-        activeCalls[callerId] = { receiverId, startTime: new Date() };
-        activeCalls[receiverId] = { callerId, startTime: new Date() };
 
         if (users[callerId]) {
           users[callerId].forEach((socketId) => {
@@ -389,45 +386,49 @@ export const setupWebRTC = (io) => {
     socket.on('endCall', async ({ receiverId, callerId }) => {
       try {
         logger.info(`Call ended between ${callerId} and ${receiverId}`);
-
-        if (activeCalls[callerId] === receiverId) {
+    
+        // Get call data before cleaning up
+        const callData = activeCalls[callerId];
+        
+        if (callData && callData.receiverId === receiverId) {
           // Notify the other party
           if (users[receiverId]) {
             users[receiverId].forEach((socketId) => {
               socket.to(socketId).emit('callEnded', { callerId });
             });
           }
-
+    
+          // Get start time before cleanup
+          const startTime = callData.startTime;
+          const endTime = new Date();
+          const duration = Math.floor((endTime - startTime) / 1000); // Duration in seconds
+    
           // Clean up call status
           delete activeCalls[callerId];
           delete activeCalls[receiverId];
-
-          // Retrieve the startTime
-          const startTime = activeCalls[callerId].startTime;
-
-          console.log(startTime)
-          const endTime = new Date();
-          console.log(endTime)
-          const duration = Math.floor((endTime - startTime) / 1000); // Duration in seconds
-          console.log(duration)
+    
           // Helper function to format time to hh:mm:ss
           const formatTime = (date) => {
             return date.toLocaleTimeString('en-US', { hour12: false }); // Format as hh:mm:ss
           };
-
+    
           // Store the call log with formatted times
           await CallLog.create({
             caller: new mongoose.Types.ObjectId(callerId),
             receiver: new mongoose.Types.ObjectId(receiverId),
             startTime: formatTime(startTime),
             endTime: formatTime(endTime),
-            duration, // Keep the duration in seconds
+            duration,
             status: 'completed'
           });
-
+    
+          logger.info(`Call log created for call between ${callerId} and ${receiverId}`);
+        } else {
+          logger.warn(`No active call found between ${callerId} and ${receiverId}`);
         }
       } catch (error) {
         logger.error(`Error in endCall handler: ${error.message}`);
+        logger.error(error.stack); // Add stack trace for better debugging
       }
     });
 
