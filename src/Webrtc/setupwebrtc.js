@@ -371,14 +371,14 @@ export const setupWebRTC = (io) => {
         logger.info(`User ${receiverId} accepted call from User ${callerId}`);
     
         // Store start time using process.hrtime()
-        const callKey = `${callerId}_${receiverId}`;
+        const callKey = `${receiverId}_${callerId}`;
         logger.info(`callKey ${callKey}`);
 
         callTimings[callKey] = {
           startTime: process.hrtime() // Start time in seconds and nanoseconds
         };
-        
-        logger.info(`callTimings ${callTimings[callKey]}`);
+
+        logger.info(`callTimings ${callTimings[callKey].startTime}`);
 
         // Notify the caller that the call has been accepted
         if (users[callerId]) {
