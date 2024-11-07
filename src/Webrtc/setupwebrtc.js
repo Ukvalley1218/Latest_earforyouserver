@@ -168,14 +168,12 @@ export const setupWebRTC = (io) => {
         logger.info(`User ${receiverId} accepted random call from User ${callerId}`);
 
         // Store call start time
-        const callKey = `${callerId}_${receiverId}`;
-        logger.info(`callKey ${callKey}`);
+        const callKey = `${receiverId}_${callerId}`;
 
         callTimings[callKey] = {
           startTime: new Date()
         };
 
-        logger.info(`callTimings ${callTimings[callKey]}`);
 
 
         if (users[callerId]) {
@@ -373,18 +371,16 @@ export const setupWebRTC = (io) => {
         // Store start time using process.hrtime()
         const callKey = `${receiverId}_${callerId}`;
         logger.info(`callKey ${callKey}`);
-
+    
         callTimings[callKey] = {
           startTime: process.hrtime() // Start time in seconds and nanoseconds
         };
-
-        logger.info(`callTimings ${callTimings[callKey].startTime}`);
-
+    
         // Notify the caller that the call has been accepted
         if (users[callerId]) {
           users[callerId].forEach((socketId) => {
-            socket.to(socketId).emit('callAccepted', { 
-              receiverId, 
+            socket.to(socketId).emit('callAccepted', {
+              receiverId,
               socketId: socket.id
             });
           });
@@ -469,6 +465,8 @@ export const setupWebRTC = (io) => {
     //     logger.error(`Error in endCall handler: ${error.message}`);
     //   }
     // });
+
+    
     socket.on('endCall', async ({ receiverId, callerId }) => {
       try {
         logger.info(`Call ended between ${callerId} and ${receiverId}`);
@@ -480,18 +478,17 @@ export const setupWebRTC = (io) => {
               socket.to(socketId).emit('callEnded', { callerId });
             });
           }
-         
+    
           // Calculate call duration using process.hrtime()
           const callKey = `${callerId}_${receiverId}`;
           logger.info(`callKey ${callKey}`);
-
+    
           const call_time = callTimings[callKey].startTime;
           logger.info(`Call ended with time ${call_time}`);
-
+    
           const endTime = process.hrtime(callTimings[callKey].startTime); // High precision difference
           let duration = endTime[0] + (endTime[1] / 1000000000); // Convert to seconds
     
-          
           // Log the call with duration
           await CallLog.create({
             caller: new mongoose.Types.ObjectId(callerId),
@@ -499,16 +496,15 @@ export const setupWebRTC = (io) => {
             startTime: new Date(callTimings[callKey].startTime[0] * 1000 + callTimings[callKey].startTime[1] / 1000000),
             endTime: new Date(),
             duration,
-            status: 'completed',
+            status: 'completed'
           });
-
+    
           // Clean up call timing
           delete callTimings[callKey];
           delete activeCalls[callerId];
           delete activeCalls[receiverId];
     
-    
-          logger.info(`Call logged with duration: ${duration.toFixed(2)} milliseconds`);
+          logger.info(`Call logged with duration: ${duration.toFixed(2)} seconds`);
         }
       } catch (error) {
         logger.error(`Error in endCall handler: ${error.message}`);
