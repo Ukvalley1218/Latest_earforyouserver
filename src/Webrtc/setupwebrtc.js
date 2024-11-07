@@ -193,7 +193,7 @@ export const setupWebRTC = (io) => {
           callType: 'random'
         });
 
-        
+
       } catch (error) {
         logger.error(`Error in rejectRandomCall handler: ${error.message}`);
         socket.emit('callError', { message: 'Failed to reject random call' });
@@ -401,9 +401,12 @@ export const setupWebRTC = (io) => {
 
           // Retrieve the startTime
           const startTime = activeCalls[callerId].startTime;
-          const endTime = new Date();
-          const duration = Math.floor((endTime - startTime) / 1000); // Duration in seconds
 
+          console.log(startTime)
+          const endTime = new Date();
+          console.log(endTime)
+          const duration = Math.floor((endTime - startTime) / 1000); // Duration in seconds
+          console.log(duration)
           // Helper function to format time to hh:mm:ss
           const formatTime = (date) => {
             return date.toLocaleTimeString('en-US', { hour12: false }); // Format as hh:mm:ss
