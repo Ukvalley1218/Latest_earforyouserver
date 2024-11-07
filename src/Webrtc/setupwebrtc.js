@@ -477,11 +477,7 @@ export const setupWebRTC = (io) => {
           const endTime = process.hrtime(callTimings[callKey].startTime); // High precision difference
           let duration = (endTime[0] * 1000) + (endTime[1] / 1000000); // Convert to milliseconds
     
-          // Clean up call timing
-          delete callTimings[callKey];
-          delete activeCalls[callerId];
-          delete activeCalls[receiverId];
-    
+          
           // Log the call with duration
           await CallLog.create({
             caller: new mongoose.Types.ObjectId(callerId),
@@ -491,6 +487,12 @@ export const setupWebRTC = (io) => {
             duration,
             status: 'completed',
           });
+
+          // Clean up call timing
+          delete callTimings[callKey];
+          delete activeCalls[callerId];
+          delete activeCalls[receiverId];
+    
     
           logger.info(`Call logged with duration: ${duration.toFixed(2)} milliseconds`);
         }
