@@ -306,8 +306,8 @@ export const updateOrCreateUserCategory = async (req, res) => {
 // ------------------------useruserController.js---------------------------------------
 export const updateProfile = async (req, res) => {
   try {
-    const userId = req.params;
-    const { username, dateOfBirth, gender,Language } = req.body;
+    const { userId } = req.params;
+    const { username, dateOfBirth, gender, Language } = req.body;
 
     // Validation
     if (username && typeof username !== 'string') {
@@ -321,9 +321,10 @@ export const updateProfile = async (req, res) => {
     }
 
     // Check if all required fields are provided
-    if (!username || !dateOfBirth || !gender||!Language) {
+    if (!username || !dateOfBirth || !gender || !Language) {
       // Create a new user if details are not available
       const newUser = new User({
+        _id: userId,
         username,
         dateOfBirth,
         Language,
