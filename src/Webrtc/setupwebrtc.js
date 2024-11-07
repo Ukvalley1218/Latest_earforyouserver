@@ -151,6 +151,9 @@ export const setupWebRTC = (io) => {
     socket.on('acceptRandomCall', async ({ receiverId, callerId }) => {
       try {
         logger.info(`User ${receiverId} accepted random call from User ${callerId}`);
+       
+        activeCalls[callerId] = { receiverId, startTime: new Date() };
+        activeCalls[receiverId] = { callerId, startTime: new Date() };
 
         if (users[callerId]) {
           users[callerId].forEach((socketId) => {
