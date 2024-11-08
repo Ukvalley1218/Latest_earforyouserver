@@ -274,9 +274,9 @@ export const initiateLogin = async (res, email) => {
     // Send OTP to the user's email
     await sendOtpEmail(email, otp);
 
-    res.status(200).json({ message: "OTP sent to email" });
+    return { message: "OTP sent to email" };
   } catch (error) {
-    res.status(500).json({ message: "Server error", error });
+    return { message: "Server error", error };
   }
 };
 
