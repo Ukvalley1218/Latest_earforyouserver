@@ -28,3 +28,7 @@ const sendEmail = async (email, subject, message) => {
 };
 
 export default sendEmail;
+
+
+// =ukvalleytech@gmail.com   
+// =leuekrikffdperkg

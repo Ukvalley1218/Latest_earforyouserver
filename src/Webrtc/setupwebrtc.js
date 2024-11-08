@@ -106,6 +106,7 @@ export const setupWebRTC = (io) => {
 
           logger.info(`Random call matched: ${userId} with ${matchedUserId}`);
 
+
         } else {
           // Add user to queue if no users available
           randomCallQueue.add(userId);

@@ -209,6 +209,10 @@ export const initiateRegistration = async (req, res) => {
 
   try {
     // Check if the user already exists
+
+    
+
+    
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
@@ -219,18 +223,25 @@ export const initiateRegistration = async (req, res) => {
     const otp = generateOtp();
     const otpExpires = Date.now() + 3600000; // 1 hour expiry
 
+    // Log for debugging purposes
+    console.log(`Generated OTP: ${otp} for email: ${email}`);
+
     // Send OTP to the provided email
     const otpSent = await sendOtpEmail(email, otp);
 
+
+    console.log("otpSent =",otp);
     // Check if OTP was successfully sent
-    if (!otpSent) {
+    if (!otp) {
+      console.error("Failed to send OTP to email:", email);
       return res.status(500).json({ message: "Failed to send OTP" });
     }
-
+    const username = generateRandomUsername();
     // Create new user with OTP and expiration after successful OTP sending
     const newUser = new User({
       email,
       otp,
+      username,
       otpExpires,
     });
 
@@ -239,10 +250,75 @@ export const initiateRegistration = async (req, res) => {
 
     res.status(200).json({ message: "OTP sent to email for registration" });
   } catch (error) {
+    console.error("Error during registration:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+//----------------initiateLogin---------------
+
+
+export const initiateLogin = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    // Check if the user exists
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Generate OTP and set expiry
+    const otp = generateOtp();
+    user.otp = otp;
+    user.otpExpires = Date.now() + 3600000; // OTP valid for 1 hour
+
+    // Save OTP details to user
+    await user.save();
+
+    // Send OTP to the user's email
+    await sendOtpEmail(email, otp);
+
+    res.status(200).json({ message: "OTP sent to email" });
+  } catch (error) {
     res.status(500).json({ message: "Server error", error });
   }
 };
 
+
+export const resendOtp = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    // Check if the user exists
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if the OTP expired
+    if (user.otpExpires < Date.now()) {
+      return res.status(400).json({ message: "OTP has expired, please request a new one" });
+    }
+
+    // Generate a new OTP and set a new expiry
+    const otp = generateOtp();
+    user.otp = otp;
+    user.otpExpires = Date.now() + 3600000; // OTP valid for 1 hour
+
+    // Save new OTP details to user
+    await user.save();
+
+    // Send new OTP to the user's email
+    await sendOtpEmail(email, otp);
+
+    res.status(200).json({ message: "OTP resent to email" });
+  } catch (error) {
+    console.error("Error during OTP resend:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
+};
 
 
 //-----------------verifyRegistrationOtp-------------------
@@ -276,39 +352,6 @@ export const verifyRegistrationOtp = async (req, res) => {
   }
 };
 
-
-
-
-//----------------initiateLogin---------------
-
-
-export const initiateLogin = async (req, res) => {
-  const { email } = req.body;
-
-  try {
-    // Check if the user exists
-    const user = await User.findOne({ email });
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Generate OTP and set expiry
-    const otp = generateOtp();
-    user.otp = otp;
-    user.otpExpires = Date.now() + 3600000; // OTP valid for 1 hour
-
-    // Save OTP details to user
-    await user.save();
-
-    // Send OTP to the user's email
-    await sendOtpEmail(email, otp);
-
-    res.status(200).json({ message: "OTP sent to email" });
-  } catch (error) {
-    res.status(500).json({ message: "Server error", error });
-  }
-};
 
 
 //---------------verifyLoginOtp--------------------
@@ -606,7 +649,7 @@ export const verifyOTP = async (req, res) => {
     const decodedToken = await admin.auth().verifyIdToken(sessionInfo);
 
     // Ensure the decoded token contains the correct phone number
-    if (!decodedToken || decodedToken.phone_number !== `+${phone}`) {
+    if (!decodedToken || decodedToken.phone_number !== `${phone}`) {
       return res.status(401).json({ message: 'Invalid or expired OTP.' });
     }
 
