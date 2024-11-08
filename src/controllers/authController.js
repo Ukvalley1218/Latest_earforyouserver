@@ -203,55 +203,6 @@ export const verifyOtp = async (req, res) => {
 //-----------------initiateRegistration-------------------
 
 
-// export const initiateRegistration = async (req, res) => {
-//   const { email } = req.body;
-
-//   try {
-//     // Check if the user already exists
-//     const existingUser = await User.findOne({ email });
-
-//     if (existingUser) {
-      
-//     }
-
-//     // Generate OTP and set expiry (valid for 1 hour)
-//     const otp = generateOtp();
-//     const otpExpires = Date.now() + 3600000; // 1 hour expiry
-
-//     // Log for debugging purposes
-//     console.log(`Generated OTP: ${otp} for email: ${email}`);
-
-//     // Send OTP to the provided email
-//     const otpSent = await sendOtpEmail(email, otp);
-
-
-//     console.log("otpSent =",otp);
-//     // Check if OTP was successfully sent
-//     if (!otp) {
-//       console.error("Failed to send OTP to email:", email);
-//       return res.status(500).json({ message: "Failed to send OTP" });
-//     }
-//     const username = generateRandomUsername();
-//     // Create new user with OTP and expiration after successful OTP sending
-//     const newUser = new User({
-//       email,
-//       otp,
-//       username,
-//       otpExpires,
-//     });
-
-//     // Save user with OTP and expiration
-//     await newUser.save();
-
-//     res.status(200).json({ message: "OTP sent to email for registration" });
-//   } catch (error) {
-//     console.error("Error during registration:", error);
-//     res.status(500).json({ message: "Server error", error });
-//   }
-// };
-
-
-
 
 export const initiateRegistration = async (req, res) => {
   const { email } = req.body;
@@ -261,8 +212,7 @@ export const initiateRegistration = async (req, res) => {
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      // User already exists, call the login function
-      return await initiateLogin(req, res);
+      initiateLogin(email)
     }
 
     // Generate OTP and set expiry (valid for 1 hour)
@@ -305,8 +255,8 @@ export const initiateRegistration = async (req, res) => {
 //----------------initiateLogin---------------
 
 
-export const initiateLogin = async (req, res) => {
-  const { email } = req.body;
+export const initiateLogin = async (email) => {
+  // const { email } = req.body;
 
   try {
     // Check if the user exists
@@ -327,9 +277,9 @@ export const initiateLogin = async (req, res) => {
     // Send OTP to the user's email
     await sendOtpEmail(email, otp);
 
-    res.status(200).json({ message: "OTP sent to email" });
+    console.log({ message: "OTP sent to email" });
   } catch (error) {
-    res.status(500).json({ message: "Server error", error });
+    console.log({ message: "Server error", error });
   }
 };
 
