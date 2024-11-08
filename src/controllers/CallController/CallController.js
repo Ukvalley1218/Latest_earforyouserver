@@ -1,7 +1,7 @@
 import createService from '../../servises/CallServices.js'
 import logger from '../../logger/winston.logger.js';
 import CallLog from '../../models/Talk-to-friend/callLogModel.js';
-
+import User from '../../models/Users.js';
 
 
 
@@ -15,6 +15,8 @@ export const getRecentCalls = async (req, res) => {
       const recentCalls = await CallLog.find({ callerId })
         .sort({ createdAt: -1 }) // Sorting by the `createdAt` field in descending order (most recent first)
         .limit(10)
+        .populate('callerId') // Populate the full caller's user details from the User model
+        .populate('receiverId')
         .exec(); // Ensure the query is executed
   
       if (recentCalls.length === 0) {
@@ -26,7 +28,7 @@ export const getRecentCalls = async (req, res) => {
       console.error('Error fetching recent call history:', error); // Corrected typo
       return res.status(500).json({ message: 'Server error, unable to fetch call history.' });
     }
-  };
+ };
   
 
 

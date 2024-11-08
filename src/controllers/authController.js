@@ -4,7 +4,6 @@ import ROLES_LIST from "../config/Roles_list.js";
 import crypto from "crypto";
 import { generateOtp, sendOtpEmail } from "../utils/generateOtp.js";
 import bcrypt from "bcrypt";
-
 import multer from "multer";
 import unirest from "unirest";
 import otpGenerator from 'otp-generator';
@@ -392,7 +391,6 @@ const generateRandomUsername = (length = 8) => {
   return result;
 };
 
-
 export const requestOTP = async (req, res) => {
   const { phone ,password} = req.body;
 
@@ -494,7 +492,6 @@ export const verifyOTP = async (req, res) => {
     });
   }
 };
-
 
 
 // update User Type Controller Function

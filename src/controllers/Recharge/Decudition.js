@@ -7,7 +7,7 @@ export const deductPerMinute = async (req, res) => {
   session.startTransaction();
 
   try {
-    const { callerId, receiverId, callId, ratePerMinute, durationInMinutes } = req.body;
+    const { callerId, receiverId, ratePerMinute, durationInMinutes } = req.body;
 
     if (ratePerMinute <= 0 || durationInMinutes <= 0) {
       return res.status(400).json({
@@ -50,7 +50,6 @@ export const deductPerMinute = async (req, res) => {
     callerWallet.deductions.push({
       amount: totalDeduction,
       deductionReason: 'call',
-      callId,
       transactionId, // Store the generated transaction ID
       createdAt: new Date(),
     });
@@ -72,6 +71,9 @@ export const deductPerMinute = async (req, res) => {
       rechargeMethod: 'CALL', // Indicate income source
       transactionId, // Use the same transaction ID for consistency
       createdAt: new Date(),
+      responseCode: 'SUCCESS', // Assuming a success response from the transaction
+      state: 'COMPLETED', // Indicate the transaction is complete
+      merchantTransactionId: transactionId, // Use the same transaction ID
     });
 
     // Save both wallets
@@ -124,7 +126,7 @@ export const deductPerMinute = async (req, res) => {
 //   }
 
 //   // Start processing deductions for a call
-//   async handleStartCall(socket, { callerId, receiverId, callId, ratePerMinute }) {
+//   async handleStartCall(socket, { callerId, receiverId,  ratePerMinute }) {
 //     try {
 //       // Validate input
 //       if (ratePerMinute <= 0) {
