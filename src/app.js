@@ -104,6 +104,7 @@ import SendNotificationRoute from './routes/NotificationRoute/SendNotificationRo
 import CallRoute from './routes/CallRoute.js'
 import RechargeRoute from './routes/Recharge/RechargeRoute.js'
 import msg91Routes from './routes/OTP/msg91Routes.js'
+import appRatingRoutes from './routes/LeaderBoard/apprateRoute.js'
 
 app.get("/", (req, res) => {
   try {
@@ -124,6 +125,7 @@ app.use('/api/v1', CallRoute);
 //authRoutes
 app.use("/api/v1", authRoutes);
 
+app.use('/api/v1/apprating', appRatingRoutes);
 
 
 app.use("/api/v1/chats", chatRouter);
