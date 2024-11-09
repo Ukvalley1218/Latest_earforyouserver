@@ -10,7 +10,7 @@ import otpGenerator from 'otp-generator';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose'
 import admin from 'firebase-admin';
-
+import Wallet from "../models/Wallet/Wallet.js";
 
 
 const generateAccessAndRefreshTokens = async (userId) => {
@@ -239,6 +239,19 @@ export const initiateRegistration = async (req, res) => {
       username,
       otpExpires,
     });
+
+
+     // Create a wallet with a balance of 15 rupees for the new user
+     const wallet = await Wallet.create({
+      userId: newUser._id, // Use the ID of the newly created user
+      balance: 15,         // Set the initial balance to 15 rupees
+      currency: 'inr',     // Set currency to INR (Indian Rupees)
+      recharges: [],
+      deductions: [],
+      lastUpdated: new Date()
+    });
+
+    console.log("Wallet created with initial balance of 15 rupees for user:", newUser._id,wallet);
 
     // Save user with OTP and expiration
     await newUser.save();
