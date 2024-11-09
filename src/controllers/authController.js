@@ -462,25 +462,25 @@ export const updateOrCreateUserCategory = async (req, res) => {
 export const updateProfile = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { username, dateOfBirth, gender, language, phone } = req.body;
-
+    const { username, dateOfBirth, gender, language, phone, userCategory } = req.body;
+    
     // Input validation
     const validationErrors = [];
-
+    
     if (!userId) {
       return res.status(400).json({
         success: false,
         message: 'User ID is required'
       });
     }
-
+    
     // Validate individual fields if they are provided
     if (username !== undefined) {
       if (typeof username !== 'string' || username.trim().length === 0) {
         validationErrors.push('Username must be a non-empty string');
       }
     }
-
+    
     if (dateOfBirth !== undefined) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
         validationErrors.push('Date of birth must be in YYYY-MM-DD format');
@@ -491,21 +491,20 @@ export const updateProfile = async (req, res) => {
         }
       }
     }
-
+    
     if (gender !== undefined) {
       if (!['male', 'female', 'other'].includes(gender.toLowerCase())) {
         validationErrors.push('Gender must be either "male", "female", or "other"');
       }
     }
-
+    
     if (phone !== undefined) {
-      // Add your phone validation regex here
       const phoneRegex = /^\+?[\d\s-]{10,}$/;  // Basic example - adjust as needed
       if (!phoneRegex.test(phone)) {
         validationErrors.push('Invalid phone number format');
       }
     }
-
+    
     if (validationErrors.length > 0) {
       return res.status(400).json({
         success: false,
@@ -513,7 +512,7 @@ export const updateProfile = async (req, res) => {
         errors: validationErrors
       });
     }
-
+    
     // Check if user exists
     const existingUser = await User.findById(userId);
     
@@ -523,17 +522,18 @@ export const updateProfile = async (req, res) => {
         message: 'User not found'
       });
     }
-
+    
     // Prepare update data with only provided fields
     const updateData = {
       ...(username !== undefined && { username }),
       ...(dateOfBirth !== undefined && { dateOfBirth }),
       ...(gender !== undefined && { gender: gender.toLowerCase() }),
-      ...(language !== undefined && { language }),
+      ...(language !== undefined && { Language: language }), // Note the capital L in Language
       ...(phone !== undefined && { phone }),
+      ...(userCategory !== undefined && { userCategory }),
       updatedAt: new Date()
     };
-
+    
     // Update user profile
     const updatedUser = await User.findByIdAndUpdate(
       userId,
@@ -543,13 +543,13 @@ export const updateProfile = async (req, res) => {
         runValidators: true
       }
     );
-
+    
     return res.status(200).json({
       success: true,
       message: 'Profile updated successfully',
       user: updatedUser
     });
-
+    
   } catch (error) {
     console.error('Profile update error:', error);
     
@@ -561,7 +561,7 @@ export const updateProfile = async (req, res) => {
         errors: Object.values(error.errors).map(err => err.message)
       });
     }
-
+    
     return res.status(500).json({
       success: false,
       message: 'An error occurred while updating the profile',
@@ -569,6 +569,8 @@ export const updateProfile = async (req, res) => {
     });
   }
 };
+
+
 
  
 
