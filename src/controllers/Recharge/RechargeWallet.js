@@ -206,12 +206,13 @@ export const getRechargeHistory = async (req, res) => {
         message: "Wallet not found for this user",
       });
     }
+    const rechargeHistory = wallet.recharges.slice(-20); // Fetch the most recent 20 recharges
 
     // Return the recharges array from the wallet
     return res.status(200).json({
       success: true,
       message: "Recharge history retrieved successfully",
-      data: wallet.recharges,
+      data: rechargeHistory,
       balance: wallet.balance,
     });
   } catch (error) {
