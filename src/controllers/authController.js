@@ -462,7 +462,7 @@ export const updateOrCreateUserCategory = async (req, res) => {
 export const updateProfile = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { username, dateOfBirth, gender, language, phone, userCategory } = req.body;
+    const { username, dateOfBirth, gender, Language, phone, userCategory } = req.body;
     
     // Input validation
     const validationErrors = [];
@@ -528,7 +528,7 @@ export const updateProfile = async (req, res) => {
       ...(username !== undefined && { username }),
       ...(dateOfBirth !== undefined && { dateOfBirth }),
       ...(gender !== undefined && { gender: gender.toLowerCase() }),
-      ...(language !== undefined && { Language: language }), // Note the capital L in Language
+      ...(Language !== undefined && { Language: Language }), // Note the capital L in Language
       ...(phone !== undefined && { phone }),
       ...(userCategory !== undefined && { userCategory }),
       updatedAt: new Date()

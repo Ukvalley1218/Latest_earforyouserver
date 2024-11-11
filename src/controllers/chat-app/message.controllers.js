@@ -153,25 +153,24 @@ const sendMessage = asyncHandler(async (req, res) => {
       receivedMessage
     );
 
-     // Send push notification
-    //  const recipient =  User.findById(participantObjectId); // Find recipient user
-    //  if (recipient.deviceToken) {
-    //    const payload = {
-    //      notification: {
-    //        title: 'New Message',
-    //        body: receivedMessage.content || 'You have a new message.',
-    //      },
-    //      token: recipient.deviceToken,
-    //    };
- 
-    //    admin.messaging().send(payload)
-    //      .then((response) => {
-    //        console.log('Successfully sent message:', response);
-    //      })
-    //      .catch((error) => {
-    //        console.error('Error sending message:', error);
-    //      });
-     //}
+    // Send push notification
+    const recipient = Chat.findById(participants); // Find recipient user
+    if (recipient.deviceToken) {
+      const payload = {
+        notification: {
+          title: 'New Message',
+          body: receivedMessage.content || 'You have a new message.',
+        },
+        token: recipient.deviceToken,
+      }
+      admin.messaging().send(payload)
+        .then((response) => {
+          console.log('Successfully sent message:', response);
+        })
+        .catch((error) => {
+          console.error('Error sending message:', error);
+        });
+    }
   });
 
   return res
