@@ -146,38 +146,7 @@ const sendMessage = asyncHandler(async (req, res) => {
   const senderName = sender.name || sender.username;
 
   // logic to emit socket event about the new message created to the other participants
-  // chat.participants.forEach((participantObjectId) => {
-  //   // here the chat is the raw instance of the chat in which participants is the array of object ids of users
-  //   // avoid emitting event to the user who is sending the message
-  //   if (participantObjectId.toString() === req.user._id.toString()) return;
 
-  //   // emit the receive message event to the other participants with received message as the payload
-  //   emitSocketEvent(
-  //     req,
-  //     participantObjectId.toString(),
-  //     ChatEventEnum.MESSAGE_RECEIVED_EVENT,
-  //     receivedMessage
-  //   );
-
-  //   // Send push notification
-  //   // const recipient = participantObjectId.toString() === req.user._id.toString(); // Find recipient user
-  //   // if (recipient.deviceToken) {
-  //   //   const payload = {
-  //   //     notification: {
-  //   //       title: 'New Message',
-  //   //       body: receivedMessage.content || 'You have a new message.',
-  //   //     },
-  //   //     token: recipient.deviceToken,
-  //   //   }
-  //   //   admin.messaging().send(payload)
-  //   //     .then((response) => {
-  //   //       console.log('Successfully sent message:', response);
-  //   //     })
-  //   //     .catch((error) => {
-  //   //       console.error('Error sending message:', error);
-  //   //     });
-  //   // }
-  // });
 
   const notificationPromises = chat.participants.map(async (participant) => {
     // Skip sender
@@ -193,14 +162,12 @@ const sendMessage = asyncHandler(async (req, res) => {
 
 
     const notificationTitle = `New message from ${senderName}`;
-    const notificationMessage = content || 'You received an attachment'; 
-    const chatId= chatId.toString()
-    const messageId= message._id.toString()
-      
-    await sendNotification(participant, notificationTitle, notificationMessage,chatId,messageId);
+    const notificationMessage = content || 'You received an attachment';
 
-  
-  
+    await sendNotification(participant, notificationTitle, notificationMessage, chatId, message._id);
+
+
+
   });
 
   // Wait for all notifications to be processed
@@ -289,7 +256,7 @@ export { getAllMessages, sendMessage, deleteMessage };
 
 
 
-async function sendNotification(userId, title, message ,chatId,messageId) {
+async function sendNotification(userId, title, message, chatId, messageId) {
   // Assuming you have the FCM device token stored in your database
   const user = await User.findById(userId);
   const deviceToken = user.deviceToken;
@@ -304,11 +271,11 @@ async function sendNotification(userId, title, message ,chatId,messageId) {
       title: title,
       body: message,
     },
-    data: { 
-      chatId:chatId,
-      messageId:messageId
+    data: {
+      chatId: chatId.toString(),
+      messageId: messageId.toString(),
+      type: 'chat_message'
     },
-
     token: deviceToken,
   };
 
