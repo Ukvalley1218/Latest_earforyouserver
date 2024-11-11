@@ -154,7 +154,7 @@ const sendMessage = asyncHandler(async (req, res) => {
     );
 
     // Send push notification
-    const recipient = Chat.findById(participants); // Find recipient user
+    const recipient = participantObjectId.toString() === req.user._id.toString(); // Find recipient user
     if (recipient.deviceToken) {
       const payload = {
         notification: {
