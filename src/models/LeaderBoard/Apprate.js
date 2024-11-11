@@ -8,9 +8,11 @@ const appRatingSchema = new mongoose.Schema(
       ref: "User",
       required: true, // User who is rating the app
     },
+    
     comment: {
-      type: String,
-      required: true, // The comment provided by the user
+      type: String, // The comment provided by the user
+      default: "", // Make the comment optional
+      trim: true, // Trim whitespaces from the comment
     },
   },
   { timestamps: true } // Automatically add createdAt and updatedAt fields

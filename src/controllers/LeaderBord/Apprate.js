@@ -1,28 +1,37 @@
-
-import AppRating from '../../models/LeaderBoard/Apprate.js'
+import AppRating from '../../models/LeaderBoard/Apprate.js';
 import User from "../../models/Users.js";
 
-// Controller function to add a comment
+// Controller function to add a rating
 export const addRating = async (req, res) => {
   try {
-    const { comment } = req.body;
+    const {  comment } = req.body;
     const userId = req.user._id; // Assuming you are using authentication middleware to set user in the request
 
-    if (!comment) {
-      return res.status(400).json({ error: "Comment is required" });
+
+
+    // Check if the user has already rated
+    const existingRating = await AppRating.findOne({ user: userId });
+    if (existingRating) {
+      return res.status(400).json({ error: "You have already rated the app." });
     }
 
-    // Call the service to add the rating
-    const newRating = await AppRating(userId, comment);
+    // Create a new rating
+    const newRating = new AppRating({
+      user: userId,
+      comment: comment || "", // Comment is optional, default to an empty string
+    });
+
+    // Save the new rating to the database
+    await newRating.save();
 
     return res.status(201).json({
-      message: "Comment added successfully",
+      message: "Rating added successfully",
       rating: newRating,
     });
   } catch (error) {
     console.error("Error adding rating:", error);
-    return res.status(400).json({
-      error: error.message, // Return the specific error message (e.g., "You have already rated the app.")
+    return res.status(500).json({
+      error: "Internal server error",
     });
   }
 };
