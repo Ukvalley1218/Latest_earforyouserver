@@ -6,6 +6,8 @@ import { emitSocketEvent } from "../../socket/index.js";
 import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
+import User from "../../models/Users.js";
+
 import {
   getLocalPath,
   getStaticFilePath,
@@ -139,44 +141,90 @@ const sendMessage = asyncHandler(async (req, res) => {
     throw new ApiError(500, "Internal server error");
   }
 
-  // logic to emit socket event about the new message created to the other participants
-  chat.participants.forEach((participantObjectId) => {
-    // here the chat is the raw instance of the chat in which participants is the array of object ids of users
-    // avoid emitting event to the user who is sending the message
-    if (participantObjectId.toString() === req.user._id.toString()) return;
+  const sender = await User.findById(req.user._id).select('username name');
+  const senderName = sender.name || sender.username;
 
-    // emit the receive message event to the other participants with received message as the payload
+  // logic to emit socket event about the new message created to the other participants
+  // chat.participants.forEach((participantObjectId) => {
+  //   // here the chat is the raw instance of the chat in which participants is the array of object ids of users
+  //   // avoid emitting event to the user who is sending the message
+  //   if (participantObjectId.toString() === req.user._id.toString()) return;
+
+  //   // emit the receive message event to the other participants with received message as the payload
+  //   emitSocketEvent(
+  //     req,
+  //     participantObjectId.toString(),
+  //     ChatEventEnum.MESSAGE_RECEIVED_EVENT,
+  //     receivedMessage
+  //   );
+
+  //   // Send push notification
+  //   // const recipient = participantObjectId.toString() === req.user._id.toString(); // Find recipient user
+  //   // if (recipient.deviceToken) {
+  //   //   const payload = {
+  //   //     notification: {
+  //   //       title: 'New Message',
+  //   //       body: receivedMessage.content || 'You have a new message.',
+  //   //     },
+  //   //     token: recipient.deviceToken,
+  //   //   }
+  //   //   admin.messaging().send(payload)
+  //   //     .then((response) => {
+  //   //       console.log('Successfully sent message:', response);
+  //   //     })
+  //   //     .catch((error) => {
+  //   //       console.error('Error sending message:', error);
+  //   //     });
+  //   // }
+  // });
+
+  const notificationPromises = chat.participants.map(async (participant) => {
+    // Skip sender
+    if (participant._id.toString() === req.user._id.toString()) return;
+
+    // Emit socket event
     emitSocketEvent(
       req,
-      participantObjectId.toString(),
+      participant._id.toString(),
       ChatEventEnum.MESSAGE_RECEIVED_EVENT,
       receivedMessage
     );
 
-    // Send push notification
-    // const recipient = participantObjectId.toString() === req.user._id.toString(); // Find recipient user
-    // if (recipient.deviceToken) {
-    //   const payload = {
-    //     notification: {
-    //       title: 'New Message',
-    //       body: receivedMessage.content || 'You have a new message.',
-    //     },
-    //     token: recipient.deviceToken,
-    //   }
-    //   admin.messaging().send(payload)
-    //     .then((response) => {
-    //       console.log('Successfully sent message:', response);
-    //     })
-    //     .catch((error) => {
-    //       console.error('Error sending message:', error);
-    //     });
-    // }
+    // Send push notification if device token exists
+    if (participant.deviceToken) {
+      const notificationPayload = {
+        notification: {
+          title: `New message from ${senderName}`,
+          body: content || 'You received an attachment',
+          badge: '1',
+          sound: 'default'
+        },
+        data: {
+          chatId: chatId.toString(),
+          messageId: message._id.toString(),
+          type: 'chat_message'
+        },
+        token: participant.deviceToken
+      };
+
+      try {
+        await admin.messaging().send(notificationPayload);
+        console.log(`Push notification sent to user ${participant._id}`);
+      } catch (error) {
+        console.error('Error sending push notification:', error);
+        // Don't throw error as push notification failure shouldn't break the message flow
+      }
+    }
   });
+
+  // Wait for all notifications to be processed
+  await Promise.all(notificationPromises);
 
   return res
     .status(201)
     .json(new ApiResponse(201, receivedMessage, "Message saved successfully"));
 });
+
 
 const deleteMessage = asyncHandler(async (req, res) => {
   //controller to delete chat messages and attachments
