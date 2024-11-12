@@ -27,16 +27,8 @@ jobs:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           export_default_credentials: true
 
-      - name: SSH into GCP VM and deploy
-        env:
-          VM_IP: ${{ secrets.VM_IP }} 
-          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}  
+      - name: Deploy to GCP VM
         run: |
-
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ssh_key
-          chmod 600 ssh_key
-
-          # SSH into the VM and run the command
-          ssh -i ssh_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@$VM_IP << 'EOF'
-            pwd  # This will print the current working directory
-          EOF
+          gcloud compute ssh your-instance-name --zone your-instance-zone --command "
+            pwd
+          "
