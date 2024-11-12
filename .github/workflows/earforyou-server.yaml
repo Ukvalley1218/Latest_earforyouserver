@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
@@ -26,7 +26,7 @@ jobs:
 
       - name: Build Docker images
         run: |
-          docker build -t asia-south1-docker.pkg.dev/leafy-flash-441005-g2/earforyou/earforyouserver:v1 .
+          docker build --no-cache -t asia-south1-docker.pkg.dev/leafy-flash-441005-g2/earforyou/earforyouserver:v1 .
 
       - name: Push Docker images to Google Artifact Registry
         run: |
@@ -36,7 +36,7 @@ jobs:
       - name: Deploy to GCP VM
         run: |
           gcloud compute ssh --zone "us-central1-f" "earforyou" --project "leafy-flash-441005-g2" --command "
-            cd /root/deployments
+            cd /home/adityasjoshi12/deployment
             docker-compose pull
             docker-compose up -d
           "
