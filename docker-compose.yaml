@@ -1,12 +1,51 @@
-version: '3'
+version: '3.8'  
+
 services:
-  driverse:
-    image: 73835bf5cb82
-    container_name: driverse
-    ports:
-      - "8080:8080"
+  web:
+    image: asia-south1-docker.pkg.dev/leafy-flash-441005-g2/earforyou/earforyouserver:v1  
+    container_name: earforyouserver
     volumes:
-      - .:/app
+      - ./app:/usr/src/app  
+    ports:
+      - "8080:8080" 
+
+    environment:
+      PORT=8080
+      MONGO_URI=mongodb+srv://saish:saish@earforyou.sxf2v.mongodb.net/?retryWrites=true&w=majority&appName=EarforYou
+      NODE_ENV=development
+      JWT_SECRET=your_jwt_secret
+
+      EMAIL_USER=kumarrupees507@gmail.com
+      EMAIL_PASS=ztto pfxx jolh belu
+      FAST2SMS_API_KEY=https://www.fast2sms.com/dev/bulkV2
+      CORS_ORIGIN=http://localhost:3000,http://localhost:8081,http://localhost:8080,https://demo-virid-five.vercel.app//https://earforyou-server.onrender.com
+      EXPRESS_SESSION_SECRET=7fdOMCFRSLD9cv1k-5n3Dz5n3DmVmVHVIg9GG_OGTUkBfLNdgZAwKDNtoCJ0X0cyqaM0ogR80-zh9kx0Mkx.
+
+      ACCESS_TOKEN_SECRET=LD9cv1kBfgRHVIg9GG_OGzh9TUkcyqgZAaM0o3DmVkx08MCFRSzMocyO3UtNdDNtoCJ0X0-5nLwK7fdO 
+      ACCESS_TOKEN_EXPIRY=1d
+      REFRESH_TOKEN_SECRET=CMdDNtowK7fX0-5D9cv0oJ008MCFRSLHVTUkcyqgZAaIg9GG_OGzh9zMocyO3UtN1kBfLRn3DmVkxdO
+      REFRESH_TOKEN_EXPIRY=10d 
 
 
+      MSG91_AUTH_KEY =433917ALgJm23e672b026eP1
+      DEFAULT_TEMPLATE_ID=672a1727d6fc05546b5b09d2
+      MERCHANT_ID=PGTESTPAYUAT77
+      SALT_KEY=14fa5465-f8a7-443f-8477-f986b8fcfde9
+      SALT_INDEX=1# 1 day.
+      PHONE_PE_HOST_URL=https://api-preprod.phonepe.com/apis/pg-sandbox
+      APP_BE_URL=https://earforyou-server.onrender.com
 
+
+  nginx:
+    image: nginx:latest  
+    container_name: nginx_server
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf  
+    depends_on:
+      - web 
+
+networks:
+  default:
+    driver: bridge 
