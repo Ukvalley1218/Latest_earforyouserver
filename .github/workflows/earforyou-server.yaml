@@ -29,5 +29,8 @@ jobs:
 
       - name: Deploy to GCP VM
         run: |
-          gcloud compute ssh --zone "us-central1-f" "earforyou" --project "leafy-flash-441005-g2"
+          gcloud compute ssh --zone "us-central1-f" "earforyou" --project "leafy-flash-441005-g2" --command "
+            pwd
+            docker-compose up -d
+          "
           
