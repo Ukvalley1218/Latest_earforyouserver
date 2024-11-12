@@ -1,0 +1,42 @@
+name: EAR_FOR_YOU_SERVER
+
+on:
+  push:
+    branches:
+      - main  
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v0.2.0
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          export_default_credentials: true
+
+      - name: Authenticate Docker to Google Artifact Registry
+        run: |
+          gcloud auth configure-docker asia-south1-docker.pkg.dev
+
+      - name: Build Docker images
+        run: |
+          docker build -t asia-south1-docker.pkg.dev/leafy-flash-441005-g2/earforyou/earforyouserver:v1 .
+
+      - name: Push Docker images to Google Artifact Registry
+        run: |
+        
+          docker push asia-south1-docker.pkg.dev/leafy-flash-441005-g2/earforyou/earforyouserver:v1
+
+      - name: Deploy to GCP VM
+        run: |
+          gcloud compute ssh --zone "us-central1-f" "earforyou" --project "leafy-flash-441005-g2" --command "
+
+            docker-compose pull
+            docker-compose up -d
+          "
