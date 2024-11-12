@@ -29,14 +29,13 @@ jobs:
 
       - name: SSH into GCP VM and deploy
         env:
-          VM_IP: ${{ secrets.VM_IP }}  # External IP of your GCP VM
-          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}  # SSH private key
+          VM_IP: ${{ secrets.VM_IP }} 
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}  
         run: |
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ssh_key
           chmod 600 ssh_key
 
-          # SSH into the VM and run Docker Compose commands
-          ssh -i ssh_key -o StrictHostKeyChecking=no user@$VM_IP << 'EOF'
+          ssh -i ssh_key -o StrictHostKeyChecking=no root@$VM_IP << 'EOF'
             pwd
-            docker-compose up -d
+
           EOF
