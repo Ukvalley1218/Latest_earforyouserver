@@ -207,7 +207,7 @@ export const verifyOtp = async (req, res) => {
 export const initiateRegistration = async (req, res) => {
   const { email } = req.body;
   console.log("email:", email);
-  console.log("playstore verification id:", playstoreVerificationId);
+  // console.log("playstore verification id:", playstoreVerificationId);
 
   try {
     // Check if it's a playstore verification request
