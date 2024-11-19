@@ -4,15 +4,8 @@ import jwt from "jsonwebtoken";
 
 const userSchema = new mongoose.Schema(
   {
-    avatar: {
-      type: {
-        url: {
-          type: String,
-          default: "https://cdn-icons-png.flaticon.com/512/660/660611.png", // Default avatar URL
-        },
-        localPath: String,
-        _id: false
-      },
+    avatarUrl: {
+      type: String,
     },
     username: {
       type: String,
@@ -83,6 +76,9 @@ const userSchema = new mongoose.Schema(
     refreshToken: {
       type: String,
     },
+    status: {
+      type: String,
+    }
   },
   { timestamps: true }
 );

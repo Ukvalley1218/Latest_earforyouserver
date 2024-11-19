@@ -13,7 +13,8 @@ import {
     getAllUsers,
     registerUser,
     initiateRegistration,
-    verifyLoginOtp
+    verifyLoginOtp,
+    updateStatus
 } from '../controllers/authController.js';
 // import { validateUserSignup } from '../middlewares/auth/validators.js';
 import { protect } from '../middlewares/auth/authMiddleware.js'
@@ -37,6 +38,7 @@ router.put('/category/:userId', updateOrCreateUserCategory);
 // updateUserDeatil
 
 router.put('/updateProfile/:userId', updateProfile);
+router.put('/updateStatus/:userId', updateStatus);
 router.put('/users/:userId', changeUserType);
 
 // Route to request OTP 

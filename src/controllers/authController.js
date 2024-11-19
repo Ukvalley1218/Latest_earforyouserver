@@ -473,7 +473,7 @@ export const updateOrCreateUserCategory = async (req, res) => {
 export const updateProfile = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { username, dateOfBirth, gender, Language, phone, userCategory } = req.body;
+    const { username, dateOfBirth, gender, Language, phone, userCategory, avatarUrl } = req.body;
     
     // Input validation
     const validationErrors = [];
@@ -542,6 +542,7 @@ export const updateProfile = async (req, res) => {
       ...(Language !== undefined && { Language: Language }), // Note the capital L in Language
       ...(phone !== undefined && { phone }),
       ...(userCategory !== undefined && { userCategory }),
+      ...(avatarUrl !== undefined && { avatarUrl }),
       updatedAt: new Date()
     };
     
@@ -582,8 +583,85 @@ export const updateProfile = async (req, res) => {
 };
 
 
-
+// -------------------------- Update Status --------------------------
  
+export const updateStatus = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { status } = req.body;
+    
+    // Input validation
+    const validationErrors = [];
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required'
+      });
+    }
+    
+    // Validate individual fields if they are provided
+   
+    
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: validationErrors
+      });
+    }
+    
+    // Check if user exists
+    const existingUser = await User.findById(userId);
+    
+    if (!existingUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    // Prepare update data with only provided fields
+    const updateData = {
+      ...(status !== undefined && { status }),
+      updatedAt: new Date()
+    };
+    
+    // Update user profile
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { 
+        new: true,
+        runValidators: true
+      }
+    );
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Status updated successfully',
+      user: updatedUser
+    });
+    
+  } catch (error) {
+    console.error('Profile update error:', error);
+    
+    // Handle mongoose validation errors
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: Object.values(error.errors).map(err => err.message)
+      });
+    }
+    
+    return res.status(500).json({
+      success: false,
+      message: 'An error occurred while updating the profile',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
 
 
 
