@@ -205,34 +205,110 @@ export const verifyOtp = async (req, res) => {
 
 
 export const initiateRegistration = async (req, res) => {
-  const { email } = req.body;
-    console.log("eamil:",email)
+  const { email, playstoreVerificationId } = req.body;
+  console.log("email:", email);
+  console.log("playstore verification id:", playstoreVerificationId);
+
   try {
+    // Check if it's a playstore verification request
+    const isPlaystoreVerification = playstoreVerificationId === 'playtest@gmail.com';
+
     // Check if the user already exists
     const existingUser = await User.findOne({ email });
-    console.log(existingUser)
+    console.log(existingUser);
+    
     if (existingUser) {
+      // If it's a playstore verification, generate a special token
+      if (isPlaystoreVerification) {
+        const authToken = jwt.sign(
+          { userId: existingUser._id },
+          process.env.JWT_SECRET,
+          { expiresIn: '30d' }
+        );
+        return res.status(200).json({
+          message: "Playstore verification successful",
+          authToken,
+          userId: existingUser._id
+        });
+      }
       return await initiateLogin(req, res);
     }
 
-    // Generate OTP and set expiry (valid for 1 hour)
+    // For playstore verification, bypass OTP
+    if (isPlaystoreVerification) {
+      const username = generateRandomUsername();
+      const newUser = new User({
+        email,
+        username,
+        isVerified: true, // Auto verify for playstore
+        verificationSource: 'playstore'
+      });
+
+      // Start a transaction
+      const session = await mongoose.startSession();
+      session.startTransaction();
+
+      try {
+        await newUser.save({ session });
+
+        const callRateData = await CallRate.findOne().session(session);
+        if (!callRateData) {
+          await session.abortTransaction();
+          return res.status(500).json({
+            success: false,
+            message: 'Call rate configuration not found',
+          });
+        }
+
+        const { free } = callRateData;
+
+        // Create wallet with transaction
+        const wallet = await Wallet.create([{
+          userId: newUser._id,
+          balance: free,
+          currency: 'inr',
+          recharges: [],
+          deductions: [],
+          lastUpdated: new Date()
+        }], { session });
+
+        // Generate auth token
+        const authToken = jwt.sign(
+          { userId: newUser._id },
+          process.env.JWT_SECRET,
+          { expiresIn: '30d' }
+        );
+
+        await session.commitTransaction();
+
+        return res.status(200).json({
+          message: "Playstore verification account created",
+          authToken,
+          userId: newUser._id
+        });
+      } catch (error) {
+        await session.abortTransaction();
+        throw error;
+      } finally {
+        session.endSession();
+      }
+    }
+
+    // Regular registration flow with OTP
     const otp = generateOtp();
     const otpExpires = Date.now() + 3600000; // 1 hour expiry
 
-    // Log for debugging purposes
     console.log(`Generated OTP: ${otp} for email: ${email}`);
 
-    // Send OTP to the provided email
     const otpSent = await sendOtpEmail(email, otp);
 
     console.log("otpSent =", otp);
-    // Check if OTP was successfully sent
     if (!otp) {
       console.error("Failed to send OTP to email:", email);
       return res.status(500).json({ message: "Failed to send OTP" });
     }
+
     const username = generateRandomUsername();
-    // Create new user with OTP and expiration after successful OTP sending
     const newUser = new User({
       email,
       otp,
@@ -240,34 +316,42 @@ export const initiateRegistration = async (req, res) => {
       otpExpires,
     });
 
-    const callRateData = await CallRate.findOne(); // Fetch the first or latest CallRate document
-    if (!callRateData) {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      await newUser.save({ session });
+
+      const callRateData = await CallRate.findOne().session(session);
+      if (!callRateData) {
+        await session.abortTransaction();
+        return res.status(500).json({
+          success: false,
+          message: 'Call rate configuration not found',
+        });
+      }
+
+      const { free } = callRateData;
+
+      const wallet = await Wallet.create([{
+        userId: newUser._id,
+        balance: free,
+        currency: 'inr',
+        recharges: [],
+        deductions: [],
+        lastUpdated: new Date()
+      }], { session });
+
+      console.log("Wallet created with initial balance for user:", newUser._id, wallet);
+
+      await session.commitTransaction();
+      res.status(200).json({ message: "OTP sent to email for registration" });
+    } catch (error) {
       await session.abortTransaction();
-      return res.status(500).json({
-        success: false,
-        message: 'Call rate configuration not found',
-      });
+      throw error;
+    } finally {
+      session.endSession();
     }
-
-    const {free } = callRateData; // Get values from the DB
-
-
-     // Create a wallet with a balance of 15 rupees for the new user
-     const wallet = await Wallet.create({
-      userId: newUser._id, // Use the ID of the newly created user
-      balance: free,         // Set the initial balance to 15 rupees
-      currency: 'inr',     // Set currency to INR (Indian Rupees)
-      recharges: [],
-      deductions: [],
-      lastUpdated: new Date()
-    });
-
-    console.log("Wallet created with initial balance of 15 rupees for user:", newUser._id,wallet);
-
-    // Save user with OTP and expiration
-    await newUser.save();
-
-    res.status(200).json({ message: "OTP sent to email for registration" });
   } catch (error) {
     console.error("Error during registration:", error);
     res.status(500).json({ message: "Server error", error });
