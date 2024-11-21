@@ -81,107 +81,107 @@ export const initiatePayment = async (req, res) => {
 };
 
 
-export const validatePayment = async (req, res) => {
-  const { merchantTransactionId, userId } = req.body; // Since we're now passing it in the URL params
+// export const validatePayment = async (req, res) => {
+//   const { merchantTransactionId, userId } = req.body; // Since we're now passing it in the URL params
 
-  if (!merchantTransactionId) {
-    return res.status(400).send("Invalid transaction ID");
-  }
-  if (!userId) {
-    return res.status(400).send("Invalid UserId ID");
-  }
+//   if (!merchantTransactionId) {
+//     return res.status(400).send("Invalid transaction ID");
+//   }
+//   if (!userId) {
+//     return res.status(400).send("Invalid UserId ID");
+//   }
 
-  try {
-    // Construct the status URL
-    const statusUrl = `${process.env.PHONE_PE_HOST_URL}/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}`;
+//   try {
+//     // Construct the status URL
+//     const statusUrl = `${process.env.PHONE_PE_HOST_URL}/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}`;
 
-    // Create the X-VERIFY checksum
-    const stringToHash = `/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}${process.env.SALT_KEY}`;
-    const sha256Hash = sha256(stringToHash);
-    const xVerifyChecksum = `${sha256Hash}###${process.env.SALT_INDEX}`;
+//     // Create the X-VERIFY checksum
+//     const stringToHash = `/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}${process.env.SALT_KEY}`;
+//     const sha256Hash = sha256(stringToHash);
+//     const xVerifyChecksum = `${sha256Hash}###${process.env.SALT_INDEX}`;
 
-    // Make the request to check payment status
-    const response = await axios.get(statusUrl, {
-      headers: {
-        "Content-Type": "application/json",
-        "X-VERIFY": xVerifyChecksum,
-        "X-MERCHANT-ID": merchantTransactionId,
-        accept: "application/json",
-      },
-    });
+//     // Make the request to check payment status
+//     const response = await axios.get(statusUrl, {
+//       headers: {
+//         "Content-Type": "application/json",
+//         "X-VERIFY": xVerifyChecksum,
+//         "X-MERCHANT-ID": merchantTransactionId,
+//         accept: "application/json",
+//       },
+//     });
 
-    // Check if the payment was successful
-    if (response.data && response.data.code === "PAYMENT_SUCCESS") {
-      const { amount } = response.data.data;
+//     // Check if the payment was successful
+//     if (response.data && response.data.code === "PAYMENT_SUCCESS") {
+//       const { amount } = response.data.data;
 
-      // Fetch the plan from the database
-      const plan = await SubscriptionPlan.findOne({ planId: response.data.data.planId });
+//       // Fetch the plan from the database
+//       const plan = await SubscriptionPlan.findOne({ planId: response.data.data.planId });
 
-      if (!plan) {
-        return res.status(404).json({
-          success: false,
-          message: 'Plan not found.',
-        });
-      }
+//       if (!plan) {
+//         return res.status(404).json({
+//           success: false,
+//           message: 'Plan not found.',
+//         });
+//       }
 
-      // Assign the plan to the user
-      const expirationDate = new Date(Date.now() + plan.validity * 24 * 60 * 60 * 1000); // Validity in days
-      const planDetails = {
-        planId: plan._id,
-        validity: plan.validity,
-        expirationDate: expirationDate,
-        status: 'active', // Initially, the plan is active
-        minutesLeft: plan.talkTime, // Allocate minutes to the plan (using `talkTime` from the schema)
-      };
+//       // Assign the plan to the user
+//       const expirationDate = new Date(Date.now() + plan.validity * 24 * 60 * 60 * 1000); // Validity in days
+//       const planDetails = {
+//         planId: plan._id,
+//         validity: plan.validity,
+//         expirationDate: expirationDate,
+//         status: 'active', // Initially, the plan is active
+//         minutesLeft: plan.talkTime, // Allocate minutes to the plan (using `talkTime` from the schema)
+//       };
 
-      // Fetch the user's wallet (optional: you can log the purchase here too)
-      const wallet = await Wallet.findOne({ userId });
+//       // Fetch the user's wallet (optional: you can log the purchase here too)
+//       const wallet = await Wallet.findOne({ userId });
       
-      if (!wallet) {
-        return res.status(404).json({
-          success: false,
-          message: 'Wallet not found for this user',
-        });
-      }
+//       if (!wallet) {
+//         return res.status(404).json({
+//           success: false,
+//           message: 'Wallet not found for this user',
+//         });
+//       }
 
-      // Add the plan to the user's account
-      wallet.plans = wallet.plans || [];
-      wallet.plans.push(planDetails);
+//       // Add the plan to the user's account
+//       wallet.plans = wallet.plans || [];
+//       wallet.plans.push(planDetails);
       
-      // Log the payment in the recharge history
-      wallet.recharges.push({
-        amount: amount / 100,  // Convert from paise to rupees
-        rechargeMethod: 'PhonePe',
-        transactionId: merchantTransactionId, // Unique transaction ID
-        state: 'COMPLETED',
-        createdAt: new Date(),
-      });
+//       // Log the payment in the recharge history
+//       wallet.recharges.push({
+//         amount: amount / 100,  // Convert from paise to rupees
+//         rechargeMethod: 'PhonePe',
+//         transactionId: merchantTransactionId, // Unique transaction ID
+//         state: 'COMPLETED',
+//         createdAt: new Date(),
+//       });
 
-      // Save the wallet and plan info
-      await wallet.save();
+//       // Save the wallet and plan info
+//       await wallet.save();
 
-      // Send a notification to the user
-      await sendNotification(userId, 'Plan Purchased Successfully', `You have successfully purchased the plan. Your new plan expires on ${expirationDate}.`);
+//       // Send a notification to the user
+//       await sendNotification(userId, 'Plan Purchased Successfully', `You have successfully purchased the plan. Your new plan expires on ${expirationDate}.`);
 
-      return res.status(200).json({
-        success: true,
-        message: 'Plan purchased and wallet updated successfully',
-        data: {
-          plan: planDetails,
-        },
-      });
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: "Payment validation failed",
-        data: response.data
-      });
-    }
-  } catch (error) {
-    console.error("Error in payment validation:", error);
-    return res.status(500).send({ error: "Payment validation failed" });
-  }
-};
+//       return res.status(200).json({
+//         success: true,
+//         message: 'Plan purchased and wallet updated successfully',
+//         data: {
+//           plan: planDetails,
+//         },
+//       });
+//     } else {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Payment validation failed",
+//         data: response.data
+//       });
+//     }
+//   } catch (error) {
+//     console.error("Error in payment validation:", error);
+//     return res.status(500).send({ error: "Payment validation failed" });
+//   }
+// };
 
 
 export const buyPlan = async (req, res) => {
@@ -227,118 +227,118 @@ export const buyPlan = async (req, res) => {
   }
 };
 
-// export const validatePayment = async (req, res) => {
-//   const { merchantTransactionId, userId } = req.body; // Since we're now passing it in the URL params
-//   console.log("userId and merchantTransactionId:", userId, merchantTransactionId);
-//   if (!merchantTransactionId) {
-//     return res.status(400).send("Invalid transaction ID");
-//   }
-//   if (!userId) {
-//     return res.status(400).send("Invalid UserId ID");
-//   }
+export const validatePayment = async (req, res) => {
+  const { merchantTransactionId, userId } = req.body; // Since we're now passing it in the URL params
+  console.log("userId and merchantTransactionId:", userId, merchantTransactionId);
+  if (!merchantTransactionId) {
+    return res.status(400).send("Invalid transaction ID");
+  }
+  if (!userId) {
+    return res.status(400).send("Invalid UserId ID");
+  }
 
-//   try {
-//     // Construct the status URL
-//     const statusUrl = `${process.env.PHONE_PE_HOST_URL}/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}`;
+  try {
+    // Construct the status URL
+    const statusUrl = `${process.env.PHONE_PE_HOST_URL}/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}`;
 
-//     // Create the X-VERIFY checksum
-//     const stringToHash = `/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}${process.env.SALT_KEY}`;
-//     const sha256Hash = sha256(stringToHash);
-//     const xVerifyChecksum = `${sha256Hash}###${process.env.SALT_INDEX}`;
+    // Create the X-VERIFY checksum
+    const stringToHash = `/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}${process.env.SALT_KEY}`;
+    const sha256Hash = sha256(stringToHash);
+    const xVerifyChecksum = `${sha256Hash}###${process.env.SALT_INDEX}`;
 
-//     // Make the request to check payment status
-//     const response = await axios.get(statusUrl, {
-//       headers: {
-//         "Content-Type": "application/json",
-//         "X-VERIFY": xVerifyChecksum,
-//         "X-MERCHANT-ID": merchantTransactionId,
-//         accept: "application/json",
-//       },
-//     });
+    // Make the request to check payment status
+    const response = await axios.get(statusUrl, {
+      headers: {
+        "Content-Type": "application/json",
+        "X-VERIFY": xVerifyChecksum,
+        "X-MERCHANT-ID": merchantTransactionId,
+        accept: "application/json",
+      },
+    });
 
-//     console.log("Payment validation response->", response.data);
+    console.log("Payment validation response->", response.data);
 
-//     // Check if the payment was successful
-//     if (response.data && response.data.code === "PAYMENT_SUCCESS") {
-//       const { amount } = response.data.data;
+    // Check if the payment was successful
+    if (response.data && response.data.code === "PAYMENT_SUCCESS") {
+      const { amount } = response.data.data;
       
-//       let wallet = await Wallet.findOne({ userId });
+      let wallet = await Wallet.findOne({ userId });
 
-//       if (!wallet) {
+      if (!wallet) {
 
         
-//         wallet = await Wallet.create({
-//           userId: userId,
-//           balance: 0,
-//           currency: 'inr', // matches schema default
-//           recharges: [],
-//           deductions: [],
-//           lastUpdated: new Date()
-//         });
-//       }
+        wallet = await Wallet.create({
+          userId: userId,
+          balance: 0,
+          currency: 'inr', // matches schema default
+          recharges: [],
+          deductions: [],
+          lastUpdated: new Date()
+        });
+      }
 
-//       // Create recharge object matching your schema exactly
-//       const newRecharge = {
-//         amount: amount / 100, // Convert from paise to rupees
-//         merchantTransactionId: merchantTransactionId,
-//         state: response.data.data.state || 'COMPLETED',
-//         responseCode: response.data.code,
-//         rechargeMethod: "PhonePe",
-//         rechargeDate: new Date(),
-//         transactionId: merchantTransactionId // Using merchantTransactionId as transactionId
-//       };
+      // Create recharge object matching your schema exactly
+      const newRecharge = {
+        amount: amount / 100, // Convert from paise to rupees
+        merchantTransactionId: merchantTransactionId,
+        state: response.data.data.state || 'COMPLETED',
+        responseCode: response.data.code,
+        rechargeMethod: "PhonePe",
+        rechargeDate: new Date(),
+        transactionId: merchantTransactionId // Using merchantTransactionId as transactionId
+      };
 
-//       // Calculate new balance
-//       const newBalance = Number(wallet.balance) + Number(newRecharge.amount);
+      // Calculate new balance
+      const newBalance = Number(wallet.balance) + Number(newRecharge.amount);
       
-//       // Update wallet
-//       wallet.balance = newBalance;
-//       wallet.recharges.push(newRecharge);
-//       // lastUpdated will be automatically updated by the pre-save hook
+      // Update wallet
+      wallet.balance = newBalance;
+      wallet.recharges.push(newRecharge);
+      // lastUpdated will be automatically updated by the pre-save hook
 
-//       await wallet.save();
-//       await sendNotification(userId, "Payment Successful", `Your wallet has been credited with ₹${newRecharge.amount}. New balance: ₹${wallet.balance}.`);
+      await wallet.save();
+      await sendNotification(userId, "Payment Successful", `Your wallet has been credited with ₹${newRecharge.amount}. New balance: ₹${wallet.balance}.`);
 
-//       return res.status(200).send({ 
-//         success: true, 
-//         message: "Payment validated and wallet updated",
-//         data: {
-//           balance: wallet.balance,
-//           transaction: newRecharge
-//         }
-//       });
-//     } else {
-//       // For failed payments
-//       let wallet = await Wallet.findOne({ userId });
+      return res.status(200).send({ 
+        success: true, 
+        message: "Payment validated and wallet updated",
+        data: {
+          balance: wallet.balance,
+          transaction: newRecharge
+        }
+      });
+    } else {
+      // For failed payments
+      let wallet = await Wallet.findOne({ userId });
       
-//       if (wallet) {
-//         const failedRecharge = {
-//           amount: response.data.data?.amount ? response.data.data.amount / 100 : 0,
-//           merchantTransactionId: merchantTransactionId,
-//           state: response.data.data?.state || 'FAILED',
-//           responseCode: response.data.code,
-//           rechargeMethod: "PhonePe",
-//           rechargeDate: new Date(),
-//           transactionId: merchantTransactionId
-//         };
+      if (wallet) {
+        const failedRecharge = {
+          amount: response.data.data?.amount ? response.data.data.amount / 100 : 0,
+          merchantTransactionId: merchantTransactionId,
+          state: response.data.data?.state || 'FAILED',
+          responseCode: response.data.code,
+          rechargeMethod: "PhonePe",
+          rechargeDate: new Date(),
+          transactionId: merchantTransactionId
+        };
 
-//         wallet.recharges.push(failedRecharge);
-//         await wallet.save();
-//         await sendNotification(userId, "Payment failed", `Your wallet has been failed with ₹${newRecharge.amount}. New balance: ₹${wallet.balance}.`);
+        wallet.recharges.push(failedRecharge);
+        await wallet.save();
+        await sendNotification(userId, "Payment failed", `Your wallet has been failed with ₹${newRecharge.amount}. New balance: ₹${wallet.balance}.`);
 
-//       }
+      }
 
-//       return res.status(400).send({
-//         success: false,
-//         message: "Payment validation failed",
-//         data: response.data
-//       });
-//     }
-//   } catch (error) {
-//     console.error("Error in payment validation:", error);
-//     return res.status(500).send({ error: "Payment validation failed" });
-//   }
-// };
+      return res.status(400).send({
+        success: false,
+        message: "Payment validation failed",
+        data: response.data
+      });
+    }
+  } catch (error) {
+    console.error("Error in payment validation:", error);
+    return res.status(500).send({ error: "Payment validation failed" });
+  }
+};
 
 
 

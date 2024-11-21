@@ -257,7 +257,46 @@ export { getAllMessages, sendMessage, deleteMessage };
 
 
 
-async function sendNotification(userId, title, message, chatId, messageId, senderId, sendername, senderavatar) {
+// async function sendNotification(userId, title, message, chatId, messageId, senderId, sendername, senderavatar) {
+//   // Assuming you have the FCM device token stored in your database
+//   const user = await User.findById(userId);
+//   const deviceToken = user.deviceToken;
+
+//   if (!deviceToken) {
+//     console.error("No device token found for user:", userId);
+//     return;
+//   }
+
+//   const payload = {
+//     notification: {
+//       title: title,
+//       body: message,
+//     },
+//     data: {
+//       screen: 'Chat', // The screen name you want to navigate to
+//       params: JSON.stringify({
+//         chatId: chatId,
+//         messageId: messageId,
+//         type: 'chat_message',
+//         AgentID: senderId,
+//         friendName: sendername,
+//         imageurl: senderavatar || '', // Add sender's avatar if available
+//       // Include any other parameters your Chat screen needs
+//     })
+     
+//     },
+//     token: deviceToken,
+//   };
+
+//   try {
+//     const response = await admin.messaging().send(payload);
+//     console.log("Notification sent successfully:", response);
+//   } catch (error) {
+//     console.error("Error sending notification:", error);
+//   }
+// }
+
+async function sendNotification(userId, title, message, chatId, messageId, senderId, senderName, senderAvatar) {
   // Assuming you have the FCM device token stored in your database
   const user = await User.findById(userId);
   const deviceToken = user.deviceToken;
@@ -271,6 +310,7 @@ async function sendNotification(userId, title, message, chatId, messageId, sende
     notification: {
       title: title,
       body: message,
+      image: senderAvatar || '', // Adding the sender's avatar as the image
     },
     data: {
       screen: 'Chat', // The screen name you want to navigate to
@@ -279,11 +319,10 @@ async function sendNotification(userId, title, message, chatId, messageId, sende
         messageId: messageId,
         type: 'chat_message',
         AgentID: senderId,
-        friendName: sendername,
-        imageurl: senderavatar || '', // Add sender's avatar if available
-      // Include any other parameters your Chat screen needs
-    })
-     
+        friendName: senderName,
+        imageurl: senderAvatar || '', // Include sender's avatar in data
+      }),
+      // Add any other data parameters your Chat screen needs
     },
     token: deviceToken,
   };
