@@ -250,7 +250,7 @@ export const setupWebRTC = (io) => {
 
     // Initial call request
 
-    socket.on('call', async ({ callerId, receiverId }) => {
+   socket.on('call', async ({ callerId, receiverId }) => {
       try {
         logger.info(`User ${callerId} is calling User ${receiverId}`);
     
