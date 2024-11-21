@@ -145,13 +145,16 @@ const sendMessage = asyncHandler(async (req, res) => {
 
   const sender = await User.findById(req.user._id).select('username name');
   const senderName = sender.name || sender.username;
+  const senderurl = sender.avatarUrl || sender.avatarUrl;
 
   // logic to emit socket event about the new message created to the other participants
 
 
   const notificationPromises = chat.participants.map(async (participant) => {
+    
     // Skip sender
     if (participant._id.toString() === req.user._id.toString()) return;
+
 
     // Emit socket event
     emitSocketEvent(
@@ -160,12 +163,11 @@ const sendMessage = asyncHandler(async (req, res) => {
       ChatEventEnum.MESSAGE_RECEIVED_EVENT,
       receivedMessage
     );
-
-
-    const notificationTitle = `New message from ${senderName}`;
-    const notificationMessage = content || 'You received an attachment';
-
-    await sendNotification(participant, notificationTitle, notificationMessage, chatId, message._id, sender._id, senderName, sender.avatarUrl);
+    const notificationTitle = `💬 Hey, ${senderName} sent you a message! ✨`;
+    const notificationMessage = content 
+      ? `📨 "${content}"` 
+      : '📎 You’ve got an attachment waiting for you! Tap to check it out!';
+    await sendNotification(participant, notificationTitle, notificationMessage, chatId, message._id, sender._id, senderName, senderurl);
 
 
 
@@ -310,7 +312,7 @@ async function sendNotification(userId, title, message, chatId, messageId, sende
     notification: {
       title: title,
       body: message,
-      image: senderAvatar || '', // Adding the sender's avatar as the image
+      image: senderurl || 'https://investogram.ukvalley.com/avatars/default.png', // Adding the sender's avatar as the image
     },
     data: {
       screen: 'Chat', // The screen name you want to navigate to
@@ -320,7 +322,7 @@ async function sendNotification(userId, title, message, chatId, messageId, sende
         type: 'chat_message',
         AgentID: senderId,
         friendName: senderName,
-        imageurl: senderAvatar || '', // Include sender's avatar in data
+        imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png', // Include sender's avatar in data
       }),
       // Add any other data parameters your Chat screen needs
     },

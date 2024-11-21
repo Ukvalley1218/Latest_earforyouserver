@@ -253,53 +253,66 @@ export const setupWebRTC = (io) => {
     socket.on('call', async ({ callerId, receiverId }) => {
       try {
         logger.info(`User ${callerId} is calling User ${receiverId}`);
-
+    
         // Check if either user is already in a call
         if (activeCalls[receiverId] || activeCalls[callerId]) {
           socket.emit('userBusy', { receiverId });
           logger.warn(`User ${receiverId} or ${callerId} is already in a call`);
           return;
         }
-
-        // Get user details
-        const receiver = await User.findById(receiverId);
-        const caller = await User.findById(callerId);
-
+    
+        // Fetch user details
+        const [receiver, caller] = await Promise.all([
+          User.findById(receiverId),
+          User.findById(callerId),
+        ]);
+    
         if (!receiver) {
           socket.emit('userUnavailable', { receiverId });
           logger.warn(`User ${receiverId} not found`);
           return;
         }
-
+    
+        if (!caller) {
+          socket.emit('userUnavailable', { callerId });
+          logger.warn(`User ${callerId} not found`);
+          return;
+        }
+    
         // Initialize socket arrays if needed
         if (!users[callerId]) users[callerId] = [];
         if (!users[receiverId]) users[receiverId] = [];
-
+    
         // Add current socket to caller's sockets if not already present
         if (!users[callerId].includes(socket.id)) {
           users[callerId].push(socket.id);
         }
-
+    
         if (users[receiverId].length > 0) {
-          // Emit incoming call to all receiver's sockets
+          // Notify all receiver's sockets about the incoming call
           users[receiverId].forEach((socketId) => {
             socket.to(socketId).emit('incomingCall', {
               callerId,
-              socketId: socket.id
+              callerSocketId: socket.id, // Provide caller's socket ID
             });
           });
-
+    
+          // Notify the caller to play caller tune
           socket.emit('playCallerTune', { callerId });
-
-          // Send push notification if available
+    
+          // Send push notification if the receiver has a device token
           if (receiver.deviceToken) {
             const title = 'Incoming Call';
             const message = `${caller.username} is calling you!`;
-            await sendNotification(receiverId, title, message);
+            const type = 'Incoming_Call';
+            const senderName = caller.username || 'Unknown Caller';
+            const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
+    
+            await sendNotification(receiverId, title, message, type, callerId, receiverId, senderName, senderAvatar);
             logger.info(`Push notification sent to User ${receiverId}`);
           }
-          
         } else {
+          // Receiver is unavailable for the call
           socket.emit('userUnavailable', { receiverId });
           logger.warn(`User ${receiverId} is unavailable for the call`);
         }
@@ -308,7 +321,7 @@ export const setupWebRTC = (io) => {
         socket.emit('callError', { message: 'Failed to initiate call' });
       }
     });
-
+    
 
     // Handle WebRTC offer
     socket.on('offer', async ({ offer, callerId, receiverId }) => {
@@ -710,25 +723,38 @@ export const setupWebRTC = (io) => {
 
 
 
-async function sendNotification(userId, title, message) {
-  // Assuming you have the FCM device token stored in your database
-  const user = await User.findById(userId);
-  const deviceToken = user.deviceToken;
-
-  if (!deviceToken) {
-    console.error("No device token found for user:", userId);
-    return;
-  }
-
-  const payload = {
-    notification: {
-      title: title,
-      body: message,
-    },
-    token: deviceToken,
-  };
-
+async function sendNotification(userId, title, message, type, CallId, receiverId, senderName, senderAvatar) {
   try {
+    // Fetch the user from the database
+    const user = await User.findById(userId);
+    if (!user || !user.deviceToken) {
+      console.error("No device token found for user:", userId);
+      return;
+    }
+
+    const deviceToken = user.deviceToken;
+
+    // Construct the payload for FCM
+    const payload = {
+      notification: {
+        title: title,
+        body: message,
+      },
+      data: {
+        screen: 'Call', // Target screen
+        params: JSON.stringify({
+          CallId: CallId, // Include Call ID
+          type: type, // Type of call
+          AgentID: receiverId, // Receiver ID
+          friendName: senderName, // Sender name
+          imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png', // Sender avatar with default fallback
+        }),
+        // Add any additional parameters if needed
+      },
+      token: deviceToken,
+    };
+
+    // Send the notification
     const response = await admin.messaging().send(payload);
     console.log("Notification sent successfully:", response);
   } catch (error) {
