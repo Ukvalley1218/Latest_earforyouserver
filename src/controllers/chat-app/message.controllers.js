@@ -145,7 +145,7 @@ const sendMessage = asyncHandler(async (req, res) => {
 
   const sender = await User.findById(req.user._id).select('username name');
   const senderName = sender.name || sender.username;
-  const senderurl = sender.avatarUrl || sender.avatarUrl;
+  
 
   // logic to emit socket event about the new message created to the other participants
 
@@ -167,7 +167,7 @@ const sendMessage = asyncHandler(async (req, res) => {
     const notificationMessage = content 
       ? `📨 "${content}"` 
       : '📎 You’ve got an attachment waiting for you! Tap to check it out!';
-    await sendNotification(participant, notificationTitle, notificationMessage, chatId, message._id, sender._id, senderName, senderurl);
+    await sendNotification(participant, notificationTitle, notificationMessage, chatId, message._id, sender._id, senderName);
 
 
 
@@ -312,7 +312,7 @@ async function sendNotification(userId, title, message, chatId, messageId, sende
     notification: {
       title: title,
       body: message,
-      image: senderurl || 'https://investogram.ukvalley.com/avatars/default.png', // Adding the sender's avatar as the image
+     
     },
     data: {
       screen: 'Chat', // The screen name you want to navigate to
@@ -322,7 +322,7 @@ async function sendNotification(userId, title, message, chatId, messageId, sende
         type: 'chat_message',
         AgentID: senderId,
         friendName: senderName,
-        imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png', // Include sender's avatar in data
+        
       }),
       // Add any other data parameters your Chat screen needs
     },
