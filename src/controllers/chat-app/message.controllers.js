@@ -274,7 +274,6 @@ async function sendNotification(userId, title, message, chatId, messageId, sende
     notification: {
       title: title,
       body: message,
-      imageurl:senderavatar
 
     },
     data: {
