@@ -11,24 +11,24 @@ import SubscriptionPlan from '../../models/Subscription/Subscription.js';
 
 export const initiatePayment = async (req, res) => {
   try {
-    const { userId, planId  } = req.body;
+    const { userId, planId } = req.body;
     const plan = await SubscriptionPlan.findById(planId);
     console.log(plan)
-     // Step 1: Validate the input
-     if (!userId || !planId) {
+    // Step 1: Validate the input
+    if (!userId || !planId) {
       return res.status(400).json({
         success: false,
         message: 'Invalid input. User ID and plan ID are required.',
       });
     }
 
-    
+
     // Step 2: Fetch the plan details from the SubscriptionPlan collection
-    const amount=plan.price;
+    const amount = plan.price;
     console
 
 
-  
+
 
     // Generate a unique merchant transaction ID
     const merchantTransactionId = uniqid();
@@ -80,6 +80,139 @@ export const initiatePayment = async (req, res) => {
   }
 };
 
+export const validatePayment = async (req, res) => {
+  const { merchantTransactionId, userId } = req.params;
+  console.log("userId and merchantTransactionId:", userId, merchantTransactionId);
+
+  if (!merchantTransactionId) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid transaction ID"
+    });
+  }
+  if (!userId) {
+    return res.status(400).json({
+      success: false, 
+      message: "Invalid User ID"
+    });
+  }
+
+  try {
+    // Construct the status URL
+    const statusUrl = `${process.env.PHONE_PE_HOST_URL}/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}`;
+
+    // Create the X-VERIFY checksum
+    const stringToHash = `/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}${process.env.SALT_KEY}`;
+    const sha256Hash = sha256(stringToHash);
+    const xVerifyChecksum = `${sha256Hash}###${process.env.SALT_INDEX}`;
+
+    // Make the request to check payment status
+    const response = await axios.get(statusUrl, {
+      headers: {
+        "Content-Type": "application/json",
+        "X-VERIFY": xVerifyChecksum,
+        "X-MERCHANT-ID": process.env.MERCHANT_ID,
+        accept: "application/json",
+      },
+    });
+
+    console.log("Payment validation response->", response.data);
+
+    // Check if the payment was successful
+    if (response.data && response.data.code === "PAYMENT_SUCCESS") {
+      const { amount } = response.data.data;
+
+      let wallet = await Wallet.findOne({ userId });
+
+      if (!wallet) {
+        wallet = await Wallet.create({
+          userId: userId,
+          balance: 0,
+          currency: 'inr',
+          recharges: [],
+          deductions: [],
+          lastUpdated: new Date()
+        });
+      }
+
+      // Create recharge object
+      const newRecharge = {
+        amount: amount / 100, // Convert from paise to rupees
+        merchantTransactionId: merchantTransactionId,
+        state: response.data.data.state || 'COMPLETED',
+        responseCode: response.data.code,
+        rechargeMethod: "PhonePe",
+        rechargeDate: new Date(),
+        transactionId: merchantTransactionId
+      };
+
+      // Calculate new balance
+      const newBalance = Number(wallet.balance) + Number(newRecharge.amount);
+
+      // Update wallet
+      wallet.balance = newBalance;
+      wallet.recharges.push(newRecharge);
+      await wallet.save();
+
+      await sendNotification(userId, "Payment Successful", `Your wallet has been credited with ₹${newRecharge.amount}. New balance: ₹${wallet.balance}.`);
+
+      return res.status(200).json({
+        success: true,
+        message: "Payment validated and wallet updated",
+        data: {
+          balance: wallet.balance,
+          transaction: newRecharge
+        }
+      });
+    } else {
+      // For failed payments
+      let wallet = await Wallet.findOne({ userId });
+
+      const failedRecharge = {
+        amount: response.data.data?.amount ? response.data.data.amount / 100 : 0,
+        merchantTransactionId: merchantTransactionId,
+        state: response.data.data?.state || 'FAILED',
+        responseCode: response.data.code,
+        rechargeMethod: "PhonePe",
+        rechargeDate: new Date(),
+        transactionId: merchantTransactionId
+      };
+
+      if (wallet) {
+        wallet.recharges.push(failedRecharge);
+        await wallet.save();
+      }
+
+      await sendNotification(userId, "Payment Failed", 
+        `Your payment of ₹${failedRecharge.amount} has failed. 
+         Reason: ${response.data.code || 'Unknown error'}`
+      );
+
+      return res.status(400).json({
+        success: false,
+        message: "Payment validation failed",
+        errorCode: response.data.code,
+        details: response.data
+      });
+    }
+  } catch (error) {
+    console.error("Error in payment validation:", {
+      message: error.message,
+      stack: error.stack,
+      responseData: error.response?.data,
+      requestDetails: {
+        merchantTransactionId,
+        userId
+      }
+    });
+    
+    return res.status(500).json({
+      success: false,
+      message: "Payment validation failed",
+      error: error.message
+    });
+  }
+};
 
 // export const validatePayment = async (req, res) => {
 //   const { merchantTransactionId, userId } = req.body; // Since we're now passing it in the URL params
@@ -136,7 +269,7 @@ export const initiatePayment = async (req, res) => {
 
 //       // Fetch the user's wallet (optional: you can log the purchase here too)
 //       const wallet = await Wallet.findOne({ userId });
-      
+
 //       if (!wallet) {
 //         return res.status(404).json({
 //           success: false,
@@ -147,7 +280,7 @@ export const initiatePayment = async (req, res) => {
 //       // Add the plan to the user's account
 //       wallet.plans = wallet.plans || [];
 //       wallet.plans.push(planDetails);
-      
+
 //       // Log the payment in the recharge history
 //       wallet.recharges.push({
 //         amount: amount / 100,  // Convert from paise to rupees
@@ -198,7 +331,7 @@ export const buyPlan = async (req, res) => {
 
     // Step 2: Fetch the plan details from the SubscriptionPlan collection
     const plan = await SubscriptionPlan.findById(planId);
-    
+
     if (!plan) {
       return res.status(404).json({
         success: false,
@@ -227,116 +360,7 @@ export const buyPlan = async (req, res) => {
   }
 };
 
-export const validatePayment = async (req, res) => {
-  const { merchantTransactionId, userId } = req.body;
-  console.log("userId and merchantTransactionId:", userId, merchantTransactionId);
 
-  if (!merchantTransactionId) {
-    return res.status(400).send("Invalid transaction ID");
-  }
-  if (!userId) {
-    return res.status(400).send("Invalid User ID");
-  }
-
-  try {
-    // Construct the status URL
-    const statusUrl = `${process.env.PHONE_PE_HOST_URL}/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}`;
-
-    // Create the X-VERIFY checksum
-    const stringToHash = `/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}${process.env.SALT_KEY}`;
-    const sha256Hash = sha256(stringToHash);
-    const xVerifyChecksum = `${sha256Hash}###${process.env.SALT_INDEX}`;
-
-    // Make the request to check payment status
-    const response = await axios.get(statusUrl, {
-      headers: {
-        "Content-Type": "application/json",
-        "X-VERIFY": xVerifyChecksum,
-        "X-MERCHANT-ID": process.env.MERCHANT_ID, // Fix: Use MERCHANT_ID from env, not merchantTransactionId
-        accept: "application/json",
-      },
-    });
-
-    console.log("Payment validation response->", response.data);
-
-    // Check if the payment was successful
-    if (response.data && response.data.code === "PAYMENT_SUCCESS") {
-      const { amount } = response.data.data;
-
-      let wallet = await Wallet.findOne({ userId });
-
-      if (!wallet) {
-        wallet = await Wallet.create({
-          userId: userId,
-          balance: 0,
-          currency: 'inr',
-          recharges: [],
-          deductions: [],
-          lastUpdated: new Date()
-        });
-      }
-
-      // Create recharge object
-      const newRecharge = {
-        amount: amount / 100, // Convert from paise to rupees
-        merchantTransactionId: merchantTransactionId,
-        state: response.data.data.state || 'COMPLETED',
-        responseCode: response.data.code,
-        rechargeMethod: "PhonePe",
-        rechargeDate: new Date(),
-        transactionId: merchantTransactionId
-      };
-
-      // Calculate new balance
-      const newBalance = Number(wallet.balance) + Number(newRecharge.amount);
-
-      // Update wallet
-      wallet.balance = newBalance;
-      wallet.recharges.push(newRecharge);
-      await wallet.save();
-
-      await sendNotification(userId, "Payment Successful", `Your wallet has been credited with ₹${newRecharge.amount}. New balance: ₹${wallet.balance}.`);
-
-      return res.status(200).send({
-        success: true,
-        message: "Payment validated and wallet updated",
-        data: {
-          balance: wallet.balance,
-          transaction: newRecharge
-        }
-      });
-    } else {
-      // For failed payments
-      let wallet = await Wallet.findOne({ userId });
-
-      if (wallet) {
-        const failedRecharge = {
-          amount: response.data.data?.amount ? response.data.data.amount / 100 : 0,
-          merchantTransactionId: merchantTransactionId,
-          state: response.data.data?.state || 'FAILED',
-          responseCode: response.data.code,
-          rechargeMethod: "PhonePe",
-          rechargeDate: new Date(),
-          transactionId: merchantTransactionId
-        };
-
-        wallet.recharges.push(failedRecharge);
-        await wallet.save();
-
-        await sendNotification(userId, "Payment failed", `Your payment of ₹${failedRecharge.amount} has failed. Current balance: ₹${wallet.balance}.`);
-      }
-
-      return res.status(400).send({
-        success: false,
-        message: "Payment validation failed",
-        data: response.data
-      });
-    }
-  } catch (error) {
-    console.error("Error in payment validation:", error);
-    return res.status(500).send({ error: "Payment validation failed" });
-  }
-};
 
 
 
@@ -357,7 +381,7 @@ export const validatePayment = async (req, res) => {
 
 //     // Step 2: Fetch the plan details from the SubscriptionPlan collection
 //     const plan = await SubscriptionPlan.findById(planId);
-    
+
 //     if (!plan) {
 //       return res.status(404).json({
 //         success: false,
@@ -367,7 +391,7 @@ export const validatePayment = async (req, res) => {
 
 //     // Step 3: Fetch the user's wallet to check balance
 //     const wallet = await Wallet.findOne({ userId });
-    
+
 //     if (!wallet) {
 //       return res.status(404).json({
 //         success: false,
