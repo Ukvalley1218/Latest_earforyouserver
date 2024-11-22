@@ -17,7 +17,6 @@ export const setupWebRTC = (io) => {
   io.on('connection', (socket) => {
     logger.http(`User connected: ${socket.id}`);
 
-
     socket.on('registerUser', async (userId) => {
       try {
         if (!userId) {
@@ -294,8 +293,11 @@ export const setupWebRTC = (io) => {
 
         if (!receiver) {
 
+
           socket.emit('receiver unavailable', { receiverId });
           logger.warn(`User ${receiverId} not found`);
+
+
           return;
         }
 
@@ -331,7 +333,7 @@ export const setupWebRTC = (io) => {
           if (receiver.deviceToken) {
             const title = 'Incoming Call';
             const message = `${caller.username} is calling you!`;
-            const type = 'incoming_Call';
+            const type = 'Incoming_Call';
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
@@ -339,21 +341,36 @@ export const setupWebRTC = (io) => {
             logger.info(`Push notification sent to User ${receiverId}`);
           }
         } else {
-          // Receiver is unavailable for the call
-         
           if (receiver.deviceToken) {
             const title = 'Incoming Call';
-            const message = `${caller.username} is calling you!`;
-            const type = 'incoming_Call';
+            const message = `${caller.username || 'Unknown Caller'} is calling you!`;
+            const type = 'Incoming_Call';
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
-            await sendNotification(receiverId, title, message, type, callerId, receiverId, senderName, senderAvatar);
-            logger.info(`Push notification sent to User ${receiverId}`);
-          }
+            try {
+              // Initial notification
+              await sendNotification(receiverId, title, message, type, callerId, receiverId, senderName, senderAvatar);
+              logger.info(`Push notification sent to User ${receiverId}`);
 
-          
+              // Retry after 30 seconds if still not connected
+              setTimeout(async () => {
+                try {
+                  await sendNotification(receiverId, title, message, type, callerId, receiverId, senderName, senderAvatar);
+                  logger.info(`Retry push notification sent to User ${receiverId}`);
+                } catch (retryError) {
+                  logger.error(`Retry push notification failed for User ${receiverId}: ${retryError.message}`);
+                }
+              }, 30000); // 30 seconds
+            } catch (error) {
+              logger.error(`Failed to send push notification to User ${receiverId}: ${error.message}`);
+            }
+          } else {
+            logger.warn(`No device token available for User ${receiverId}, skipping notification`);
+          }
         }
+
+
       } catch (error) {
         logger.error(`Error in call handler: ${error.message}`);
         socket.emit('callError', { message: 'Failed to initiate call' });
@@ -361,117 +378,6 @@ export const setupWebRTC = (io) => {
     });
 
 
-    // socket.on('call', async ({ callerId, receiverId }) => {
-    //   try {
-    //     logger.info(`User ${callerId} is calling User ${receiverId}`);
-    
-    //     // Check if either user is already in a call
-    //     if (activeCalls[receiverId] || activeCalls[callerId]) {
-    //       socket.emit('userBusy', { receiverId });
-    //       logger.warn(`User ${receiverId} or ${callerId} is already in a call`);
-    //       return;
-    //     }
-    
-    //     // Fetch user details
-    //     const [receiver, caller] = await Promise.all([
-    //       User.findById(receiverId),
-    //       User.findById(callerId),
-    //     ]);
-    
-    //     if (!receiver) {
-    //       socket.emit('receiverUnavailable', { receiverId });
-    //       logger.warn(`User ${receiverId} not found`);
-    //       return;
-    //     }
-    
-    //     if (!caller) {
-    //       socket.emit('callerUnavailable', { callerId });
-    //       logger.warn(`User ${callerId} not found`);
-    //       return;
-    //     }
-    
-    //     // Initialize socket arrays if needed
-    //     if (!users[callerId]) users[callerId] = [];
-    //     if (!users[receiverId]) users[receiverId] = [];
-    
-    //     if (!users[callerId].includes(socket.id)) {
-    //       users[callerId].push(socket.id);
-    //     }
-    
-    //     if (users[receiverId].length > 0) {
-    //       // Notify all receiver's sockets about the incoming call
-    //       users[receiverId].forEach((socketId) => {
-    //         socket.to(socketId).emit('incomingCall', {
-    //           callerId,
-    //           callerSocketId: socket.id,
-    //         });
-    //       });
-    
-    //       // Notify the caller to play caller tune
-    //       socket.emit('playCallerTune', { callerId });
-    
-    //       // Send push notification if receiver has a device token
-    //       if (receiver.deviceToken) {
-    //         const title = 'Incoming Call';
-    //         const message = `${caller.username} is calling you!`;
-    //         const type = 'Incoming_Call';
-    //         const senderName = caller.username || 'Unknown Caller';
-    //         const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
-    
-    //         await sendNotification(receiverId, title, message, type, callerId, receiverId, senderName, senderAvatar);
-    //         logger.info(`Push notification sent to User ${receiverId}`);
-    //       }
-    //     } else {
-    //       // Receiver offline, send push notification
-    //       if (receiver.deviceToken) {
-    //         const title = 'Incoming Call';
-    //         const message = `${caller.username} is calling you!`;
-    //         const type = 'Incoming_Call';
-    //         const senderName = caller.username || 'Unknown Caller';
-    //         const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
-    
-    //         await sendNotification(receiverId, title, message, type, callerId, receiverId, senderName, senderAvatar);
-    //         logger.info(`Push notification sent to User ${receiverId}`);
-    //       }
-    
-    //       // Start a 45-second timer for the call
-    //       const callTimeout = setTimeout(async () => {
-    //         if (!activeCalls[callerId] && !activeCalls[receiverId]) {
-    //           // Notify both users that the call was not received
-    //           socket.emit('callNotReceived', { receiverId });
-    //           users[receiverId]?.forEach((socketId) => {
-    //             socket.to(socketId).emit('callMissed', { callerId });
-    //           });
-    
-    //           // Log missed call in the database
-    //           await CallLog.create({
-    //             caller: callerId,
-    //             receiver: receiverId,
-    //             startTime: new Date(),
-    //             status: 'missed',
-    //           });
-    
-    //           logger.warn(`Call from User ${callerId} to User ${receiverId} was not received`);
-    //         }
-    //       }, 45000);
-    
-    //       // Cleanup timeout if the call is accepted or rejected
-    //       socket.on('acceptCall', () => {
-    //         clearTimeout(callTimeout);
-    //         logger.info(`Call accepted by User ${receiverId}`);
-    //       });
-    
-    //       socket.on('rejectCall', () => {
-    //         clearTimeout(callTimeout);
-    //         logger.info(`Call rejected by User ${receiverId}`);
-    //       });
-    //     }
-    //   } catch (error) {
-    //     logger.error(`Error in call handler: ${error.message}`);
-    //     socket.emit('callError', { message: 'Failed to initiate call' });
-    //   }
-    // });
-    
     // Handle WebRTC offer
     socket.on('offer', async ({ offer, callerId, receiverId }) => {
       try {
@@ -872,7 +778,7 @@ export const setupWebRTC = (io) => {
 
 
 
-async function sendNotification(userId, title, message, type, callerId, receiverId, senderName, senderAvatar) {
+async function sendNotification(userId, title, message, type, receiverId, senderName, senderAvatar) {
   try {
     // Fetch the user from the database
     const user = await User.findById(userId);
@@ -888,18 +794,17 @@ async function sendNotification(userId, title, message, type, callerId, receiver
       notification: {
         title: title,
         body: message,
-        sound: 'default', // Ensure a sound plays for the notification
       },
       data: {
         screen: 'incoming_Call', // Target screen
         params: JSON.stringify({
-          user_id: userId,
-          callerId: callerId,
+          user_id: userId, // Include Call ID
           type: type, // Type of call
           agent_id: receiverId, // Receiver ID
           username: senderName, // Sender name
           imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png', // Sender avatar with default fallback
         }),
+        // Add any additional parameters if needed
       },
       token: deviceToken,
     };
@@ -908,7 +813,6 @@ async function sendNotification(userId, title, message, type, callerId, receiver
     const response = await admin.messaging().send(payload);
     console.log("Notification sent successfully:", response);
   } catch (error) {
-    console.error("Error sending notification:", error.message);
+    console.error("Error sending notification:", error);
   }
 }
-
