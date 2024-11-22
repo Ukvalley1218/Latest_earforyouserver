@@ -292,18 +292,13 @@ export const setupWebRTC = (io) => {
         ]);
 
         if (!receiver) {
-
-
-          socket.emit('receiver unavailable', { receiverId });
+          socket.emit('receiverUnavailable', { receiverId });
           logger.warn(`User ${receiverId} not found`);
-
-
           return;
         }
 
-
         if (!caller) {
-          socket.emit('caller unablivale', { callerId });
+          socket.emit('callerUnavailable', { callerId });
           logger.warn(`User ${callerId} not found`);
           return;
         }
@@ -354,7 +349,7 @@ export const setupWebRTC = (io) => {
               logger.info(`Push notification sent to User ${receiverId}`);
 
               // Retry after 30 seconds if still not connected
-              setTimeout(async () => {
+              const callTimeout = setTimeout(async () => {
                 try {
                   await sendNotification(receiverId, title, message, type, receiverId, senderName, senderAvatar);
                   logger.info(`Retry push notification sent to User ${receiverId}`);
@@ -362,6 +357,23 @@ export const setupWebRTC = (io) => {
                   logger.error(`Retry push notification failed for User ${receiverId}: ${retryError.message}`);
                 }
               }, 30000); // 30 seconds
+
+              // Cleanup timeout if the call is accepted or rejected
+              socket.on('callAccepted', () => {
+                clearTimeout(callTimeout);
+                logger.info(`Call accepted by User ${receiverId}`);
+              });
+
+              socket.on('callRejected', () => {
+                clearTimeout(callTimeout);
+                logger.info(`Call rejected by User ${receiverId}`);
+              });
+
+              socket.on('callEnded', () => {
+                clearTimeout(callTimeout);
+                logger.info(`Call ended by User ${receiverId}`);
+              });
+
             } catch (error) {
               logger.error(`Failed to send push notification to User ${receiverId}: ${error.message}`);
             }
@@ -370,12 +382,12 @@ export const setupWebRTC = (io) => {
           }
         }
 
-
       } catch (error) {
         logger.error(`Error in call handler: ${error.message}`);
         socket.emit('callError', { message: 'Failed to initiate call' });
       }
     });
+
 
 
     // Handle WebRTC offer
