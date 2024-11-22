@@ -1,5 +1,4 @@
-# Use the official Node.js 18 image with Alpine for a lightweight build
-FROM node:18
+FROM node:18-alpine
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -7,22 +6,22 @@ WORKDIR /app
 # Copy package.json and package-lock.json to install dependencies
 COPY package.json package-lock.json ./
 
-COPY . .
-
-RUN npm install 
-# Install dependencies (this will include Babel)
-RUN npm install --force
-RUN npm install @babel/core @babel/cli @babel/node @babel/preset-env --save-dev
-
+# Install dependencies (this will include Babel and any other dependencies)
+RUN npm install --production
 
 # Copy the rest of the application files into the container
+COPY . .
 
+# Optionally, install development dependencies if needed (e.g., for testing)
+# Uncomment the following line if you need dev dependencies in the container
+# RUN npm install --force
 
 # Expose the application's port
 EXPOSE 8080
 
 # Build the application if needed (optional, remove if not using build step)
+# Uncomment the following line if you have a build step to run
 RUN npm run build
 
-# Start the application using npx babel-node
+# Start the application
 CMD ["npx", "nodemon", "src/index.js"]
