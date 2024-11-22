@@ -8,27 +8,32 @@ import admin from 'firebase-admin';
 import firebaseConfig from '../../config/firebaseConfig.js';
 import SubscriptionPlan from '../../models/Subscription/Subscription.js';
 
+import axios from 'axios';
+import crypto from 'crypto';
+import Wallet from '../../models/Wallet/Wallet.js';
+import User from '../../models/Users.js'
+import sha256 from "sha256";
+import uniqid from "uniqid";
+import admin from 'firebase-admin';
+import firebaseConfig from '../../config/firebaseConfig.js';
+
+
 
 export const initiatePayment = async (req, res) => {
   try {
-    const { userId, planId } = req.body;
-    const plan = await SubscriptionPlan.findById(planId);
-    console.log(plan)
-    // Step 1: Validate the input
-    if (!userId || !planId) {
+    const { userId, amount } = req.body;
+
+    if (amount < 100) {
+      await logTransaction(transactionId, 'VALIDATION_FAILED', new Error('Amount below minimum'));
       return res.status(400).json({
         success: false,
-        message: 'Invalid input. User ID and plan ID are required.',
+        message: 'Minimum recharge amount is 100'
       });
     }
+    // Transaction amount from query params
+   
 
-
-    // Step 2: Fetch the plan details from the SubscriptionPlan collection
-    const amount = plan.price;
-    console
-
-
-
+  
 
     // Generate a unique merchant transaction ID
     const merchantTransactionId = uniqid();
@@ -80,21 +85,15 @@ export const initiatePayment = async (req, res) => {
   }
 };
 
-export const validatePayment = async (req, res) => {
-  const { merchantTransactionId, userId } = req.params;
-  console.log("userId and merchantTransactionId:", userId, merchantTransactionId);
 
+export const validatePayment = async (req, res) => {
+  const { merchantTransactionId, userId } = req.body; // Since we're now passing it in the URL params
+  console.log("userId and merchantTransactionId:", userId, merchantTransactionId);
   if (!merchantTransactionId) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid transaction ID"
-    });
+    return res.status(400).send("Invalid transaction ID");
   }
   if (!userId) {
-    return res.status(400).json({
-      success: false, 
-      message: "Invalid User ID"
-    });
+    return res.status(400).send("Invalid UserId ID");
   }
 
   try {
@@ -111,7 +110,7 @@ export const validatePayment = async (req, res) => {
       headers: {
         "Content-Type": "application/json",
         "X-VERIFY": xVerifyChecksum,
-        "X-MERCHANT-ID": process.env.MERCHANT_ID,
+        "X-MERCHANT-ID": merchantTransactionId,
         accept: "application/json",
       },
     });
@@ -121,21 +120,23 @@ export const validatePayment = async (req, res) => {
     // Check if the payment was successful
     if (response.data && response.data.code === "PAYMENT_SUCCESS") {
       const { amount } = response.data.data;
-
+      
       let wallet = await Wallet.findOne({ userId });
 
       if (!wallet) {
+
+        
         wallet = await Wallet.create({
           userId: userId,
           balance: 0,
-          currency: 'inr',
+          currency: 'inr', // matches schema default
           recharges: [],
           deductions: [],
           lastUpdated: new Date()
         });
       }
 
-      // Create recharge object
+      // Create recharge object matching your schema exactly
       const newRecharge = {
         amount: amount / 100, // Convert from paise to rupees
         merchantTransactionId: merchantTransactionId,
@@ -143,21 +144,22 @@ export const validatePayment = async (req, res) => {
         responseCode: response.data.code,
         rechargeMethod: "PhonePe",
         rechargeDate: new Date(),
-        transactionId: merchantTransactionId
+        transactionId: merchantTransactionId // Using merchantTransactionId as transactionId
       };
 
       // Calculate new balance
       const newBalance = Number(wallet.balance) + Number(newRecharge.amount);
-
+      
       // Update wallet
       wallet.balance = newBalance;
       wallet.recharges.push(newRecharge);
-      await wallet.save();
+      // lastUpdated will be automatically updated by the pre-save hook
 
+      await wallet.save();
       await sendNotification(userId, "Payment Successful", `Your wallet has been credited with ₹${newRecharge.amount}. New balance: ₹${wallet.balance}.`);
 
-      return res.status(200).json({
-        success: true,
+      return res.status(200).send({ 
+        success: true, 
         message: "Payment validated and wallet updated",
         data: {
           balance: wallet.balance,
@@ -167,52 +169,74 @@ export const validatePayment = async (req, res) => {
     } else {
       // For failed payments
       let wallet = await Wallet.findOne({ userId });
-
-      const failedRecharge = {
-        amount: response.data.data?.amount ? response.data.data.amount / 100 : 0,
-        merchantTransactionId: merchantTransactionId,
-        state: response.data.data?.state || 'FAILED',
-        responseCode: response.data.code,
-        rechargeMethod: "PhonePe",
-        rechargeDate: new Date(),
-        transactionId: merchantTransactionId
-      };
-
+      
       if (wallet) {
+        const failedRecharge = {
+          amount: response.data.data?.amount ? response.data.data.amount / 100 : 0,
+          merchantTransactionId: merchantTransactionId,
+          state: response.data.data?.state || 'FAILED',
+          responseCode: response.data.code,
+          rechargeMethod: "PhonePe",
+          rechargeDate: new Date(),
+          transactionId: merchantTransactionId
+        };
+
         wallet.recharges.push(failedRecharge);
         await wallet.save();
+        await sendNotification(userId, "Payment failed", `Your wallet has been failed with ₹${newRecharge.amount}. New balance: ₹${wallet.balance}.`);
+
       }
 
-      await sendNotification(userId, "Payment Failed", 
-        `Your payment of ₹${failedRecharge.amount} has failed. 
-         Reason: ${response.data.code || 'Unknown error'}`
-      );
-
-      return res.status(400).json({
+      return res.status(400).send({
         success: false,
         message: "Payment validation failed",
-        errorCode: response.data.code,
-        details: response.data
+        data: response.data
       });
     }
   } catch (error) {
-    console.error("Error in payment validation:", {
-      message: error.message,
-      stack: error.stack,
-      responseData: error.response?.data,
-      requestDetails: {
-        merchantTransactionId,
-        userId
-      }
+    console.error("Error in payment validation:", error);
+    return res.status(500).send({ error: "Payment validation failed" });
+  }
+};
+
+
+
+
+
+export const getRechargeHistory = async (req, res) => {
+  try {
+    const { userId } = req.params; // Assuming userId is passed as a route parameter
+
+    // Find the wallet for the specified userId
+    const wallet = await Wallet.findOne({ userId });
+
+    if (!wallet) {
+      return res.status(404).json({
+        success: false,
+        message: "Wallet not found for this user",
+      });
+    }
+    const rechargeHistory = wallet.recharges.slice(-20); // Fetch the most recent 20 recharges
+
+    // Return the recharges array from the wallet
+    return res.status(200).json({
+      success: true,
+      message: "Recharge history retrieved successfully",
+      data: rechargeHistory,
+      balance: wallet.balance,
     });
-    
+  } catch (error) {
+    console.error("Error retrieving recharge history:", error);
     return res.status(500).json({
       success: false,
-      message: "Payment validation failed",
-      error: error.message
+      message: "Failed to retrieve recharge history",
+      error: error.message,
     });
   }
 };
+
+
+
 
 // export const validatePayment = async (req, res) => {
 //   const { merchantTransactionId, userId } = req.body; // Since we're now passing it in the URL params
@@ -462,42 +486,12 @@ export const buyPlan = async (req, res) => {
 // };
 
 
-export const getRechargeHistory = async (req, res) => {
-  try {
-    const { userId } = req.params; // Assuming userId is passed as a route parameter
-
-    // Find the wallet for the specified userId
-    const wallet = await Wallet.findOne({ userId });
-
-    if (!wallet) {
-      return res.status(404).json({
-        success: false,
-        message: "Wallet not found for this user",
-      });
-    }
-    const rechargeHistory = wallet.recharges.slice(-20); // Fetch the most recent 20 recharges
-
-    // Return the recharges array from the wallet
-    return res.status(200).json({
-      success: true,
-      message: "Recharge history retrieved successfully",
-      data: rechargeHistory,
-      balance: wallet.balance,
-    });
-  } catch (error) {
-    console.error("Error retrieving recharge history:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to retrieve recharge history",
-      error: error.message,
-    });
-  }
-};
-
 
 
 
 // Function to send FCM notification
+
+
 async function sendNotification(userId, title, message) {
   // Assuming you have the FCM device token stored in your database
   const user = await User.findById(userId);
