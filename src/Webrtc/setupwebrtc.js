@@ -427,6 +427,17 @@ export const setupWebRTC = (io) => {
         const callTimeout = setTimeout(async () => {
           if (!activeCalls[callerId] && !activeCalls[receiverId]) {
             // Notify both users that the call was not received
+            if (receiver.deviceToken) {
+              const title = 'Incoming Call';
+              const message = `${caller.username} is calling you!`;
+              const type = 'Incoming_Call';
+              const senderName = caller.username || 'Unknown Caller';
+              const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
+      
+              await sendNotification(receiverId, title, message, type, callerId, receiverId, senderName, senderAvatar);
+              logger.info(`Push notification sent to User ${receiverId}`);
+            }
+
             socket.emit('callNotReceived', { receiverId });
             users[receiverId]?.forEach((socketId) => {
               socket.to(socketId).emit('callMissed', { callerId });
