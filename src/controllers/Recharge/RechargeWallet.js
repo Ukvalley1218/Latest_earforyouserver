@@ -324,7 +324,7 @@ export const validatePayment = async (req, res) => {
 
         wallet.recharges.push(failedRecharge);
         await wallet.save();
-        await sendNotification(userId, "Payment failed", `Your wallet has been failed with ₹${newRecharge.amount}. New balance: ₹${wallet.balance}.`);
+        await sendNotification(userId, "Payment failed",` Your wallet has been failed with ₹${newRecharge.amount}. New balance: ₹${wallet.balance}.`);
 
       }
 

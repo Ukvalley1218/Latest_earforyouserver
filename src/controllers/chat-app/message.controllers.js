@@ -143,8 +143,9 @@ const sendMessage = asyncHandler(async (req, res) => {
     throw new ApiError(500, "Internal server error");
   }
 
-  const sender = await User.findById(req.user._id).select('username name');
+  const sender = await User.findById(req.user._id).select('username name avatarUrl');
   const senderName = sender.name || sender.username;
+  const avatarUrl = sender.avatarUrl; // Access the avatar URL
   
 
   // logic to emit socket event about the new message created to the other participants
@@ -167,7 +168,7 @@ const sendMessage = asyncHandler(async (req, res) => {
     const notificationMessage = content 
       ? `📨 "${content}"` 
       : '📎 You’ve got an attachment waiting for you! Tap to check it out!';
-    await sendNotification(participant, notificationTitle, notificationMessage, chatId, message._id, sender._id, senderName, sender.avatarUrl);
+    await sendNotification(participant, notificationTitle, notificationMessage, chatId, message._id, sender._id, senderName, avatarUrl);
 
 
 
