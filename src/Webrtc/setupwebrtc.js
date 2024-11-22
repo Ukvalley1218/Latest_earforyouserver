@@ -275,92 +275,225 @@ export const setupWebRTC = (io) => {
 
     // Initial call request
 
+    // socket.on('call', async ({ callerId, receiverId }) => {
+    //   try {
+    //     logger.info(`User ${callerId} is calling User ${receiverId}`);
+
+    //     // Check if either user is already in a call
+    //     if (activeCalls[receiverId] || activeCalls[callerId]) {
+    //       socket.emit('userBusy', { receiverId });
+    //       logger.warn(`User ${receiverId} or ${callerId} is already in a call`);
+    //       return;
+    //     }
+
+    //     // Fetch user details
+    //     const [receiver, caller] = await Promise.all([
+    //       User.findById(receiverId),
+    //       User.findById(callerId),
+    //     ]);
+
+    //     if (!receiver) {
+
+    //       socket.emit('receiver unavailable', { receiverId });
+    //       logger.warn(`User ${receiverId} not found`);
+    //       return;
+    //     }
+
+
+    //     if (!caller) {
+    //       socket.emit('caller unablivale', { callerId });
+    //       logger.warn(`User ${callerId} not found`);
+    //       return;
+    //     }
+
+    //     // Initialize socket arrays if needed
+    //     if (!users[callerId]) users[callerId] = [];
+    //     if (!users[receiverId]) users[receiverId] = [];
+
+    //     // Add current socket to caller's sockets if not already present
+    //     if (!users[callerId].includes(socket.id)) {
+    //       users[callerId].push(socket.id);
+    //     }
+
+    //     if (users[receiverId].length > 0) {
+    //       // Notify all receiver's sockets about the incoming call
+    //       users[receiverId].forEach((socketId) => {
+    //         socket.to(socketId).emit('incomingCall', {
+    //           callerId,
+    //           callerSocketId: socket.id, // Provide caller's socket ID
+    //         });
+    //       });
+
+    //       // Notify the caller to play caller tune
+    //       socket.emit('playCallerTune', { callerId });
+
+    //       // Send push notification if the receiver has a device token
+    //       if (receiver.deviceToken) {
+    //         const title = 'Incoming Call';
+    //         const message = `${caller.username} is calling you!`;
+    //         const type = 'Incoming_Call';
+    //         const senderName = caller.username || 'Unknown Caller';
+    //         const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
+
+    //         await sendNotification(receiverId, title, message, type, callerId, receiverId, senderName, senderAvatar);
+    //         logger.info(`Push notification sent to User ${receiverId}`);
+    //       }
+    //     } else {
+    //       // Receiver is unavailable for the call
+    //       socket.emit('userUnavailable', { receiverId });
+    //       if (receiver.deviceToken) {
+    //         const title = 'Incoming Call';
+    //         const message = `${caller.username} is calling you!`;
+    //         const type = 'Incoming_Call';
+    //         const senderName = caller.username || 'Unknown Caller';
+    //         const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
+
+    //         await sendNotification(receiverId, title, message, type, callerId, receiverId, senderName, senderAvatar);
+    //         logger.info(`Push notification sent to User ${receiverId}`);
+    //       }
+
+    //       logger.warn(`User ${receiverId} is unavailable for the call`);
+    //     }
+    //   } catch (error) {
+    //     logger.error(`Error in call handler: ${error.message}`);
+    //     socket.emit('callError', { message: 'Failed to initiate call' });
+    //   }
+    // });
+
+
     socket.on('call', async ({ callerId, receiverId }) => {
       try {
         logger.info(`User ${callerId} is calling User ${receiverId}`);
-
+    
         // Check if either user is already in a call
         if (activeCalls[receiverId] || activeCalls[callerId]) {
           socket.emit('userBusy', { receiverId });
           logger.warn(`User ${receiverId} or ${callerId} is already in a call`);
           return;
         }
-
+    
         // Fetch user details
         const [receiver, caller] = await Promise.all([
           User.findById(receiverId),
           User.findById(callerId),
         ]);
-
+    
         if (!receiver) {
-
-          socket.emit('receiver unavailable', { receiverId });
+          socket.emit('receiverUnavailable', { receiverId });
           logger.warn(`User ${receiverId} not found`);
           return;
         }
-
-
+    
         if (!caller) {
-          socket.emit('caller unablivale', { callerId });
+          socket.emit('callerUnavailable', { callerId });
           logger.warn(`User ${callerId} not found`);
           return;
         }
-
+    
         // Initialize socket arrays if needed
         if (!users[callerId]) users[callerId] = [];
         if (!users[receiverId]) users[receiverId] = [];
-
-        // Add current socket to caller's sockets if not already present
+    
         if (!users[callerId].includes(socket.id)) {
           users[callerId].push(socket.id);
         }
-
+    
         if (users[receiverId].length > 0) {
           // Notify all receiver's sockets about the incoming call
           users[receiverId].forEach((socketId) => {
             socket.to(socketId).emit('incomingCall', {
               callerId,
-              callerSocketId: socket.id, // Provide caller's socket ID
+              callerSocketId: socket.id,
             });
           });
-
+    
           // Notify the caller to play caller tune
           socket.emit('playCallerTune', { callerId });
-
-          // Send push notification if the receiver has a device token
+    
+          // Send push notification if receiver has a device token
           if (receiver.deviceToken) {
             const title = 'Incoming Call';
             const message = `${caller.username} is calling you!`;
             const type = 'Incoming_Call';
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
-
+    
             await sendNotification(receiverId, title, message, type, callerId, receiverId, senderName, senderAvatar);
             logger.info(`Push notification sent to User ${receiverId}`);
           }
-        } else {
-          // Receiver is unavailable for the call
-          socket.emit('userUnavailable', { receiverId });
-          if (receiver.deviceToken) {
-            const title = 'Incoming Call';
-            const message = `${caller.username} is calling you!`;
-            const type = 'Incoming_Call';
-            const senderName = caller.username || 'Unknown Caller';
-            const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
-
-            await sendNotification(receiverId, title, message, type, callerId, receiverId, senderName, senderAvatar);
-            logger.info(`Push notification sent to User ${receiverId}`);
-          }
-
-          logger.warn(`User ${receiverId} is unavailable for the call`);
         }
+    
+        // Start a 45-second timer for the call
+        const callTimeout = setTimeout(async () => {
+          if (!activeCalls[callerId] && !activeCalls[receiverId]) {
+
+            if (receiver.deviceToken) {
+              const title = 'Incoming Call';
+              const message = `${caller.username} is calling you!`;
+              const type = 'Incoming_Call';
+              const senderName = caller.username || 'Unknown Caller';
+              const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
+      
+              await sendNotification(receiverId, title, message, type, callerId, receiverId, senderName, senderAvatar);
+              logger.info(`Push notification sent to User ${receiverId}`);
+            }
+            // Notify both users that the call was not received
+            socket.emit('callNotReceived', { receiverId });
+            users[receiverId]?.forEach((socketId) => {
+              socket.to(socketId).emit('callMissed', { callerId });
+            });
+    
+            // Log missed call in the database
+            await CallLog.create({
+              caller: callerId,
+              receiver: receiverId,
+              startTime: new Date(),
+              status: 'missed',
+            });
+    
+            logger.warn(`Call from User ${callerId} to User ${receiverId} was not received`);
+    
+            // // Send notifications to both users
+            // if (caller.deviceToken) {
+            //   const title = 'Call Missed';
+            //   const message = `Your call to ${receiver.username} was not answered.`;
+            //   const type = 'Missed_Call';
+            //   const senderName = receiver.username || 'Unknown Receiver';
+            //   const senderAvatar = receiver.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
+    
+            //   await sendNotification(callerId, title, message, type, callerId, receiverId, senderName, senderAvatar);
+            //   logger.info(`Missed call notification sent to User ${callerId}`);
+            // }
+    
+            // if (receiver.deviceToken) {
+            //   const title = 'Missed Call';
+            //   const message = `You missed a call from ${caller.username}.`;
+            //   const type = 'Missed_Call';
+            //   const senderName = caller.username || 'Unknown Caller';
+            //   const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
+    
+            //   await sendNotification(receiverId, title, message, type, callerId, receiverId, senderName, senderAvatar);
+            //   logger.info(`Missed call notification sent to User ${receiverId}`);
+            // }
+          }
+        }, 45000);
+    
+        // Cleanup timeout if the call is accepted or rejected
+        socket.on('acceptCall', () => {
+          clearTimeout(callTimeout);
+          logger.info(`Call accepted by User ${receiverId}`);
+        });
+    
+        socket.on('rejectCall', () => {
+          clearTimeout(callTimeout);
+          logger.info(`Call rejected by User ${receiverId}`);
+        });
       } catch (error) {
         logger.error(`Error in call handler: ${error.message}`);
         socket.emit('callError', { message: 'Failed to initiate call' });
       }
     });
-
-
+    
     // Handle WebRTC offer
     socket.on('offer', async ({ offer, callerId, receiverId }) => {
       try {
@@ -760,13 +893,17 @@ export const setupWebRTC = (io) => {
 
 
 
+// Make sure Firebase Admin SDK is initialized
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 
 async function sendNotification(userId, title, message, type, receiverId, senderName, senderAvatar) {
   try {
     // Fetch the user from the database
     const user = await User.findById(userId);
     if (!user || !user.deviceToken) {
-      console.error("No device token found for user:", userId);
+      console.warn("No device token found for user:", userId);
       return;
     }
 
@@ -775,27 +912,40 @@ async function sendNotification(userId, title, message, type, receiverId, sender
     // Construct the payload for FCM
     const payload = {
       notification: {
-        title: title,
+        title,
         body: message,
+        sound: 'default', // Optionally, add sound to the notification
       },
       data: {
-        screen: 'incoming_Call', // Target screen
+        screen: 'incoming_Call', // Target screen identifier
         params: JSON.stringify({
-          user_id: userId, // Include Call ID
-          type: type, // Type of call
+          user_id: userId, // Caller ID
+          type, // Type of notification
           agent_id: receiverId, // Receiver ID
           username: senderName, // Sender name
-          imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png', // Sender avatar with default fallback
+          imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png', // Sender avatar
         }),
-        // Add any additional parameters if needed
+        timestamp: new Date().toISOString(), // Add a timestamp for reference
       },
-      token: deviceToken,
     };
 
-    // Send the notification
-    const response = await admin.messaging().send(payload);
-    console.log("Notification sent successfully:", response);
+    // Options for high-priority notifications
+    const options = {
+      priority: 'high', // Ensures notification wakes up the device
+      timeToLive: 60 * 60 * 24, // Keep notification valid for 24 hours
+    };
+
+    // Send the notification via FCM
+    const response = await admin.messaging().sendToDevice(deviceToken, payload, options);
+    
+    if (response.failureCount > 0) {
+      console.error("Failed to send notification:", response.results);
+    } else {
+      console.info("Notification sent successfully:", response);
+    }
   } catch (error) {
-    console.error("Error sending notification:", error);
+    console.error("Error sending notification:", error, { userId, title, message, type });
   }
 }
+
+
