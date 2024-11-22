@@ -13,6 +13,7 @@ import { removeLocalFile } from "../../../src/utils/helpers.js";
  * @description Utility function which returns the pipeline stages to structure the chat schema with common lookups
  * @returns {mongoose.PipelineStage[]}
  */
+
 const chatCommonAggregation = () => {
   return [
     {
@@ -141,19 +142,19 @@ const createOrGetAOneOnOneChat = asyncHandler(async (req, res) => {
   if (!receiver) {
     throw new ApiError(404, "Receiver does not exist");
   }
-   console.log(req.user._id);
+  console.log(req.user._id);
   // check if receiver is not the user who is requesting a chat
   if (receiver._id.toString() === req.user._id.toString()) {
     throw new ApiError(400, "You cannot chat with yourself");
   }
-    // Check if a chat already exists between these two participants
-    const existingChat = await Chat.findOne({
-      participants: { $all: [req.user._id, receiverId] },
-    });
+  // Check if a chat already exists between these two participants
+  const existingChat = await Chat.findOne({
+    participants: { $all: [req.user._id, receiverId] },
+  });
 
-    if (existingChat) {
-      // If chat exists, return the existing chat
-      return res.status(200).json({ data: existingChat });
+  if (existingChat) {
+    // If chat exists, return the existing chat
+    return res.status(200).json({ data: existingChat });
   }
   const chat = await Chat.aggregate([
     {
@@ -267,19 +268,62 @@ const deleteOneOnOneChat = asyncHandler(async (req, res) => {
 
 
 
+// const getAllChats = asyncHandler(async (req, res) => {
+//   const chats = await Chat.aggregate([
+//     {
+//       $match: {
+//         participants: { $elemMatch: { $eq: req.user._id } }, // get all chats that have logged in user as a participant
+//       },
+//     },
+//     {
+//       $sort: {
+//         updatedAt: -1,
+//       },
+//     },
+//     ...chatCommonAggregation(),
+//   ]);
+
+//   return res
+//     .status(200)
+//     .json(
+//       new ApiResponse(200, chats || [], "User chats fetched successfully!")
+//     );
+// });
 const getAllChats = asyncHandler(async (req, res) => {
   const chats = await Chat.aggregate([
     {
       $match: {
-        participants: { $elemMatch: { $eq: req.user._id } }, // get all chats that have logged in user as a participant
+        participants: { $elemMatch: { $eq: req.user._id } }, // Match chats with the logged-in user as a participant
+      },
+    },
+    {
+      $lookup: {
+        from: "messages", // Assuming messages are stored in a separate collection
+        localField: "_id", // Chat ID
+        foreignField: "chatId", // Corresponding chat ID in the messages collection
+        as: "messages",
+        pipeline: [
+          { $sort: { createdAt: -1 } }, // Sort messages by creation time in descending order
+          { $limit: 1 }, // Fetch only the most recent message
+        ],
+      },
+    },
+    {
+      $addFields: {
+        lastMessage: { $arrayElemAt: ["$messages", 0] }, // Extract the most recent message
+      },
+    },
+    {
+      $project: {
+        messages: 0, // Exclude the `messages` field as it's no longer needed
       },
     },
     {
       $sort: {
-        updatedAt: -1,
+        updatedAt: -1, // Sort chats by update time
       },
     },
-    ...chatCommonAggregation(),
+    ...chatCommonAggregation(), // Include your common aggregation steps if necessary
   ]);
 
   return res
@@ -288,6 +332,7 @@ const getAllChats = asyncHandler(async (req, res) => {
       new ApiResponse(200, chats || [], "User chats fetched successfully!")
     );
 });
+
 
 export {
   createOrGetAOneOnOneChat,

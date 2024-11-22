@@ -17,6 +17,31 @@ export const setupWebRTC = (io) => {
   io.on('connection', (socket) => {
     logger.http(`User connected: ${socket.id}`);
 
+
+    socket.on('registerUser', async (userId) => {
+      try {
+        if (!userId) {
+          throw new Error('User ID is required');
+        }
+
+        // Use an in-memory reference (if applicable) or limit the database call.
+        socket.userId = userId; // Associate the userId with the socket
+
+        // Update user status to online in the background without awaiting
+        User.findByIdAndUpdate(userId, { status: 'online' }).exec();
+
+        // Immediately broadcast the online status
+        socket.broadcast.emit('userStatusChanged', {
+          userId,
+          status: 'online',
+        });
+
+        console.log(`User ${userId} is now online`);
+      } catch (error) {
+        console.error(`Error updating user online status: ${error.message}`);
+      }
+    });
+
     socket.on('join', async ({ userId }) => {
       if (!users[userId]) {
         users[userId] = [];
@@ -26,38 +51,38 @@ export const setupWebRTC = (io) => {
     });
 
 
-   
+
 
     socket.on('requestRandomCall', async ({ userId }) => {
       try {
         logger.info(`User ${userId} requesting random call`);
-    
+
         // Check if user is already in a call
         if (activeCalls[userId]) {
           socket.emit('callError', { message: 'You are already in a call' });
           return;
         }
-    
+
         // Check if user is already in queue
         if (randomCallQueue.has(userId)) {
           socket.emit('callError', { message: 'You are already in random call queue' });
           return;
         }
-    
+
         const user = await User.findById(userId);
-    
+
         // Check if user exists and is a CALLER
         if (!user || user.userType !== 'CALLER') {
           socket.emit('callError', { message: 'Only CALLER users can initiate calls' });
           return;
         }
-    
+
         // Check if user is eligible to initiate a call based on category
         if (['Doctor', 'Therapist', 'Healer', 'Psychologist'].includes(user.userCategory)) {
           socket.emit('callError', { message: 'You are not eligible to initiate a call based on your category' });
           return;
         }
-    
+
         // Get all available RECEIVER users only
         const allAvailableUsers = Object.keys(users).filter(async potentialUserId => {
           const potentialUser = await User.findById(potentialUserId);
@@ -67,7 +92,7 @@ export const setupWebRTC = (io) => {
             !randomCallQueue.has(potentialUserId) && // Not already in queue
             potentialUser?.userType === 'RECEIVER'; // Must be a RECEIVER type
         });
-    
+
         logger.info(`Available RECEIVER users for call with ${userId}:`, {
           totalAvailable: allAvailableUsers.length,
           availableUserIds: allAvailableUsers,
@@ -76,40 +101,40 @@ export const setupWebRTC = (io) => {
             socketCount: users[id]?.length || 0
           }))
         });
-    
+
         if (allAvailableUsers.length > 0) {
           // Match with a random available RECEIVER user
           const randomIndex = Math.floor(Math.random() * allAvailableUsers.length);
           const matchedUserId = allAvailableUsers[randomIndex];
-    
+
           // Get user details for both parties
           const [caller, receiver] = await Promise.all([
             User.findById(userId),
             User.findById(matchedUserId)
           ]);
-    
+
           if (!caller || !receiver) {
             socket.emit('callError', { message: 'Failed to match users' });
             return;
           }
-    
+
           // Verify again that receiver is of type RECEIVER
           if (receiver.userType !== 'RECEIVER') {
             socket.emit('callError', { message: 'Invalid match - Receiver type mismatch' });
             return;
           }
-    
+
           // Set active call status
           activeCalls[userId] = matchedUserId;
           activeCalls[matchedUserId] = userId;
-    
+
           // Notify the caller about the match
           socket.emit('randomCallMatched', {
             matchedUserId: matchedUserId,
             matchedUsername: receiver.username,
             socketId: socket.id
           });
-    
+
           // Notify the matched RECEIVER about incoming call
           users[matchedUserId].forEach((receiverSocketId) => {
             socket.to(receiverSocketId).emit('incomingRandomCall', {
@@ -118,7 +143,7 @@ export const setupWebRTC = (io) => {
               socketId: socket.id
             });
           });
-    
+
           // Send push notification if receiver has a device token
           if (receiver.deviceToken) {
             const title = 'Incoming Call';
@@ -126,9 +151,9 @@ export const setupWebRTC = (io) => {
             await sendNotification(matchedUserId, title, message);
             logger.info(`Push notification sent to RECEIVER ${matchedUserId}`);
           }
-    
+
           logger.info(`Call matched: CALLER ${userId} with RECEIVER ${matchedUserId}`);
-    
+
         } else {
           // Add CALLER to queue if no RECEIVER users available
           randomCallQueue.add(userId);
@@ -136,7 +161,7 @@ export const setupWebRTC = (io) => {
             message: 'Waiting for a RECEIVER to become available'
           });
           logger.info(`CALLER ${userId} added to call queue`);
-    
+
           // Set a timeout for queue waiting
           setTimeout(() => {
             if (randomCallQueue.has(userId)) {
@@ -153,7 +178,7 @@ export const setupWebRTC = (io) => {
         socket.emit('callError', { message: 'Failed to process call request' });
       }
     });
-    
+
     // Add a middleware to prevent CALLER users from receiving calls
     socket.use((packet, next) => {
       const eventName = packet[0];
@@ -176,7 +201,7 @@ export const setupWebRTC = (io) => {
       }
     });
 
-    
+
 
     socket.on('acceptRandomCall', async ({ receiverId, callerId }) => {
       try {
@@ -253,41 +278,43 @@ export const setupWebRTC = (io) => {
     socket.on('call', async ({ callerId, receiverId }) => {
       try {
         logger.info(`User ${callerId} is calling User ${receiverId}`);
-    
+
         // Check if either user is already in a call
         if (activeCalls[receiverId] || activeCalls[callerId]) {
           socket.emit('userBusy', { receiverId });
           logger.warn(`User ${receiverId} or ${callerId} is already in a call`);
           return;
         }
-    
+
         // Fetch user details
         const [receiver, caller] = await Promise.all([
           User.findById(receiverId),
           User.findById(callerId),
         ]);
-    
+
         if (!receiver) {
-          socket.emit('userUnavailable', { receiverId });
+
+          socket.emit('receiver unavailable', { receiverId });
           logger.warn(`User ${receiverId} not found`);
           return;
         }
-    
+
+
         if (!caller) {
-          socket.emit('userUnavailable', { callerId });
+          socket.emit('caller unablivale', { callerId });
           logger.warn(`User ${callerId} not found`);
           return;
         }
-    
+
         // Initialize socket arrays if needed
         if (!users[callerId]) users[callerId] = [];
         if (!users[receiverId]) users[receiverId] = [];
-    
+
         // Add current socket to caller's sockets if not already present
         if (!users[callerId].includes(socket.id)) {
           users[callerId].push(socket.id);
         }
-    
+
         if (users[receiverId].length > 0) {
           // Notify all receiver's sockets about the incoming call
           users[receiverId].forEach((socketId) => {
@@ -296,10 +323,10 @@ export const setupWebRTC = (io) => {
               callerSocketId: socket.id, // Provide caller's socket ID
             });
           });
-    
+
           // Notify the caller to play caller tune
           socket.emit('playCallerTune', { callerId });
-    
+
           // Send push notification if the receiver has a device token
           if (receiver.deviceToken) {
             const title = 'Incoming Call';
@@ -307,13 +334,24 @@ export const setupWebRTC = (io) => {
             const type = 'Incoming_Call';
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
-    
+
             await sendNotification(receiverId, title, message, type, callerId, receiverId, senderName, senderAvatar);
             logger.info(`Push notification sent to User ${receiverId}`);
           }
         } else {
           // Receiver is unavailable for the call
           socket.emit('userUnavailable', { receiverId });
+          if (receiver.deviceToken) {
+            const title = 'Incoming Call';
+            const message = `${caller.username} is calling you!`;
+            const type = 'Incoming_Call';
+            const senderName = caller.username || 'Unknown Caller';
+            const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
+
+            await sendNotification(receiverId, title, message, type, callerId, receiverId, senderName, senderAvatar);
+            logger.info(`Push notification sent to User ${receiverId}`);
+          }
+
           logger.warn(`User ${receiverId} is unavailable for the call`);
         }
       } catch (error) {
@@ -321,7 +359,7 @@ export const setupWebRTC = (io) => {
         socket.emit('callError', { message: 'Failed to initiate call' });
       }
     });
-    
+
 
     // Handle WebRTC offer
     socket.on('offer', async ({ offer, callerId, receiverId }) => {
@@ -376,7 +414,7 @@ export const setupWebRTC = (io) => {
       }
     });
 
-   
+
     socket.on('acceptCall', async ({ receiverId, callerId }) => {
       try {
         logger.info(`User ${receiverId} accepted call from User ${callerId}`);
@@ -407,18 +445,18 @@ export const setupWebRTC = (io) => {
       }
     });
 
-    
+
     socket.on('missedcall', async ({ receiverId, callerId }) => {
       // Input validation
       if (!receiverId || !callerId) {
         logger.error('Missing required parameters: receiverId or callerId');
-        return socket.emit('callError', { 
-          message: 'Invalid call parameters' 
+        return socket.emit('callError', {
+          message: 'Invalid call parameters'
         });
       }
-    
+
       const CALL_TIMEOUT = 60000; // 1 minute in milliseconds
-    
+
       // Set auto-cut timer
       const autoEndCallTimeout = setTimeout(async () => {
         try {
@@ -435,7 +473,7 @@ export const setupWebRTC = (io) => {
           });
         }
       }, CALL_TIMEOUT);
-    
+
       async function handleMissedCall() {
         try {
           // Fetch caller and receiver details
@@ -443,21 +481,21 @@ export const setupWebRTC = (io) => {
             User.findById(callerId).select('username name profilePicture'),
             User.findById(receiverId).select('username deviceToken notificationSettings')
           ]);
-    
+
           if (!caller || !receiver) {
             throw new Error('Caller or receiver not found');
           }
-    
+
           // Clean up call status
           if (activeCalls[callerId]) delete activeCalls[callerId];
           if (activeCalls[receiverId]) delete activeCalls[receiverId];
-    
+
           // Notify receiver through socket
           if (users[receiverId]) {
             const receiverSockets = users[receiverId];
             if (Array.isArray(receiverSockets) && receiverSockets.length > 0) {
               receiverSockets.forEach((socketId) => {
-                socket.to(socketId).emit('callMissed', { 
+                socket.to(socketId).emit('callMissed', {
                   callerId,
                   callerName: caller.name || caller.username,
                   callerPicture: caller.profilePicture,
@@ -466,17 +504,17 @@ export const setupWebRTC = (io) => {
               });
             }
           }
-    
+
           // Send push notification if enabled
-          if (receiver.deviceToken && 
-              (!receiver.notificationSettings || receiver.notificationSettings.missedCalls !== false)) {
+          if (receiver.deviceToken &&
+            (!receiver.notificationSettings || receiver.notificationSettings.missedCalls !== false)) {
             try {
               const notificationData = {
                 title: 'Missed Call',
                 body: `You missed a call from ${caller.name || caller.username}`,
-              
+
               };
-    
+
               await sendNotification(receiver.deviceToken, notificationData);
               logger.info(`Push notification sent to User ${receiverId} for missed call`);
             } catch (notificationError) {
@@ -487,13 +525,13 @@ export const setupWebRTC = (io) => {
               });
             }
           }
-    
+
           // Stop caller tune
-          socket.emit('stopCallerTune', { 
+          socket.emit('stopCallerTune', {
             callerId,
             status: 'missed'
           });
-    
+
           // Create call log
           const currentTime = new Date();
           const callLog = await CallLog.create({
@@ -510,26 +548,26 @@ export const setupWebRTC = (io) => {
               callerName: caller.name || caller.username
             }
           });
-    
+
           logger.info(`Call log created with ID: ${callLog._id}`);
-    
+
         } catch (error) {
           throw error;
         }
       }
-    
+
       try {
         // Validate ObjectId format
-        if (!mongoose.Types.ObjectId.isValid(receiverId) || 
-            !mongoose.Types.ObjectId.isValid(callerId)) {
+        if (!mongoose.Types.ObjectId.isValid(receiverId) ||
+          !mongoose.Types.ObjectId.isValid(callerId)) {
           clearTimeout(autoEndCallTimeout);
           throw new Error('Invalid user ID format');
         }
-    
+
         logger.info(`User ${receiverId} missed call from User ${callerId}`);
         await handleMissedCall();
         clearTimeout(autoEndCallTimeout);
-    
+
       } catch (error) {
         clearTimeout(autoEndCallTimeout);
         logger.error('Error in missedcall handler:', {
@@ -538,12 +576,12 @@ export const setupWebRTC = (io) => {
           receiverId,
           stackTrace: error.stack
         });
-    
-        socket.emit('callError', { 
+
+        socket.emit('callError', {
           message: 'Failed to process missed call',
           details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
-    
+
         // Cleanup remaining call states
         try {
           if (activeCalls[callerId]) delete activeCalls[callerId];
@@ -553,10 +591,10 @@ export const setupWebRTC = (io) => {
         }
       }
     });
-    
-    
 
-  
+
+
+
 
     // Handle call rejection
     socket.on('rejectCall', async ({ receiverId, callerId }) => {
@@ -592,7 +630,7 @@ export const setupWebRTC = (io) => {
       }
     });
 
-    
+
 
     socket.on('endCall', async ({ receiverId, callerId }) => {
       try {
@@ -637,7 +675,7 @@ export const setupWebRTC = (io) => {
 
     socket.on('disconnect', async () => {
       logger.info(`Socket disconnected: ${socket.id}`);
-    
+
       // Find and remove the disconnected socket
       let disconnectedUserId;
       for (const [userId, socketIds] of Object.entries(users)) {
@@ -645,20 +683,20 @@ export const setupWebRTC = (io) => {
         if (index !== -1) {
           socketIds.splice(index, 1);
           disconnectedUserId = userId;
-    
+
           // Remove user entry if no sockets left
           if (socketIds.length === 0) {
             delete users[userId];
-            
+
             // Update user status to offline in database
             try {
               await User.findByIdAndUpdate(
                 disconnectedUserId,
-                { 
+                {
                   status: 'offline',
                 }
               );
-    
+
               // Broadcast offline status to other users
               socket.broadcast.emit('userStatusChanged', {
                 userId: disconnectedUserId,
@@ -671,20 +709,20 @@ export const setupWebRTC = (io) => {
           break;
         }
       }
-    
+
       // End any active calls for the disconnected user
       if (disconnectedUserId && activeCalls[disconnectedUserId]) {
         const otherUserId = activeCalls[disconnectedUserId];
-    
+
         // Log call if it was ongoing
         const callKey = `${disconnectedUserId}_${otherUserId}`;
         const reverseCallKey = `${otherUserId}_${disconnectedUserId}`;
-    
+
         if (callTimings[callKey] || callTimings[reverseCallKey]) {
           const endTime = new Date();
           const startTime = callTimings[callKey]?.startTime || callTimings[reverseCallKey]?.startTime;
           const duration = Math.floor((endTime - startTime) / 1000);
-    
+
           // Create call log for disconnected call
           CallLog.create({
             caller: new mongoose.Types.ObjectId(disconnectedUserId),
@@ -696,12 +734,12 @@ export const setupWebRTC = (io) => {
           }).catch(error => {
             logger.error(`Error logging disconnected call: ${error.message}`);
           });
-    
+
           // Clean up call timings
           delete callTimings[callKey];
           delete callTimings[reverseCallKey];
         }
-    
+
         // Notify other user about call end
         if (users[otherUserId]) {
           users[otherUserId].forEach((socketId) => {
@@ -710,7 +748,7 @@ export const setupWebRTC = (io) => {
             });
           });
         }
-    
+
         delete activeCalls[disconnectedUserId];
         delete activeCalls[otherUserId];
       }
@@ -723,7 +761,7 @@ export const setupWebRTC = (io) => {
 
 
 
-async function sendNotification(userId, title, message, type, CallId, receiverId, senderName, senderAvatar) {
+async function sendNotification(userId, title, message, type, receiverId, senderName, senderAvatar) {
   try {
     // Fetch the user from the database
     const user = await User.findById(userId);
@@ -743,10 +781,10 @@ async function sendNotification(userId, title, message, type, CallId, receiverId
       data: {
         screen: 'incoming_Call', // Target screen
         params: JSON.stringify({
-          CallId: CallId, // Include Call ID
+          user_id: userId, // Include Call ID
           type: type, // Type of call
-          AgentID: receiverId, // Receiver ID
-          friendName: senderName, // Sender name
+          agent_id: receiverId, // Receiver ID
+          username: senderName, // Sender name
           imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png', // Sender avatar with default fallback
         }),
         // Add any additional parameters if needed
