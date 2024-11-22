@@ -894,9 +894,7 @@ export const setupWebRTC = (io) => {
 
 
 // Make sure Firebase Admin SDK is initialized
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
+
 
 async function sendNotification(userId, title, message, type, receiverId, senderName, senderAvatar) {
   try {
