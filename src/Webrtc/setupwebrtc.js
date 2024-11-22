@@ -418,7 +418,7 @@ export const setupWebRTC = (io) => {
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
-            await sendNotification(receiverId, title, message, receiverId, senderName, senderAvatar);
+            await sendNotification(receiverId, title, message, callerId, receiverId, senderName, senderAvatar);
             logger.info(`Push notification sent to User ${receiverId}`);
           }
         } else {
@@ -898,7 +898,7 @@ export const setupWebRTC = (io) => {
 
 
 
-async function sendNotification(userId, title, message, receiverId, senderName, senderAvatar) {
+async function sendNotification(userId, title, message,callerId, receiverId, senderName, senderAvatar) {
   try {
     // Fetch the user from the database
     const user = await User.findById(userId);
