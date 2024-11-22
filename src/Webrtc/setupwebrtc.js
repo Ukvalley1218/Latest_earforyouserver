@@ -418,7 +418,7 @@ export const setupWebRTC = (io) => {
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
-            await sendNotification(receiverId, title, message, callerId, receiverId, senderName, senderAvatar);
+            await sendNotification(receiverId, title, message,type, callerId, receiverId, senderName, senderAvatar);
             logger.info(`Push notification sent to User ${receiverId}`);
           }
         } else {
@@ -430,7 +430,7 @@ export const setupWebRTC = (io) => {
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
-            await sendNotification(receiverId, title, message, callerId,receiverId, senderName, senderAvatar);
+            await sendNotification(receiverId, title, message, type,callerId,receiverId, senderName, senderAvatar);
             logger.info(`Push notification sent to User ${receiverId}`);
           }
 
@@ -464,7 +464,7 @@ export const setupWebRTC = (io) => {
                 const senderName = receiver.username || 'Unknown Receiver';
                 const senderAvatar = receiver.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
-                await sendNotification(receiverId, title, message,callerId, receiverId, senderName, senderAvatar);
+                await sendNotification(receiverId, title, type,message,callerId, receiverId, senderName, senderAvatar);
                 logger.info(`Missed call notification sent to User ${callerId}`);
               }
 
@@ -918,7 +918,8 @@ async function sendNotification(userId, title, message,callerId, receiverId, sen
       data: {
         screen: 'incoming_Call', // Target screen
         params: JSON.stringify({
-          user_id: userId, // Include Call ID
+          user_id: userId,
+          callerId:callerId,
           type: type, // Type of call
           agent_id: receiverId, // Receiver ID
           username: senderName, // Sender name
