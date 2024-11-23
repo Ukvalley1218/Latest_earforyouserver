@@ -328,7 +328,7 @@ export const setupWebRTC = (io) => {
           if (receiver.deviceToken) {
             const title = 'Incoming Call';
             const message = `${caller.username} is calling you!`;
-            const type = 'Incoming_Call';
+            const type = 'incoming_Call';
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
@@ -339,7 +339,7 @@ export const setupWebRTC = (io) => {
           if (receiver.deviceToken) {
             const title = 'Incoming Call';
             const message = `${caller.username || 'Unknown Caller'} is calling you!`;
-            const type = 'Incoming_Call';
+            const type = 'incoming_Call';
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
@@ -359,17 +359,17 @@ export const setupWebRTC = (io) => {
               }, 30000); // 30 seconds
 
               // Cleanup timeout if the call is accepted or rejected
-              socket.on('callAccepted', () => {
+              socket.on('acceptCall', () => {
                 clearTimeout(callTimeout);
                 logger.info(`Call accepted by User ${receiverId}`);
               });
 
-              socket.on('callRejected', () => {
+              socket.on('rejectCall', () => {
                 clearTimeout(callTimeout);
                 logger.info(`Call rejected by User ${receiverId}`);
               });
 
-              socket.on('callEnded', () => {
+              socket.on('endCall', () => {
                 clearTimeout(callTimeout);
                 logger.info(`Call ended by User ${receiverId}`);
               });
