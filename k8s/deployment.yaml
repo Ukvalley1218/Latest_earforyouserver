@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: earforyouserver
+  namespace: prod
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: earforyouserver
+  template:
+    metadata:
+      labels:
+        app: earforyouserver
+    spec:
+      containers:
+      - name: earforyouserver
+        image: asia-south1-docker.pkg.dev/leafy-flash-441005-g2/earforyou/earforyouserver:v1
+        ports:
+        - containerPort: 8080
+        env:
+        - name: REFRESH_TOKEN_SECRET
+          value: "CMdDNtowK7fX0-5D9cv0oJ008MCFRSLHVTUkcyqgZAaIg9GG_OGzh9zMocyO3UtN1kBfLRn3DmVkxdO"
+        - name: REFRESH_TOKEN_EXPIRY
+          value: "10d"
+        - name: MSG91_AUTH_KEY
+          value: "433917ALgJm23e672b026eP1"
+        - name: DEFAULT_TEMPLATE_ID
+          value: "672a1727d6fc05546b5b09d2"
+        - name: MERCHANT_ID
+          value: "PGTESTPAYUAT77"
+        - name: SALT_KEY
+          value: "14fa5465-f8a7-443f-8477-f986b8fcfde9"
+        - name: SALT_INDEX
+          value: "1d"
+        - name: PHONE_PE_HOST_URL
+          value: "https://api-preprod.phonepe.com/apis/pg-sandbox"
+        - name: APP_BE_URL
+          value: "https://earforyou.in"
+        - name: SERVICE_ACCOUNT
+          value: '{
+            "type": "service_account",
+            "project_id": "earforyou-89c9b",
+            "private_key_id": "21cd136bf4aa089391e187581c6608959368d228",
+            "private_key": "-----BEGIN PRIVATE KEY-----\\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQD3wzP8lJV59viU\\nbMxULKIcw3J/z279bVTeTSQv+i0ZKmqGw6/HIhH3Hp2qyJRV7wyYPPXbWWc01vV8\\nu32eq3IkEsK0Y4CTcS1PkXtgVlgfiY+8hOpNAyj6oim1LpXf3cOB5lDqCd68Ysms\\nbfVDGSDgIp1e4wfDLjN59609pTZKEJzqTbb/jbm09abi6xJb54DlB/blHck5wmSl\\nxx9NaW0ZwuC5k5vAujHJCPiine92ef6x8nvSUHyj8I/tjQRlI+Ht8hqjs42py2G5\\n8ftue8zbG3qwnNIl2x2F0hGXfySOfyNiufpWUIX70oS4t6EZ5vkCCtqqrPdIwHPQ\\nfcUq3VP9AgMBAAECggEACmvC8YI8YUNihDepRncUIHqWA8sxQ2aIVctP1NbEc9UF\\nYwKzD4Ce2dKHVioWlyC1Wmfh/WZewWmzLJpkN7rFU8AYQWcX/tuZSMn5Mv2eukDa\\nc1bx1ehmnlgYwf6iHibhNML/r0BYBntvORns4XQanmLGVLne1zZHwv8IYdnjlSzV\\nhOddzdloeIKdlpoWLpIHIzjcZmzTZ6CwrgEcKYEn6xAVfIy6hoA4RdwldXBEjxYY\\n0cE40NCIg7E4ZGpOdkTK1ZO1MWBRBKUWaurGFgvS5MrXClU6S4Cm7KpoaerAnXvN\\nGcOX5PixzcZjIXUqBkZNw0tNjct8OKfcqrodE7+bkQKBgQD+bkYfiJMtCdaf6GV2\\nqcN4ovpcrEqLHw8kSzDH4CnCXsF6+Jvj9FBDFjgGRdOamDilhDka+2o/HMYeS1E+\\nYneWR6mlL99c4TMco4ARN7igZV06O6t7c6JJJ1HG4tvAkaA80+nQRPF0fhwdTavt\\nr3rPx4jqj3rqxn8fWm3+HM9kNQKBgQD5SmaIifOCCtExHzx99mG52fHGrklYKLcH\\n0tQtq6D09fqFOYqKaNU4SqseVEWGkWPEFlz29nF4bxceaIq5vpMeJ5pA4SM74qKq\\naPGFF/vgkr5oGMoWr7gpvCGOPUh3bCNuj9z3Qt0RueAcq8vOlhaHt1ITqrmAEvzO\\nq/KKj98ZqQKBgDG3TpB+2XNlhsC8YocraPy7q/xL1k0VBppq7t8/mClY5qmmxp9m\\ncACL6Oqg3lZJBFijW51AH2SxtKzavsdX6lI9MpMKpbS6dIhWEoJKxxLge7UTT9DR\\nqZZtznb0gUhBrHP2XKvLrPq8YbYAJWZOccsEDGb5HmWd3906iF+tNYE5AoGBALe8\\nVWwHORm8vUhWPHCempKvhtqn9Fjs0VIL2uS6XcyOS5HLwkeXUqfFqO+WrxOqrvyE\\newpuw10/i6uW48BZLPeJutBc32ow9TFiXbh53+Q6Y+o3cyNbagIgrh63HmUep9LC\\nZ9s6RdPdysd2+6UMzBhFTlI+f7BczkXJR99GgOnZAoGAdNqmIYUhrPX9eUWEKGVf\\nA9kL6SQNdgqlOPK69oFEORSaID4lm5nYRwWdlzx0L1iUE1FConVLspwcjxgxl85D\\nt/KYS+cThAa/R0lenaVE7r1foCZwGEoiyozSR7Bo7mmEtbNpcNK9C8/RWolw56uX\\nMTvzFktkhTxU50L5KAzD1NE=\\n-----END PRIVATE KEY-----\\n",
+            "client_email": "firebase-adminsdk-at6et@earforyou-89c9b.iam.gserviceaccount.com",
+            "client_id": "106399836630088383088",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-at6et%40earforyou-89c9b.iam.gserviceaccount.com",
+            "universe_domain": "googleapis.com"
+          }'
+        resources:
+          limits:
+            memory: 1.5Gi
+            cpu: 2000m
+          requests:
+            memory: 1Gi
+            cpu: 1000m
