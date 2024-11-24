@@ -42,4 +42,5 @@ jobs:
       - name: Deploy to GCP VM
         run: |
           gcloud container clusters get-credentials cluster-1 --zone us-central1-c --project leafy-flash-441005-g2
+          pwd
           kubectl apply -f ./k8s
