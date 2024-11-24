@@ -30,7 +30,6 @@ jobs:
 
       - name: Push Docker images to Google Artifact Registry
         run: |
-        
           docker push asia-south1-docker.pkg.dev/leafy-flash-441005-g2/earforyou/earforyouserver:v1
 
       - name: Installing kubectl authentication plugin
@@ -43,5 +42,4 @@ jobs:
       - name: Deploy to GCP VM
         run: |
           gcloud container clusters get-credentials cluster-1 --zone us-central1-c --project leafy-flash-441005-g2
-          cd ./k8s
-          kubectl apply -f -
+          kubectl apply -f ./k8s
