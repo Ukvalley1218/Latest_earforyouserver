@@ -35,8 +35,6 @@ jobs:
 
       - name: Deploy to GCP VM
         run: |
-          gcloud compute ssh --zone "us-central1-f" "earforyou" --project "leafy-flash-441005-g2" --command "
-            cd /home/adityasjoshi12/deployment
-            docker-compose pull
-            docker-compose up -d
-          "
+          gcloud container clusters get-credentials cluster-1 --zone us-central1-c --project leafy-flash-441005-g2
+          cd ./k8s
+          kubectl deploy -f -
