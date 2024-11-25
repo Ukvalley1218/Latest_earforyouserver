@@ -10,7 +10,7 @@ router.post("/pay", initiatePayment);
 // Route to validate payment
 router.post("/validate",validatePayment);
 
- router.post('/buyPlan',buyPlan);
+//  router.post('/buyPlan',buyPlan);
 
  router.get("/getAllPlans",getAllPlans);
 router.post('/recharges/:userId', getRechargeHistory);
