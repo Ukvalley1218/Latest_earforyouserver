@@ -278,7 +278,7 @@ export const initiatePayment = async (req, res) => {
 };
 
 export const validatePayment = async (req, res) => {
-  const { merchantTransactionId, userId } = req.body;
+  const { merchantTransactionId, userId ,planId} = req.body;
 
   if (!merchantTransactionId || !userId) {
     return res.status(400).send("Invalid transaction ID or user ID");
@@ -300,7 +300,7 @@ export const validatePayment = async (req, res) => {
 
     if (response.data && response.data.code === "PAYMENT_SUCCESS") {
       const { amount } = response.data.data;
-      const planId = response.data.data.planId; // Assuming planId is returned in response
+      // const planId = response.data.data.planId; // Assuming planId is returned in response
 
       // Fetch the subscription plan
       const plan = await SubscriptionPlan.findById(planId);
