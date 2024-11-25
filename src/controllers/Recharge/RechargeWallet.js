@@ -318,6 +318,7 @@ export const validatePayment = async (req, res) => {
           currency: 'inr',
           recharges: [],
           deductions: [],
+          plan:[],
           lastUpdated: new Date()
         });
       }
@@ -332,7 +333,7 @@ export const validatePayment = async (req, res) => {
         transactionId: merchantTransactionId
       };
 
-      const newBalance = wallet.balance + newRecharge.amount;
+      const newBalance = wallet.balance + talkTime;
       wallet.balance = newBalance;
       wallet.recharges.push(newRecharge);
 
