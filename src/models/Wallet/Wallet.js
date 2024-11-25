@@ -72,11 +72,13 @@ const walletSchema = new mongoose.Schema({
       },
     },
   ],
-  planId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'SubscriptionPlan',
-    required: true,
-  },
+  plan: [{
+    planId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SubscriptionPlan',
+      required: true,
+    }
+  }],
   lastUpdated: {
     type: Date,
     default: Date.now,
