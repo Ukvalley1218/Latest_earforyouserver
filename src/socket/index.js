@@ -91,6 +91,9 @@ const initializeSocketIO = (io) => {
           socket.leave(socket.user._id);
         }
       });
+
+        
+
     } catch (error) {
       socket.emit(
         ChatEventEnum.SOCKET_ERROR_EVENT,
@@ -98,6 +101,9 @@ const initializeSocketIO = (io) => {
       );
     }
   });
+
+
+
 };
 
 /**
@@ -111,6 +117,8 @@ const initializeSocketIO = (io) => {
 const emitSocketEvent = (req, roomId, event, payload) => {
   req.app.get("io").in(roomId).emit(event, payload);
 };
+
+
 
 export { initializeSocketIO, emitSocketEvent };
 
