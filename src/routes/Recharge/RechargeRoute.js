@@ -1,6 +1,6 @@
 import express from 'express';
 // import { verifyPayment } from '../../controllers/Recharge/RechargeWallet.js'
-import { initiatePayment,validatePayment,getRechargeHistory,buyPlan,getAllPlans} from '../../controllers/Recharge/RechargeWallet.js'
+import { initiatePayment,validatePayment,getRechargeHistory,getAllPlans} from '../../controllers/Recharge/RechargeWallet.js'
 import { deductPerMinute } from '../../controllers/Recharge/Decudition.js'
 import { protect } from '../../middlewares/auth/authMiddleware.js'
 const router = express.Router();
