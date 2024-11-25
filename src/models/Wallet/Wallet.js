@@ -72,13 +72,16 @@ const walletSchema = new mongoose.Schema({
       },
     },
   ],
-  plan: [{
-    planId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'SubscriptionPlan',
-      required: true,
+  plan: [
+    {
+      planId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'SubscriptionPlan',
+        required: false,
+        default: null
+      }
     }
-  }],
+  ],
   lastUpdated: {
     type: Date,
     default: Date.now,
@@ -86,23 +89,7 @@ const walletSchema = new mongoose.Schema({
 });
 
 // Middleware to automatically calculate expirationDate and deduct minutes
-walletSchema.pre('save', function (next) {
-  this.plans.forEach(plan => {
-    // Set the expirationDate by adding the validity (in days) to the current date
-    if (plan.validity) {
-      plan.expirationDate = new Date(Date.now() + plan.validity * 24 * 60 * 60 * 1000); // validity in days
-    }
 
-    // If the expiration date is in the past, mark the status as 'expired'
-    if (plan.expirationDate && new Date() > plan.expirationDate) {
-      plan.status = 'expired';
-    }
-  });
-
-  // Update the lastUpdated timestamp
-  this.lastUpdated = new Date();
-  next();
-});
 
 // Method to deduct from wallet balance and plan minutes
 walletSchema.methods.deductBalanceAndMinutes = async function (amount, minutes, planId) {
@@ -134,9 +121,7 @@ walletSchema.methods.deductBalanceAndMinutes = async function (amount, minutes, 
 };
 
 // Create a method to check and clean expired wallets periodically (optional, can be run in background)
-walletSchema.statics.cleanExpiredWallets = async function () {
-  await this.deleteMany({ 'plans.status': 'expired' });
-};
+
 
 const Wallet = mongoose.model('Wallet', walletSchema);
 
