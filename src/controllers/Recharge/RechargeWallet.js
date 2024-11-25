@@ -229,33 +229,33 @@ export const getRechargeHistory = async (req, res) => {
 
 
 
-export const getAllPlans = async (req, res) => {
-  try {
-    // Fetch all plans
-    const plans = await SubscriptionPlan.find();
+// export const getAllPlans = async (req, res) => {
+//   try {
+//     // Fetch all plans
+//     const plans = await SubscriptionPlan.find();
 
-    if (!plans || plans.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No subscription plans found",
-      });
-    }
+//     if (!plans || plans.length === 0) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "No subscription plans found",
+//       });
+//     }
 
-    // Respond with the fetched plans
-    return res.status(200).json({
-      success: true,
-      message: "Subscription plans retrieved successfully",
-      data: plans,
-    });
-  } catch (error) {
-    console.error("Error fetching subscription plans:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch subscription plans",
-      error: error.message,
-    });
-  }
-};
+//     // Respond with the fetched plans
+//     return res.status(200).json({
+//       success: true,
+//       message: "Subscription plans retrieved successfully",
+//       data: plans,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching subscription plans:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch subscription plans",
+//       error: error.message,
+//     });
+//   }
+// };
 
 
 // export const buyPlan = async (req, res) => {
