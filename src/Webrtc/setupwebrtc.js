@@ -325,7 +325,7 @@ export const setupWebRTC = (io) => {
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
-            await sendNotification(receiverId, title, message, type, receiverId, senderName, senderAvatar);
+            await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
             logger.info(`Push notification sent to User ${receiverId}`);
           }
         } else {
@@ -338,13 +338,13 @@ export const setupWebRTC = (io) => {
 
             try {
               // Initial notification
-              await sendNotification(receiverId, title, message, type, receiverId, senderName, senderAvatar);
+              await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
               logger.info(`Push notification sent to User ${receiverId}`);
 
               // Retry after 30 seconds if still not connected
               const callTimeout = setTimeout(async () => {
                 try {
-                  await sendNotification(receiverId, title, message, type, receiverId, senderName, senderAvatar);
+                  await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
                   logger.info(`Retry push notification sent to User ${receiverId}`);
                 } catch (retryError) {
                   logger.error(`Retry push notification failed for User ${receiverId}: ${retryError.message}`);
