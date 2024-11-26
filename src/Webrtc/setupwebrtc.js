@@ -32,7 +32,7 @@ export const setupWebRTC = (io) => {
         // Update user's status in the database
         await User.findByIdAndUpdate(
           userId,
-          { status: 'online' }, // Assuming `status` is the field
+          { status: 'Online' }, // Assuming `status` is the field
           { new: true } // Returns the updated document
         );
     
