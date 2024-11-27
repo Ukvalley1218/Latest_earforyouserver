@@ -388,7 +388,7 @@ export const validatePayment = async (req, res) => {
     });
   }
 
-  try {
+
     // Construct URL and headers for PhonePe validation
     const statusUrl = `${process.env.PHONE_PE_HOST_URL}/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}`;
     const stringToHash = `/pg/v1/status/${process.env.MERCHANT_ID}/${merchantTransactionId}${process.env.SALT_KEY}`;
@@ -407,7 +407,7 @@ export const validatePayment = async (req, res) => {
     console.log("PhonePe Response:", response.data);
 
     const { data } = response;
-    if (data && data.code === "PAYMENT_SUCCESS" && data.data?.status === "COMPLETED") {
+    if (response.data && response.data.code === "PAYMENT_SUCCESS" && response.data.data?.status === "COMPLETED") {
       const { amount } = data.data;
 
       // Validate subscription plan
@@ -497,7 +497,7 @@ export const validatePayment = async (req, res) => {
         data: data,
       });
     }
-  } catch (error) {
+
     console.error("Error during payment validation:", error.message);
 
     return res.status(500).json({
@@ -506,7 +506,7 @@ export const validatePayment = async (req, res) => {
       error: error.message,
     });
   }
-};
+
 
 export const getRechargeHistory = async (req, res) => {
   try {
