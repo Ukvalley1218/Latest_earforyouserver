@@ -414,7 +414,7 @@ export const setupWebRTC = (io) => {
       }
     });
 
-    
+
 
     // Handle WebRTC offer
     socket.on('offer', async ({ offer, callerId, receiverId }) => {
@@ -508,16 +508,16 @@ export const setupWebRTC = (io) => {
     socket.on('acceptCall', async ({ receiverId, callerId }) => {
       try {
         logger.info(`User ${receiverId} accepted the call from User ${callerId}`);
-    
+
         // Generate a unique key for the call session
         const callKey = `${receiverId}_${callerId}`;
         logger.info(`Call session key: ${callKey}`);
-    
+
         // Record the start time of the call
         callTimings[callKey] = {
           startTime: new Date(), // Start time as a Date object
         };
-    
+
         // Notify the caller that the call has been accepted
         if (users[callerId] && users[callerId].length > 0) {
           users[callerId].forEach((socketId) => {
@@ -526,7 +526,7 @@ export const setupWebRTC = (io) => {
               receiverId,
               receiverSocketId: socket.id, // Provide the receiver's socket ID
             });
-    
+
             // Notify about the active call
             socket.to(socketId).emit('activeCall', {
               callerId,
@@ -534,9 +534,9 @@ export const setupWebRTC = (io) => {
               receiverSocketId: socket.id,
             });
           });
-    
+
           logger.info(`Call accepted notification sent to User ${callerId}`);
-    
+
           // Stop the caller's tune after call acceptance
           socket.emit('stopCallerTune', { callerId });
         } else {
@@ -546,12 +546,12 @@ export const setupWebRTC = (io) => {
             message: `Unable to notify User ${callerId} about call acceptance.`,
           });
         }
-    
+
         // Log successful acceptance
         logger.info(
           `Call between User ${callerId} and User ${receiverId} is now active.`
         );
-    
+
       } catch (error) {
         // Handle errors gracefully
         logger.error(`Error in acceptCall handler: ${error.message}`);
@@ -560,7 +560,7 @@ export const setupWebRTC = (io) => {
         });
       }
     });
-    
+
 
     socket.on('missedcall', async ({ receiverId, callerId }) => {
       // Input validation
@@ -757,6 +757,12 @@ export const setupWebRTC = (io) => {
           if (users[receiverId]) {
             users[receiverId].forEach((socketId) => {
               socket.to(socketId).emit('callEnded', { callerId });
+              socket.to(socketId).emit('inactiveCall', {
+                callerId,
+                receiverId,
+                SocketId: socket.id,
+              });
+
             });
           }
 
@@ -766,6 +772,7 @@ export const setupWebRTC = (io) => {
           const startTime = callTimings[callerCallKey]?.startTime || callTimings[receiverCallKey]?.startTime;
           const endTime = new Date();
           const duration = (endTime - startTime) / 1000; // Calculate duration in seconds
+
 
           // Log the call with duration
           await CallLog.create({
@@ -873,14 +880,14 @@ export const setupWebRTC = (io) => {
 
     socket.on('disconnect', async () => {
       logger.info(`Socket disconnected: ${socket.id}`);
-    
+
       let disconnectedUserId;
       for (const [userId, socketIds] of Object.entries(users)) {
         const index = socketIds.indexOf(socket.id);
         if (index !== -1) {
           socketIds.splice(index, 1);
           disconnectedUserId = userId;
-    
+
           if (socketIds.length === 0) {
             delete users[userId];
             try {
@@ -893,17 +900,17 @@ export const setupWebRTC = (io) => {
           break;
         }
       }
-    
+
       if (disconnectedUserId && activeCalls[disconnectedUserId]) {
         const otherUserId = activeCalls[disconnectedUserId];
         const callKey = `${disconnectedUserId}_${otherUserId}`;
         const reverseCallKey = `${otherUserId}_${disconnectedUserId}`;
         const callStartTime = callTimings[callKey]?.startTime || callTimings[reverseCallKey]?.startTime;
-    
+
         if (callStartTime) {
           const endTime = new Date();
           const duration = Math.floor((endTime - callStartTime) / 1000);
-    
+
           try {
             await CallLog.create({
               caller: new mongoose.Types.ObjectId(disconnectedUserId),
@@ -916,23 +923,23 @@ export const setupWebRTC = (io) => {
           } catch (error) {
             logger.error(`Failed to log call for disconnected user ${disconnectedUserId}: ${error.message}`);
           }
-    
+
           delete callTimings[callKey];
           delete callTimings[reverseCallKey];
         }
-    
+
         if (users[otherUserId]) {
           users[otherUserId].forEach((socketId) => {
             socket.to(socketId).emit('callEnded', { callerId: disconnectedUserId });
           });
         }
-    
+
         delete activeCalls[disconnectedUserId];
         delete activeCalls[otherUserId];
       }
     });
 
-    
+
   });
 };
 
