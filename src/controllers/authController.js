@@ -17,21 +17,28 @@ const generateAccessAndRefreshTokens = async (userId) => {
   try {
     const user = await User.findById(userId);
 
-    const accessToken = user.generateAccessToken();
-    const refreshToken = user.generateRefreshToken();
+    if (!user) {
+      throw new Error("User not found");
+    }
 
-    // attach refresh token to the user document to avoid refreshing the access token with multiple refresh tokens
+    // Generate tokens
+    const accessToken = user.generateAccessToken(); // Optional: Short-lived or no expiry
+    const refreshToken = user.generateRefreshToken(); // No expiry
+
+    // Save refresh token and its issued timestamp
     user.refreshToken = refreshToken;
+    user.refreshTokenIssuedAt = new Date();
 
     await user.save({ validateBeforeSave: false });
+
     return { accessToken, refreshToken };
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Something went wrong while generating the access token",
-    });
+    console.error("Error in generateAccessAndRefreshTokens:", error);
+    throw new Error("Error while generating tokens");
   }
 };
+
+
 
 export const registerUser = async (req, res) => {
   const { phone, password } = req.body; // Ensure correct field names
@@ -389,8 +396,39 @@ export const initiateRegistration = async (req, res) => {
 //----------------initiateLogin---------------
 
 
+// export const initiateLogin = async (req, res) => {
+//    const { email } = req.body;
+
+//   try {
+//     // Check if the user exists
+//     const user = await User.findOne({ email });
+
+//     if (!user) {
+//       return res.status(404).json({ message: "User not found" });
+//     }
+
+//     // Generate OTP and set expiry
+//     const otp = generateOtp();
+//     user.otp = otp;
+//     user.otpExpires = Date.now() + 3600000; // OTP valid for 1 hour
+
+
+//     console.log("Login,", otp);
+//     // Save OTP details to user
+//     await user.save();
+
+//     // Send OTP to the user's email
+//     await sendOtpEmail(email, otp);
+
+//     res.status(200).json({ message: "OTP sent to email" });
+//   } catch (error) {
+//     res.status(500).json({ message: "Server error", error });
+//   }
+// };
+
+
 export const initiateLogin = async (req, res) => {
-   const { email } = req.body;
+  const { email } = req.body;
 
   try {
     // Check if the user exists
@@ -405,30 +443,29 @@ export const initiateLogin = async (req, res) => {
     user.otp = otp;
     user.otpExpires = Date.now() + 3600000; // OTP valid for 1 hour
 
+    console.log("Login OTP:", otp);
 
-    console.log("Login,", otp);
     // Save OTP details to user
     await user.save();
 
     // Send OTP to the user's email
     await sendOtpEmail(email, otp);
 
-    res.status(200).json({ message: "OTP sent to email" });
+    // Generate tokens
+    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
+
+    res.status(200).json({
+      message: "OTP sent to email",
+      accessToken,
+      refreshToken,
+    });
   } catch (error) {
+    console.error("Error in initiateLogin:", error);
     res.status(500).json({ message: "Server error", error });
   }
 };
 
 // Rest of the code remains the same...
-
-
-
-
-
-
-
-
-
 
 //---------------verifyLoginOtp--------------------
 

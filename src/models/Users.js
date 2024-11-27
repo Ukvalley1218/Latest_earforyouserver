@@ -116,7 +116,7 @@ userSchema.methods.generateAccessToken = function () {
       userType: this.userType, // Added userType instead of serviceType
     },
     process.env.ACCESS_TOKEN_SECRET,
-    { expiresIn: process.env.ACCESS_TOKEN_EXPIRY }
+    
   );
 };
 
@@ -127,7 +127,7 @@ userSchema.methods.generateRefreshToken = function () {
       _id: this._id,
     },
     process.env.REFRESH_TOKEN_SECRET,
-    { expiresIn: process.env.REFRESH_TOKEN_EXPIRY }
+    
   );
 };
 
