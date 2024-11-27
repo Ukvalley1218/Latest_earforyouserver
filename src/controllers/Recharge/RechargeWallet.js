@@ -407,7 +407,7 @@ export const validatePayment = async (req, res) => {
     console.log("PhonePe Response:", response.data);
 
     const { data } = response;
-    if (data && data.code === "PAYMENT_SUCCESS" && data.data?.state === "COMPLETED") {
+    if (data && data.code === "PAYMENT_SUCCESS" && data.data?.status === "COMPLETED") {
       const { amount } = data.data;
 
       // Validate subscription plan
