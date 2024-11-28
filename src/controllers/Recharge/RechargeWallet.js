@@ -298,9 +298,9 @@ export const validatePayment = async (req, res) => {
       },
     });
 
-    console.log("response",response.data && response.data.code);
+    console.log("response",response.data && response.data.data.code);
 
-    if (response.data && response.data.code === "PAYMENT_SUCCESS" && response.data.status === "COMPLETED") {
+    if (response.data.data && response.data.data.code === "PAYMENT_SUCCESS" ) {
       
       const { amount } = response.data.data;
       // const planId = response.data.data.planId; // Assuming planId is returned in response
