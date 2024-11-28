@@ -294,6 +294,7 @@ export const validatePayment = async (req, res) => {
       headers: {
         "Content-Type": "application/json",
         "X-VERIFY": xVerifyChecksum,
+        "X-MERCHANT-ID":process.env.MERCHANT_ID,
         accept: "application/json",
       },
     });
