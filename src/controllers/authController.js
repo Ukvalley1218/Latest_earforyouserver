@@ -11,7 +11,7 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose'
 import admin from 'firebase-admin';
 import Wallet from "../models/Wallet/Wallet.js";
-import {CallRate} from '../models/Wallet/AdminCharges.js'
+import { CallRate } from '../models/Wallet/AdminCharges.js'
 
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
@@ -223,7 +223,7 @@ export const initiateRegistration = async (req, res) => {
     // Check if the user already exists
     const existingUser = await User.findOne({ email });
     console.log(existingUser);
-    
+
     if (existingUser) {
       // If it's a playstore verification, generate tokens
       if (isPlaystoreVerification) {
@@ -372,7 +372,7 @@ export const initiateRegistration = async (req, res) => {
       console.log("Wallet created with initial balance for user:", newUser._id, wallet);
 
       await session.commitTransaction();
-      res.status(200).json({ 
+      res.status(200).json({
         message: "OTP sent to email for registration",
         userId: newUser._id,
         email: newUser.email,
@@ -438,6 +438,11 @@ export const initiateLogin = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // Check if the user is blocked
+    if (user.UserStatus === "Blocked") {
+      return res.status(403).json({ message: `You are blocked, ${user.username}` });
+    }
+
     // Generate OTP and set expiry
     const otp = generateOtp();
     user.otp = otp;
@@ -471,7 +476,7 @@ export const initiateLogin = async (req, res) => {
 
 export const verifyLoginOtp = async (req, res) => {
   const { email, otp, deviceToken, platform } = req.body;
-    console.log({ email, otp, deviceToken, platform })
+  console.log({ email, otp, deviceToken, platform })
   try {
     // Find user by email
     const user = await User.findOne({ email });
@@ -621,24 +626,23 @@ export const updateProfile = async (req, res) => {
   try {
     const { userId } = req.params;
     const { username, dateOfBirth, gender, Language, phone, userCategory, avatarUrl } = req.body;
-    
+
     // Input validation
     const validationErrors = [];
-    
+
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: 'User ID is required'
+        message: 'User ID is required',
       });
     }
-    
-    // Validate individual fields if they are provided
+
     if (username !== undefined) {
       if (typeof username !== 'string' || username.trim().length === 0) {
         validationErrors.push('Username must be a non-empty string');
       }
     }
-    
+
     if (dateOfBirth !== undefined) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
         validationErrors.push('Date of birth must be in YYYY-MM-DD format');
@@ -649,107 +653,116 @@ export const updateProfile = async (req, res) => {
         }
       }
     }
-    
+
     if (gender !== undefined) {
       if (!['male', 'female', 'other'].includes(gender.toLowerCase())) {
         validationErrors.push('Gender must be either "male", "female", or "other"');
       }
     }
-    
+
     if (phone !== undefined) {
-      const phoneRegex = /^\+?[\d\s-]{10,}$/;  // Basic example - adjust as needed
-      if (!phoneRegex.test(phone)) {
+      const phoneRegex = /^\+?[\d\s-]{10,}$/; // Basic regex for phone validation
+      if (!phoneRegex.test(phone.trim())) {
         validationErrors.push('Invalid phone number format');
       }
     }
-    
+
+    if (Language !== undefined && typeof Language !== 'string') {
+      validationErrors.push('Language must be a string');
+    }
+
+    if (userCategory !== undefined && typeof userCategory !== 'string') {
+      validationErrors.push('User category must be a string');
+    }
+
     if (validationErrors.length > 0) {
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
-        errors: validationErrors
+        errors: validationErrors,
       });
     }
-    
+
     // Check if user exists
     const existingUser = await User.findById(userId);
-    
     if (!existingUser) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: 'User not found',
       });
     }
-    
-    // Prepare update data with only provided fields
+
+    // Prepare update data
     const updateData = {
-      ...(username !== undefined && { username }),
+      ...(username !== undefined && { username: username.trim() }),
       ...(dateOfBirth !== undefined && { dateOfBirth }),
       ...(gender !== undefined && { gender: gender.toLowerCase() }),
-      ...(Language !== undefined && { Language: Language }), // Note the capital L in Language
-      ...(phone !== undefined && { phone }),
+      ...(Language !== undefined && { Language }),
+      ...(phone !== undefined && { phone: phone.trim() }),
       ...(userCategory !== undefined && { userCategory }),
       ...(avatarUrl !== undefined && { avatarUrl }),
-      updatedAt: new Date()
+      status: 'Online',
+      UserStatus: 'Active',
+      updatedAt: new Date(),
     };
-    
+
     // Update user profile
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { $set: updateData },
-      { 
-        new: true,
-        runValidators: true
+      {
+        new: true, // Return the updated document
+        runValidators: true, // Apply schema validation
       }
     );
-    
+
     return res.status(200).json({
       success: true,
       message: 'Profile updated successfully',
-      user: updatedUser
+      user: updatedUser,
     });
-    
   } catch (error) {
     console.error('Profile update error:', error);
-    
+
     // Handle mongoose validation errors
     if (error.name === 'ValidationError') {
       return res.status(400).json({
         success: false,
         message: 'Validation error',
-        errors: Object.values(error.errors).map(err => err.message)
+        errors: Object.values(error.errors).map((err) => err.message),
       });
     }
-    
+
     return res.status(500).json({
       success: false,
       message: 'An error occurred while updating the profile',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };
 
 
+
 // -------------------------- Update Status --------------------------
- 
+
 export const updateStatus = async (req, res) => {
   try {
     const { userId } = req.params;
     const { status } = req.body;
-    
+
     // Input validation
     const validationErrors = [];
-    
+
     if (!userId) {
       return res.status(400).json({
         success: false,
         message: 'User ID is required'
       });
     }
-    
+
     // Validate individual fields if they are provided
-   
-    
+
+
     if (validationErrors.length > 0) {
       return res.status(400).json({
         success: false,
@@ -757,42 +770,42 @@ export const updateStatus = async (req, res) => {
         errors: validationErrors
       });
     }
-    
+
     // Check if user exists
     const existingUser = await User.findById(userId);
-    
+
     if (!existingUser) {
       return res.status(404).json({
         success: false,
         message: 'User not found'
       });
     }
-    
+
     // Prepare update data with only provided fields
     const updateData = {
       ...(status !== undefined && { status }),
       updatedAt: new Date()
     };
-    
+
     // Update user profile
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { $set: updateData },
-      { 
+      {
         new: true,
         runValidators: true
       }
     );
-    
+
     return res.status(200).json({
       success: true,
       message: 'Status updated successfully',
       user: updatedUser
     });
-    
+
   } catch (error) {
     console.error('Profile update error:', error);
-    
+
     // Handle mongoose validation errors
     if (error.name === 'ValidationError') {
       return res.status(400).json({
@@ -801,7 +814,7 @@ export const updateStatus = async (req, res) => {
         errors: Object.values(error.errors).map(err => err.message)
       });
     }
-    
+
     return res.status(500).json({
       success: false,
       message: 'An error occurred while updating the profile',
@@ -1039,10 +1052,22 @@ export const getAllUsers = async (req, res) => {
     const loggedInUserId = req.user.id;
 
     // Find all users except the logged-in user, excluding password and refreshToken fields
+
+    // const users = await User.find(
+    //   { _id: { $ne: loggedInUserId } }, // Exclude the logged-in user
+    //   { password: 0, refreshToken: 0 }
+    // );
+
     const users = await User.find(
-      { _id: { $ne: loggedInUserId } }, // Exclude the logged-in user
-      { password: 0, refreshToken: 0 }
+      {
+        _id: { $ne: loggedInUserId }, // Exclude the logged-in user
+        userStatus: { $nin: ['inActive', 'Blocked'] } // Exclude users with these statuses
+      },
+      { password: 0, refreshToken: 0 } // Exclude sensitive fields
     );
+
+
+
 
     // If no other users are found, return an appropriate message
     if (users.length === 0) {

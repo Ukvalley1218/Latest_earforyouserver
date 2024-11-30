@@ -37,11 +37,11 @@ const userSchema = new mongoose.Schema(
     gender: {
       type: String,
       enum: ['male', 'female', 'other'], // Enum for gender values
-      
+
     },
     Language: {
       type: String,
-      
+
     },
     userCategory: {
       type: String,
@@ -57,6 +57,7 @@ const userSchema = new mongoose.Schema(
       enum: ['CALLER', 'RECEIVER'], // Define the enum values
       default: 'CALLER', // Set default value
     },
+
     password: {
       type: String,
       required: false,
@@ -76,6 +77,11 @@ const userSchema = new mongoose.Schema(
     },
     refreshToken: {
       type: String,
+    },
+    UserStatus: {
+      type: String,
+      enum: ['Active', 'inActive', 'Blocked'],
+      default: 'inActive'
     },
     status: {
       type: String,
@@ -102,6 +108,14 @@ userSchema.pre("save", async function (next) {
   next();
 });
 
+// Update the status to "online" if userType is RECEIVER
+userSchema.pre("save", async function (next) {
+  if (this.isModified("userType") && this.userType === "RECEIVER") {
+    this.status = "Online"; // Automatically set status to "online"
+  }
+  next();
+});
+
 // Method to compare passwords
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
@@ -116,7 +130,7 @@ userSchema.methods.generateAccessToken = function () {
       userType: this.userType, // Added userType instead of serviceType
     },
     process.env.ACCESS_TOKEN_SECRET,
-    
+
   );
 };
 
@@ -127,7 +141,7 @@ userSchema.methods.generateRefreshToken = function () {
       _id: this._id,
     },
     process.env.REFRESH_TOKEN_SECRET,
-    
+
   );
 };
 
