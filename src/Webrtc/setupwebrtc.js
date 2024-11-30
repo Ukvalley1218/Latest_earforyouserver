@@ -669,63 +669,63 @@ export const setupWebRTC = (io) => {
     });
 
    
-    const cleanUpCallData = (callerId, receiverId, callKey) => {
-      delete activeCalls[callerId];
-      delete activeCalls[receiverId];
+    // const cleanUpCallData = (callerId, receiverId, callKey) => {
+    //   delete activeCalls[callerId];
+    //   delete activeCalls[receiverId];
       
-      logger.info(`Cleaned up in-memory data for call: ${callKey}`);
-    };
+    //   logger.info(`Cleaned up in-memory data for call: ${callKey}`);
+    // };
 
-    // Socket.IO event for handling missed calls
-    socket.on('missedcall', async ({ receiverId, callerId }) => {
-      try {
-        // Validate call parameters
-        validateCallParams(receiverId, callerId);
-        logger.info('callmissed From backend')
-        const [receiver, caller] = await Promise.all([
-          User.findById(receiverId),
-          User.findById(callerId),
-        ]);
-        // Mark the call as missed
-        await markCallAsMissed(callerId, receiverId);
+    // // Socket.IO event for handling missed calls
+    // socket.on('missedcall', async ({ receiverId, callerId }) => {
+    //   try {
+    //     // Validate call parameters
+    //     validateCallParams(receiverId, callerId);
+    //     logger.info('callmissed From backend')
+    //     const [receiver, caller] = await Promise.all([
+    //       User.findById(receiverId),
+    //       User.findById(callerId),
+    //     ]);
+    //     // Mark the call as missed
+    //     await markCallAsMissed(callerId, receiverId);
 
-        // Clean up call-related data
-        cleanUpCallData(callerId, receiverId);
+    //     // Clean up call-related data
+    //     cleanUpCallData(callerId, receiverId);
 
-                   // Send push notification if the receiver has a device token
-          if (receiver.deviceToken) {
-            const title = 'MissCall';
-            const message = `${caller.username || 'Unknown Caller'}  you missed the call`;
-            const type = 'Miss_call';
-            const senderName = caller.username || 'Unknown Caller';
-            const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
+    //                // Send push notification if the receiver has a device token
+    //       if (receiver.deviceToken) {
+    //         const title = 'MissCall';
+    //         const message = `${caller.username || 'Unknown Caller'}  you missed the call`;
+    //         const type = 'Miss_call';
+    //         const senderName = caller.username || 'Unknown Caller';
+    //         const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
-            await sendMNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
-            logger.info(`Push notification sent to User ${receiverId} missed call`);
-          }
+    //         await sendMNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
+    //         logger.info(`Push notification sent to User ${receiverId} missed call`);
+    //       }
 
-        // Acknowledge the missed call
-        socket.emit('callmissed', { receiverId, callerId }, () => {
-          logger.info('Missed call acknowledged', {
-            receiverId,
-            callerId
-          });
-        });
-      } catch (error) {
-        // Log and emit error
-        logger.error('Error handling missed call', {
-          error: error.message,
-          receiverId,
-          callerId
-        });
+    //     // Acknowledge the missed call
+    //     socket.emit('callmissed', { receiverId, callerId }, () => {
+    //       logger.info('Missed call acknowledged', {
+    //         receiverId,
+    //         callerId
+    //       });
+    //     });
+    //   } catch (error) {
+    //     // Log and emit error
+    //     logger.error('Error handling missed call', {
+    //       error: error.message,
+    //       receiverId,
+    //       callerId
+    //     });
 
-        socket.emit('callError', {
-          message: error.message,
-          receiverId,
-          callerId
-        });
-      }
-    });
+    //     socket.emit('callError', {
+    //       message: error.message,
+    //       receiverId,
+    //       callerId
+    //     });
+    //   }
+    // });
 
 
 
@@ -734,6 +734,154 @@ export const setupWebRTC = (io) => {
 
 
     // Handle call rejection
+    
+    socket.on('missedcall', async ({ receiverId, callerId }) => {
+      // Input validation
+      if (!receiverId || !callerId) {
+        logger.error('Missing required parameters: receiverId or callerId');
+        return socket.emit('callError', {
+          message: 'Invalid call parameters'
+        });
+      }
+
+      const CALL_TIMEOUT = 60000; // 1 minute in milliseconds
+
+      // Set auto-cut timer
+      const autoEndCallTimeout = setTimeout(async () => {
+        try {
+          if (activeCalls[callerId] || activeCalls[receiverId]) {
+            logger.info(`Auto-cutting call after timeout: Caller ${callerId} to Receiver ${receiverId}`);
+            handleMissedCall();
+          }
+        } catch (error) {
+          logger.error('Error in auto-end call handler:', {
+            error: error.message,
+            callerId,
+            receiverId,
+            stackTrace: error.stack
+          });
+        }
+      }, CALL_TIMEOUT);
+
+      async function handleMissedCall() {
+        try {
+          // Fetch caller and receiver details
+          const [caller, receiver] = await Promise.all([
+            User.findById(callerId).select('username name profilePicture'),
+            User.findById(receiverId).select('username deviceToken notificationSettings')
+          ]);
+
+          if (!caller || !receiver) {
+            throw new Error('Caller or receiver not found');
+          }
+
+          // Clean up call status
+          if (activeCalls[callerId]) delete activeCalls[callerId];
+          if (activeCalls[receiverId]) delete activeCalls[receiverId];
+
+          // Notify receiver through socket
+          if (users[receiverId]) {
+            const receiverSockets = users[receiverId];
+            if (Array.isArray(receiverSockets) && receiverSockets.length > 0) {
+              receiverSockets.forEach((socketId) => {
+                socket.to(socketId).emit('callMissed', {
+                  callerId,
+                  callerName: caller.name || caller.username,
+                  callerPicture: caller.profilePicture,
+                  timestamp: new Date()
+                });
+              });
+            }
+          }
+
+          // Send push notification if enabled
+          if (receiver.deviceToken &&
+            (!receiver.notificationSettings || receiver.notificationSettings.missedCalls !== false)) {
+            try {
+              const notificationData = {
+                title: 'Missed Call',
+                body: `You missed a call from ${caller.name || caller.username}`,
+
+              };
+
+              await sendNotification(receiver.deviceToken, notificationData);
+              logger.info(`Push notification sent to User ${receiverId} for missed call`);
+            } catch (notificationError) {
+              logger.error('Failed to send push notification:', {
+                error: notificationError.message,
+                receiverId,
+                deviceToken: receiver.deviceToken
+              });
+            }
+          }
+
+          // Stop caller tune
+          socket.emit('stopCallerTune', {
+            callerId,
+            status: 'missed'
+          });
+
+          // Create call log
+          const currentTime = new Date();
+          const callLog = await CallLog.create({
+            caller: new mongoose.Types.ObjectId(callerId),
+            receiver: new mongoose.Types.ObjectId(receiverId),
+            startTime: currentTime,
+            endTime: currentTime,
+            duration: 0,
+            status: 'Missed Call',
+            metadata: {
+              reason: 'User unavailable',
+              platform: socket.handshake?.headers?.platform || 'unknown',
+              notificationSent: Boolean(receiver.deviceToken),
+              callerName: caller.name || caller.username
+            }
+          });
+
+          logger.info(`Call log created with ID: ${callLog._id}`);
+
+        } catch (error) {
+          throw error;
+        }
+      }
+
+      try {
+        // Validate ObjectId format
+        if (!mongoose.Types.ObjectId.isValid(receiverId) ||
+          !mongoose.Types.ObjectId.isValid(callerId)) {
+          clearTimeout(autoEndCallTimeout);
+          throw new Error('Invalid user ID format');
+        }
+
+        logger.info(`User ${receiverId} missed call from User ${callerId}`);
+        await handleMissedCall();
+        clearTimeout(autoEndCallTimeout);
+
+      } catch (error) {
+        clearTimeout(autoEndCallTimeout);
+        logger.error('Error in missedcall handler:', {
+          error: error.message,
+          callerId,
+          receiverId,
+          stackTrace: error.stack
+        });
+
+        socket.emit('callError', {
+          message: 'Failed to process missed call',
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+
+        // Cleanup remaining call states
+        try {
+          if (activeCalls[callerId]) delete activeCalls[callerId];
+          if (activeCalls[receiverId]) delete activeCalls[receiverId];
+        } catch (cleanupError) {
+          logger.error('Error during cleanup:', cleanupError);
+        }
+      }
+    });
+
+
     socket.on('rejectCall', async ({ receiverId, callerId }) => {
       try {
         logger.info(`User ${receiverId} rejected call from User ${callerId}`);
@@ -1019,74 +1167,74 @@ async function sendNotification(userId, title, message, type, receiverId, sender
     console.error("Error sending notification:", error);
   }
 }
-async function sendMNotification(userId, title, message, type, receiverId, senderName, senderAvatar) {
-  try {
-    // Fetch the user from the database
-    const user = await User.findById(userId);
-    if (!user || !user.deviceToken) {
-      console.error("No device token found for user:", userId);
-      return;
-    }
+// async function sendMNotification(userId, title, message, type, receiverId, senderName, senderAvatar) {
+//   try {
+//     // Fetch the user from the database
+//     const user = await User.findById(userId);
+//     if (!user || !user.deviceToken) {
+//       console.error("No device token found for user:", userId);
+//       return;
+//     }
 
-    const deviceToken = user.deviceToken;
+//     const deviceToken = user.deviceToken;
 
-    // Construct the payload for FCM
-    const payload = {
-      notification: {
-        title: title,
-        body: message,
-      },
-      data: {
-        screen: 'misscall', // Target screen
-        params: JSON.stringify({
-          user_id: userId, // Include Call ID
-          type: type, // Type of call
-          agent_id: receiverId, // Receiver ID
-          username: senderName, // Sender name
-          imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png', // Sender avatar with default fallback
-        }),
-        // Add any additional parameters if needed
-      },
-      token: deviceToken,
-    };
-    logger.info(`Push notification sent to User  in  notification  function`);
+//     // Construct the payload for FCM
+//     const payload = {
+//       notification: {
+//         title: title,
+//         body: message,
+//       },
+//       data: {
+//         screen: 'misscall', // Target screen
+//         params: JSON.stringify({
+//           user_id: userId, // Include Call ID
+//           type: type, // Type of call
+//           agent_id: receiverId, // Receiver ID
+//           username: senderName, // Sender name
+//           imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png', // Sender avatar with default fallback
+//         }),
+//         // Add any additional parameters if needed
+//       },
+//       token: deviceToken,
+//     };
+//     logger.info(`Push notification sent to User  in  notification  function`);
 
-    // Send the notification
-    const response = await admin.messaging().send(payload);
-    console.log("Notification sent successfully:", response);
-  } catch (error) {
-    console.error("Error sending notification:", error);
-  }
-}
-
-
+//     // Send the notification
+//     const response = await admin.messaging().send(payload);
+//     console.log("Notification sent successfully:", response);
+//   } catch (error) {
+//     console.error("Error sending notification:", error);
+//   }
+// }
 
 
 
 
 
 
-// Helper function to validate call parameters
-const validateCallParams = (receiverId, callerId) => {
-  if (!receiverId || !callerId) {
-    throw new Error('Missing required parameters: receiverId or callerId');
-  }
-};
 
-// Helper function to mark a call as missed in the database
-const markCallAsMissed = async (callerId, receiverId, startTime) => {
-  try {
-    await CallLog.create({
-      caller: callerId,
-      receiver: receiverId,
-      status: 'missed',
-      startTime: startTime || new Date(),
-      endTime: new Date(),
-      duration: 0,
-    });
-    logger.info(`Missed call logged in database: Caller: ${callerId}, Receiver: ${receiverId}`);
-  } catch (error) {
-    logger.error(`Error saving missed call to database: ${error.message}`);
-    throw new Error('Failed to log missed call');
-  }
-};
+
+// // Helper function to validate call parameters
+// const validateCallParams = (receiverId, callerId) => {
+//   if (!receiverId || !callerId) {
+//     throw new Error('Missing required parameters: receiverId or callerId');
+//   }
+// };
+
+// // Helper function to mark a call as missed in the database
+// const markCallAsMissed = async (callerId, receiverId, startTime) => {
+//   try {
+//     await CallLog.create({
+//       caller: callerId,
+//       receiver: receiverId,
+//       status: 'missed',
+//       startTime: startTime || new Date(),
+//       endTime: new Date(),
+//       duration: 0,
+//     });
+//     logger.info(`Missed call logged in database: Caller: ${callerId}, Receiver: ${receiverId}`);
+//   } catch (error) {
+//     logger.error(`Error saving missed call to database: ${error.message}`);
+//     throw new Error('Failed to log missed call');
+//   }
+// };
