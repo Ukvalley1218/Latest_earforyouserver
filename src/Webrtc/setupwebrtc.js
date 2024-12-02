@@ -1070,19 +1070,19 @@ export const setupWebRTC = (io) => {
 
           if (socketIds.length === 0) {
             delete users[userId];
-            // try {
-            //   const updatedUser = await User.findOneAndUpdate(
-            //     { _id: disconnectedUserId, userType: 'CALLER' },
-            //     { status: 'offline' },
-            //     { new: true }
-            //   );
-            //   if (updatedUser) {
-            //     io.emit('userStatusChanged', { userId: disconnectedUserId, status: 'offline' });
-            //   }
+            try {
+              const updatedUser = await User.findOneAndUpdate(
+                { _id: disconnectedUserId, userType: 'CALLER' },
+                { status: 'offline' },
+                { new: true }
+              );
+              if (updatedUser) {
+                io.emit('userStatusChanged', { userId: disconnectedUserId, status: 'offline' });
+              }
 
-            // } catch (error) {
-            //   logger.error(`Failed to update offline status for user ${disconnectedUserId}: ${error.message}`);
-            // }
+            } catch (error) {
+              logger.error(`Failed to update offline status for user ${disconnectedUserId}: ${error.message}`);
+            }
           }
           break;
         }
