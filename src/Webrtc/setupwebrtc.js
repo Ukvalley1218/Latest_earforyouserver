@@ -15,6 +15,21 @@ export const setupWebRTC = (io) => {
   const onlineUsers = new Map(); // Map to track user IDs and their socket IDs
   const CALL_TIMEOUT = 60000; // 1 minute in milliseconds
 
+  // Queue to store connected users
+const userQueue = [];
+
+// Function to add user to the queue
+const addUserToQueue = (userId, socketId) => {
+    userQueue.push({ userId, socketId });
+};
+
+// Function to remove user from the queue
+const removeUserFromQueue = (socketId) => {
+    const index = userQueue.findIndex(user => user.socketId === socketId);
+    if (index !== -1) userQueue.splice(index, 1);
+};
+
+
   io.on('connection', (socket) => {
     logger.http(`User connected: ${socket.id}`);
 
@@ -51,10 +66,9 @@ export const setupWebRTC = (io) => {
 
 
     // Listen for `statusUpdated` event
-    socket.on('statusUpdated', (data, callback) => {
+    socket.on('statusUpdated', ({ userId, status }) => {
       try {
-        const { userId, status } = data;
-
+        
         // Validate the incoming data
         if (!userId || !status) {
           throw new Error('Invalid data: userId and status are required.');
@@ -64,19 +78,22 @@ export const setupWebRTC = (io) => {
         io.emit('statusUpdated', { userId, status });
 
         // Provide a response to the sender (acknowledgment)
-        if (callback) {
-          callback({ success: true, message: 'Status updated successfully.' });
-        }
+     
       } catch (error) {
         console.error('Error handling statusUpdated event:', error.message);
 
-        // Send error response to the sender
-        if (callback) {
-          callback({ success: false, message: error.message });
-        }
+        
       }
     });
 
+    socket.on('registerUser', (userId) => {
+      addUserToQueue(userId, socket.id);
+      console.log(`User registered: ${userId}`);
+      console.log('Current queue:', userQueue);
+
+      // Emit the current queue to all connected clients
+      io.emit('updateQueue', userQueue);
+  });
 
     socket.on('requestRandomCall', async ({ userId }) => {
       try {
@@ -1060,6 +1077,8 @@ export const setupWebRTC = (io) => {
 
     socket.on('disconnect', async () => {
       logger.info(`Socket disconnected: ${socket.id}`);
+      removeUserFromQueue(socket.id);
+      console.log('Current queue:', userQueue);
 
       let disconnectedUserId;
       for (const [userId, socketIds] of Object.entries(users)) {
