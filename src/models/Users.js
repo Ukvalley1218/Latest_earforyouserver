@@ -114,6 +114,7 @@ userSchema.pre("save", async function (next) {
 userSchema.pre("save", async function (next) {
   if (this.isModified("userType") && this.userType === "RECEIVER") {
     this.status = "Online";
+    console.log("Updated")
   }
   next();
 });
