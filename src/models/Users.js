@@ -61,6 +61,9 @@ const userSchema = new mongoose.Schema(
       type: [String],
       
     },
+    report:{
+      type:[String],
+    },
     
     password: {
       type: String,
@@ -87,7 +90,7 @@ const userSchema = new mongoose.Schema(
       enum: ['Active', 'inActive', 'Blocked'],
       default: 'inActive'
     },
-
+   
     status: {
       type: String,
       enum: ["Online", "offline", "Busy"], // Allow only specific status values

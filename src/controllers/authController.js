@@ -13,7 +13,7 @@ import admin from 'firebase-admin';
 import Wallet from "../models/Wallet/Wallet.js";
 import { CallRate } from '../models/Wallet/AdminCharges.js'
 import emailValidator from 'email-validator';
-  import Review from "../models/LeaderBoard/Review.js";
+import Review from "../models/LeaderBoard/Review.js";
 
 
 const generateAccessAndRefreshTokens = async (userId) => {
@@ -1149,14 +1149,20 @@ export const getAllUsers = async (req, res) => {
     );
 
     // Aggregate to calculate average user ratings
+    // Aggregate to calculate average ratings for all users
     const userRatings = await Review.aggregate([
       {
-        $group: {
-          $match: '$user' ,
-          avgRating: { $avg: '$rating' }, // Calculate average rating
-        }
+        $match: {
+          user: { $in: users.map((u) => u._id) }, // Filter reviews for the found users
+        },
       },
-    ]);
+      {
+        $group: {
+          _id: '$user', // Group by the `user` field in the Review schema
+          avgRating: { $avg: '$rating' }, // Calculate average rating
+        },
+      },
+    ])
 
     // Create a map of user ratings
     const userRatingsMap = userRatings.reduce((acc, rating) => {
@@ -1279,5 +1285,77 @@ export const deleteBio = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "An error occurred while deleting the bio.", error });
+  }
+};
+
+export const Reporte_User = async (req, res) => {
+  const { reporterId, reportedUserId, reportType } = req.body;
+
+  // Validate the input
+  if (!reporterId || !reportedUserId || !reportType) {
+    return res.status(400).json({
+      success: false,
+      message: 'Missing required fields: reporterId, reportedUserId, or reportType.',
+    });
+  }
+
+  try {
+    // Fetch the reporter and reported user to ensure they exist
+    const [reporter, reportedUser] = await Promise.all([
+      User.findById(reporterId),
+      User.findById(reportedUserId),
+    ]);
+
+    // Validate users
+    if (!reporter || !reportedUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'Reporter or reported user not found.',
+      });
+    }
+
+    // Prevent self-reporting
+    if (reporterId === reportedUserId) {
+      return res.status(400).json({
+        success: false,
+        message: 'You cannot report yourself.',
+      });
+    }
+
+    // Check if the reported user is already blocked
+    if (reportedUser.UserStatus === 'Blocked') {
+      return res.status(400).json({
+        success: false,
+        message: 'User is already blocked.',
+      });
+    }
+
+    // Add the `reportType` to the reported user's `report` array
+    reportedUser.report.push(reportType);
+
+    // If reports reach 3 or more, block the user
+    if (reportedUser.report.length >= 3) {
+      reportedUser.UserStatus = 'Blocked';
+      console.log(
+        `User ${reportedUser.username || reportedUserId} has been blocked due to excessive reports.`
+      );
+    }
+
+    // Save the changes
+    await reportedUser.save();
+
+    return res.status(200).json({
+      success: true,
+      message:
+        reportedUser.UserStatus === 'Blocked'
+          ? 'User has been reported and blocked due to multiple reports.'
+          : 'Report has been submitted successfully.',
+    });
+  } catch (error) {
+    console.error('Error reporting user:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'An error occurred while reporting the account.',
+    });
   }
 };
