@@ -14,6 +14,7 @@ import Wallet from "../models/Wallet/Wallet.js";
 import { CallRate } from '../models/Wallet/AdminCharges.js'
 import emailValidator from 'email-validator';
 import Review from "../models/LeaderBoard/Review.js";
+import { title } from "process";
 
 
 const generateAccessAndRefreshTokens = async (userId) => {
@@ -1287,7 +1288,7 @@ export const deleteBio = async (req, res) => {
     res.status(500).json({ message: "An error occurred while deleting the bio.", error });
   }
 };
-
+// Reporte_User
 export const Reporte_User = async (req, res) => {
   const { reporterId, reportedUserId, reportType } = req.body;
 
@@ -1332,6 +1333,30 @@ export const Reporte_User = async (req, res) => {
 
     // Add the `reportType` to the reported user's `report` array
     reportedUser.report.push(reportType);
+    // reportedUser.report.push(reportType);
+
+    const title = "Warning..";
+    let message = "";
+
+    switch (reportedUser.report.length) {
+      case 1:
+        message = `Someone reported your account because of the ${reportType}. This is your 1st report. Please ensure compliance with our community guidelines.`;
+        break;
+      case 2:
+        message = `Your account has been reported again for ${reportType}. This is your 2nd report. Continued violations may lead to account suspension.`;
+        break;
+      case 3:
+        message = `Your account has been reported for the 3rd time due to ${reportType}. Your account is now blocked. Contact support for further assistance.`;
+
+        // Add logic here to block the account, e.g., setting a `blocked` flag
+
+        break;
+      default:
+        message = `Your account has been reported ${reportedUser.report.length} times. Continued violations may lead to further action.`;
+    }
+
+    sendNotification(reportedUser, title, message);
+
 
     // If reports reach 3 or more, block the user
     if (reportedUser.report.length >= 3) {
@@ -1359,3 +1384,32 @@ export const Reporte_User = async (req, res) => {
     });
   }
 };
+
+
+//Notification
+
+async function sendNotification(userId, title, message) {
+  // Assuming you have the FCM device token stored in your database
+  const user = await User.findById(userId);
+  const deviceToken = user.deviceToken;
+
+  if (!deviceToken) {
+    console.error("No device token found for user:", userId);
+    return;
+  }
+
+  const payload = {
+    notification: {
+      title: title,
+      body: message,
+    },
+    token: deviceToken,
+  };
+
+  try {
+    const response = await admin.messaging().send(payload);
+    console.log("Notification sent successfully:", response);
+  } catch (error) {
+    console.error("Error sending notification:", error);
+  }
+}
