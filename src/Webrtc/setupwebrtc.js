@@ -86,13 +86,21 @@ export const setupWebRTC = (io) => {
       }
     });
 
-    socket.on('registerUser', (userId) => {
+    socket.on('registerUser', async (userId) => {
       addUserToQueue(userId, socket.id);
       console.log(`User registered: ${userId}`);
       console.log('Current queue:', userQueue);
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { status: 'Online' }, // Assuming `status` is the field
+        { new: true } // Returns the updated document
+      );
+      if (updatedUser) {
+
+        io.emit('updateQueue', userQueue);
+      }
 
       // Emit the current queue to all connected clients
-      io.emit('updateQueue', userQueue);
     });
 
     socket.on('requestRandomCall', async ({ userId }) => {
@@ -1172,6 +1180,7 @@ export const setupWebRTC = (io) => {
               );
               if (updatedUser) {
                 io.emit('userStatusChanged', { userId: disconnectedUserId, status: 'offline' });
+                logger.error(`  update offline status for user ${disconnectedUserId}: ${updatedUser} Userid ${userId}`);
               }
             } catch (error) {
               logger.error(`Failed to update offline status for user ${disconnectedUserId}: ${error.message}`);

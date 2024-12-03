@@ -31,151 +31,85 @@ import User from '../../models/Users.js';
   
 
 
-// export const getRecentCalls = async (req, res) => {
-//   try {
-//     const { userId } = req.params;
-
-//     console.log('Fetching calls for userId:', userId);
-
-//     // First, verify if userId exists and is valid
-//     if (!userId) {
-//       return res.status(400).json({ message: 'User ID is required.' });
-//     }
-
-//     // Retrieve recent call logs with proper error handling for null references
-//     const recentCalls = await CallLog.find({
-//       $or: [{ caller: userId }, { receiver: userId }],
-//     })
-//       .sort({ startTime: -1 })
-//       .populate('caller', 'username userType userCategory phone avatarUrl') // Added avatarUrl
-//       .populate('receiver', 'username userType userCategory phone avatarUrl') // Added avatarUrl
-//       .lean() // Convert to plain JavaScript objects
-//       .exec();
-
-//     if (!recentCalls || recentCalls.length === 0) {
-//       return res.status(404).json({ message: 'No call history found.' });
-//     }
-
-//     // Filter out invalid calls and handle null references
-//     const validCalls = recentCalls.filter(call => {
-//       return call.caller && call.receiver && // Check if both caller and receiver exist
-//              call.caller._id && call.receiver._id; // Check if both have _id properties
-//     });
-
-//     // Remove duplicate calls
-//     const uniqueCalls = [];
-//     const seen = new Set();
-
-//     for (const call of validCalls) {
-//       try {
-//         const callerId = call.caller._id.toString();
-//         const receiverId = call.receiver._id.toString();
-//         const callKey = [callerId, receiverId].sort().join('-');
-
-//         if (!seen.has(callKey)) {
-//           seen.add(callKey);
-//           uniqueCalls.push({
-//             ...call,
-//             caller: {
-//               ...call.caller,
-//               avatarUrl: call.caller.avatarUrl || null, // Handle missing avatarUrl
-//               username: call.caller.username || 'Unknown User'
-//             },
-//             receiver: {
-//               ...call.receiver,
-//               avatarUrl: call.receiver.avatarUrl || null, // Handle missing avatarUrl
-//               username: call.receiver.username || 'Unknown User'
-//             }
-//           });
-//         }
-//       } catch (err) {
-//         console.warn('Skipping invalid call record:', err);
-//         continue;
-//       }
-//     }
-
-//     // If all calls were invalid, return appropriate message
-//     if (uniqueCalls.length === 0) {
-//       return res.status(404).json({ 
-//         message: 'No valid call history found.',
-//         details: 'All retrieved calls contained invalid or missing user references.'
-//       });
-//     }
-
-//     return res.status(200).json({ 
-//       recentCalls: uniqueCalls,
-//       totalCalls: uniqueCalls.length
-//     });
-
-//   } catch (error) {
-//     console.error('Error fetching recent call history:', error);
-    
-//     // Provide more specific error messages based on error type
-//     if (error.name === 'CastError') {
-//       return res.status(400).json({ 
-//         message: 'Invalid user ID format.',
-//         details: error.message 
-//       });
-//     }
-
-//     return res.status(500).json({ 
-//       message: 'Server error, unable to fetch call history.',
-//       details: process.env.NODE_ENV === 'development' ? error.message : undefined
-//     });
-//   }
-// };
-
-
 export const getRecentCalls = async (req, res) => {
   try {
     const { userId } = req.params;
 
     console.log('Fetching calls for userId:', userId);
 
-    // Check if userId is provided
+    // First, verify if userId exists and is valid
     if (!userId) {
       return res.status(400).json({ message: 'User ID is required.' });
     }
 
-    // Retrieve all call logs where the user is either the caller or the receiver
+    // Retrieve recent call logs with proper error handling for null references
     const recentCalls = await CallLog.find({
       $or: [{ caller: userId }, { receiver: userId }],
     })
-      .sort({ startTime: -1 }) // Sort by the most recent calls
-      .populate('caller', 'username userType userCategory phone avatarUrl') // Populate caller details
-      .populate('receiver', 'username userType userCategory phone avatarUrl') // Populate receiver details
-      .lean() // Convert to plain JavaScript objects for easier handling
+      .sort({ startTime: -1 })
+      .populate('caller', 'username userType userCategory phone avatarUrl') // Added avatarUrl
+      .populate('receiver', 'username userType userCategory phone avatarUrl') // Added avatarUrl
+      .lean() // Convert to plain JavaScript objects
       .exec();
 
-    // Check if any calls are found
     if (!recentCalls || recentCalls.length === 0) {
       return res.status(404).json({ message: 'No call history found.' });
     }
 
-    // Process and sanitize the call data (optional, to ensure consistent fields)
-    const callsWithDefaults = recentCalls.map(call => ({
-      ...call,
-      caller: {
-        ...call.caller,
-        avatarUrl: call.caller?.avatarUrl || null, // Handle missing avatarUrl
-        username: call.caller?.username || 'Unknown User', // Fallback for missing username
-      },
-      receiver: {
-        ...call.receiver,
-        avatarUrl: call.receiver?.avatarUrl || null, // Handle missing avatarUrl
-        username: call.receiver?.username || 'Unknown User', // Fallback for missing username
-      },
-    }));
+    // Filter out invalid calls and handle null references
+    const validCalls = recentCalls.filter(call => {
+      return call.caller && call.receiver && // Check if both caller and receiver exist
+             call.caller._id && call.receiver._id; // Check if both have _id properties
+    });
 
-    // Respond with all recent calls
+    // Remove duplicate calls
+    const uniqueCalls = [];
+    const seen = new Set();
+
+    for (const call of validCalls) {
+      try {
+        const callerId = call.caller._id.toString();
+        const receiverId = call.receiver._id.toString();
+        const callKey = [callerId, receiverId].sort().join('-');
+
+        if (!seen.has(callKey)) {
+          seen.add(callKey);
+          uniqueCalls.push({
+            ...call,
+            caller: {
+              ...call.caller,
+              avatarUrl: call.caller.avatarUrl || null, // Handle missing avatarUrl
+              username: call.caller.username || 'Unknown User'
+            },
+            receiver: {
+              ...call.receiver,
+              avatarUrl: call.receiver.avatarUrl || null, // Handle missing avatarUrl
+              username: call.receiver.username || 'Unknown User'
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('Skipping invalid call record:', err);
+        continue;
+      }
+    }
+
+    // If all calls were invalid, return appropriate message
+    if (uniqueCalls.length === 0) {
+      return res.status(404).json({ 
+        message: 'No valid call history found.',
+        details: 'All retrieved calls contained invalid or missing user references.'
+      });
+    }
+
     return res.status(200).json({ 
-      recentCalls: callsWithDefaults, 
-      totalCalls: callsWithDefaults.length 
+      recentCalls: uniqueCalls,
+      totalCalls: uniqueCalls.length
     });
 
   } catch (error) {
     console.error('Error fetching recent call history:', error);
-
+    
     // Provide more specific error messages based on error type
     if (error.name === 'CastError') {
       return res.status(400).json({ 
@@ -190,6 +124,72 @@ export const getRecentCalls = async (req, res) => {
     });
   }
 };
+
+
+// export const getRecentCalls = async (req, res) => {
+//   try {
+//     const { userId } = req.params;
+
+//     console.log('Fetching calls for userId:', userId);
+
+//     // Check if userId is provided
+//     if (!userId) {
+//       return res.status(400).json({ message: 'User ID is required.' });
+//     }
+
+//     // Retrieve all call logs where the user is either the caller or the receiver
+//     const recentCalls = await CallLog.find({
+//       $or: [{ caller: userId }, { receiver: userId }],
+//     })
+//       .sort({ startTime: -1 }) // Sort by the most recent calls
+//       .populate('caller', 'username userType userCategory phone avatarUrl') // Populate caller details
+//       .populate('receiver', 'username userType userCategory phone avatarUrl') // Populate receiver details
+//       .lean() // Convert to plain JavaScript objects for easier handling
+//       .exec();
+
+//     // Check if any calls are found
+//     if (!recentCalls || recentCalls.length === 0) {
+//       return res.status(404).json({ message: 'No call history found.' });
+//     }
+
+//     // Process and sanitize the call data (optional, to ensure consistent fields)
+//     const callsWithDefaults = recentCalls.map(call => ({
+//       ...call,
+//       caller: {
+//         ...call.caller,
+//         avatarUrl: call.caller?.avatarUrl || null, // Handle missing avatarUrl
+//         username: call.caller?.username || 'Unknown User', // Fallback for missing username
+//       },
+//       receiver: {
+//         ...call.receiver,
+//         avatarUrl: call.receiver?.avatarUrl || null, // Handle missing avatarUrl
+//         username: call.receiver?.username || 'Unknown User', // Fallback for missing username
+//       },
+//     }));
+
+//     // Respond with all recent calls
+//     return res.status(200).json({ 
+//       recentCalls: callsWithDefaults, 
+//       totalCalls: callsWithDefaults.length 
+//     });
+
+//   } catch (error) {
+//     console.error('Error fetching recent call history:', error);
+
+//     // Provide more specific error messages based on error type
+//     if (error.name === 'CastError') {
+//       return res.status(400).json({ 
+//         message: 'Invalid user ID format.',
+//         details: error.message 
+//       });
+//     }
+
+//     return res.status(500).json({ 
+//       message: 'Server error, unable to fetch call history.',
+//       details: process.env.NODE_ENV === 'development' ? error.message : undefined
+//     });
+//   }
+// };
 
 /**
  * Initiates a call.
