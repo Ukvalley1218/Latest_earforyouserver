@@ -13,7 +13,7 @@ import admin from 'firebase-admin';
 import Wallet from "../models/Wallet/Wallet.js";
 import { CallRate } from '../models/Wallet/AdminCharges.js'
 import emailValidator from 'email-validator';
-import Review from "../../models/LeaderBoard/Review.js";
+import Review from "../models/LeaderBoard/Review.js";
 
 
 const generateAccessAndRefreshTokens = async (userId) => {
