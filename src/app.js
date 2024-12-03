@@ -105,7 +105,7 @@ import RechargeRoute from './routes/Recharge/RechargeRoute.js'
 import msg91Routes from './routes/OTP/msg91Routes.js'
 import appRatingRoutes from './routes/LeaderBoard/apprateRoute.js'
 // import { watchUserChanges } from "./servises/Stream.js";
-import { checkUserStatus } from "./middlewares/auth/CheckBlock.js";
+// import { checkUserStatus } from "./middlewares/auth/CheckBlock.js";
 app.get("/", (req, res) => {
   try {
     res.send("Ear For You Server Running Smoothly");
@@ -122,7 +122,7 @@ app.use('/api/v1/msg91', msg91Routes);
 
 app.use('/api/v1', CallRoute);
 // Added middleware
-app.use(checkUserStatus)
+// app.use(checkUserStatus)
 //authRoutes
 app.use("/api/v1", authRoutes);
 
