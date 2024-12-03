@@ -24,11 +24,11 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   pingTimeout: 60000,
   cors: {
-    origin:"*",
+    origin: "*",
     credentials: true,
   },
 });
-app.set("io", io); 
+app.set("io", io);
 // using set method to mount the `io` instance on the app to avoid usage of `global`
 
 // app.set("trust proxy", 1);
@@ -41,8 +41,8 @@ app.use(
   cors({
     origin:
       process.env.CORS_ORIGIN === "*"
-        ? "*" 
-        : process.env.CORS_ORIGIN?.split(","), 
+        ? "*"
+        : process.env.CORS_ORIGIN?.split(","),
     credentials: true,
   })
 );
@@ -61,8 +61,7 @@ const limiter = rateLimit({
   handler: (_, __, ___, options) => {
     throw new ApiError(
       options.statusCode || 500,
-      `There are too many requests. You are only allowed ${
-        options.max
+      `There are too many requests. You are only allowed ${options.max
       } requests per ${options.windowMs / 60000} minutes`
     );
   },
@@ -106,6 +105,7 @@ import RechargeRoute from './routes/Recharge/RechargeRoute.js'
 import msg91Routes from './routes/OTP/msg91Routes.js'
 import appRatingRoutes from './routes/LeaderBoard/apprateRoute.js'
 // import { watchUserChanges } from "./servises/Stream.js";
+import { checkUserStatus } from "./middlewares/auth/CheckBlock.js";
 app.get("/", (req, res) => {
   try {
     res.send("Ear For You Server Running Smoothly");
@@ -121,8 +121,8 @@ app.get("/", (req, res) => {
 app.use('/api/v1/msg91', msg91Routes);
 
 app.use('/api/v1', CallRoute);
-
-
+// Added middleware
+app.use(checkUserStatus)
 //authRoutes
 app.use("/api/v1", authRoutes);
 
@@ -135,12 +135,12 @@ app.use("/api/v1/messages", messageRouter);
 // Leader Board Routes for rating and Review 
 app.use('/api/v1', reviewRoutes); // Prefix all review routes with /api
 app.use('/api/v1', userRoutes);
-app.use('/api/v1',RechargeRoute);
+app.use('/api/v1', RechargeRoute);
 
 
 // FairBaseNotification
 
-app.use('/api/notify',SendNotificationRoute)
+app.use('/api/notify', SendNotificationRoute)
 //common error handling middleware
 app.use(errorHandler);
 
