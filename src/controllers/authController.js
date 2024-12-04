@@ -1164,7 +1164,7 @@ export const getAllUsers = async (req, res) => {
     const users = await User.find(
       {
         _id: { $ne: loggedInUserId }, // Exclude the logged-in user
-        UserStatus: { $nin: ['inActive', 'Blocked'] } // Exclude users with these statuses
+        UserStatus: { $nin: ['inActive', 'Blocked','InActive'] } // Exclude users with these statuses
       },
       { password: 0, refreshToken: 0 } // Exclude sensitive fields
     );
