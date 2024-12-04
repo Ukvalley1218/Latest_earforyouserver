@@ -106,6 +106,9 @@ import msg91Routes from './routes/OTP/msg91Routes.js'
 import appRatingRoutes from './routes/LeaderBoard/apprateRoute.js'
 // import { watchUserChanges } from "./servises/Stream.js";
 import { checkUserStatus } from "./middlewares/auth/CheckBlock.js";
+import { protect } from "./middlewares/auth/authMiddleware.js";
+
+
 app.get("/", (req, res) => {
   try {
     res.send("Ear For You Server Running Smoothly");
@@ -116,13 +119,18 @@ app.get("/", (req, res) => {
 });
 // watchUserChanges()
 
+// Apply global middlewares
+app.use(protect); // First protect middleware to authenticate users
+app.use(checkUserStatus); // Then checkUserStatus to ensure the user's status is valid
+
+
 +app.use("/api/", apiLimiter);
 
 app.use('/api/v1/msg91', msg91Routes);
 
 app.use('/api/v1', CallRoute);
 // Added middleware
-app.use(checkUserStatus)
+
 //authRoutes
 app.use("/api/v1", authRoutes);
 

@@ -34,6 +34,7 @@ import User from '../../models/Users.js';
 export const getRecentCalls = async (req, res) => {
   try {
     const { userId } = req.params;
+    
 
     console.log('Fetching calls for userId:', userId);
 
