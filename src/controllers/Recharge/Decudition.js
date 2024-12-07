@@ -99,7 +99,7 @@ export const deductPerMinute = async (req, res) => {
       // });
       
       await EarningWallet.create([{
-        userId: newUser._id,
+        userId: receiverId,
         balance: 0,
         currency: 'inr',
         earnings: [],
