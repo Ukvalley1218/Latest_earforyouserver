@@ -295,7 +295,7 @@ export const initiateRegistration = async (req, res) => {
         }], { session });
 
         // Create wallet with transaction
-        const EarningWallet = await EarningWallet.create([{
+        const EarningWallet2 = await EarningWallet.create([{
           userId: newUser._id,
           balance: 0,
           currency: 'inr',
@@ -388,7 +388,7 @@ export const initiateRegistration = async (req, res) => {
         lastUpdated: new Date()
       }], { session });
       
-      const EarningWallet = await EarningWallet.create([{
+      const EarningWallet2 = await EarningWallet.create([{
         userId: newUser._id,
         balance: 0,
         currency: 'inr',
@@ -400,6 +400,7 @@ export const initiateRegistration = async (req, res) => {
       console.log("Wallet created with initial balance for user:", newUser._id, wallet);
 
       await session.commitTransaction();
+
       res.status(200).json({
         message: "OTP sent to email for registration",
         userId: newUser._id,
