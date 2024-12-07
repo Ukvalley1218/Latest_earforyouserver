@@ -388,7 +388,7 @@ export const initiateRegistration = async (req, res) => {
         lastUpdated: new Date()
       }], { session });
       
-      const EarningWallet2 = await EarningWallet.create([{
+      await EarningWallet.create([{
         userId: newUser._id,
         balance: 0,
         currency: 'inr',
