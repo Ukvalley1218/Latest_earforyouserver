@@ -10,7 +10,7 @@ import {
     updateOrCreateUserCategory,
     deleteUser,
     authUser,
-    getAllUsers,
+    
     registerUser,
     initiateRegistration,
     verifyLoginOtp,
