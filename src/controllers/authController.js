@@ -17,6 +17,7 @@ import Review from "../models/LeaderBoard/Review.js";
 import { title } from "process";
 import EarningWallet from "../models/Wallet/EarningWallet.js";
 
+
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
     const user = await User.findById(userId);
@@ -1309,9 +1310,11 @@ export const getUserById = async (req, res) => {
 
 
 
+
+
 export const getAllUsers1 = async (req, res) => {
   try {
-    const loggedInUserId = mongoose.Types.ObjectId(req.user.id); // Ensure it's an ObjectId
+    const loggedInUserId = new mongoose.Types.ObjectId(req.user.id); // Ensure it's a proper ObjectId
     const loggedInUserGender = req.user.gender;
 
     const page = parseInt(req.query.page) || 1;
