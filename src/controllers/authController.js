@@ -1296,10 +1296,100 @@ export const getAllUsers = async (req, res) => {
 // Controller to add bio
 
 
+// export const getAllUsers1 = async (req, res) => {
+//   try {
+//     const loggedInUserId = req.user.id;
+//     const loggedInUserGender = req.user.gender; // Assuming gender is part of `req.user`
+
+//     const page = parseInt(req.query.page) || 1;
+//     const limit = 10;
+//     const skip = (page - 1) * limit;
+
+//     // Mongoose Aggregation Pipeline
+//     const pipeline = [
+//       {
+//         $match: {
+//           _id: { $ne: loggedInUserId }, // Exclude the logged-in user
+//           UserStatus: { $nin: ['inActive', 'Blocked', 'InActive'] }, // Exclude specific statuses
+//         },
+//       },
+//       {
+//         $lookup: {
+//           from: 'reviews', // Reference to the Review collection
+//           localField: '_id',
+//           foreignField: 'user',
+//           as: 'ratings',
+//         },
+//       },
+//       {
+//         $addFields: {
+//           avgRating: { $avg: '$ratings.rating' }, // Calculate average rating
+//           reviewCount: { $size: '$ratings' }, // Count the number of reviews
+//           isOppositeGender: {
+//             $cond: {
+//               if: { $ne: ['$gender', loggedInUserGender] },
+//               then: 1, // Mark as opposite gender
+//               else: 0, // Mark as same gender
+//             },
+//           },
+//         },
+//       },
+//       {
+//         $sort: {
+//           isOppositeGender: -1, // Prioritize opposite gender first
+//           avgRating: -1, // Then sort by average rating
+//         },
+//       },
+//       {
+//         $skip: skip,
+//       },
+//       {
+//         $limit: limit,
+//       },
+//       {
+//         $project: {
+//           password: 0,
+//           refreshToken: 0,
+//           ratings: 0, // Exclude sensitive fields and unnecessary data
+//         },
+//       },
+//     ];
+
+//     // Execute the aggregation pipeline
+//     const users = await User.aggregate(pipeline);
+
+//     if (users.length === 0) {
+//       return res.status(404).json({ message: 'No users found' });
+//     }
+
+//     // Count total users for pagination metadata
+//     const totalUsers = await User.countDocuments({
+//       _id: { $ne: loggedInUserId },
+//       UserStatus: { $nin: ['inActive', 'Blocked', 'InActive'] },
+//     });
+
+//     // Response with sorted users and pagination details
+//     res.status(200).json({
+//       message: 'Users fetched successfully',
+//       users,
+//       pagination: {
+//         totalUsers,
+//         currentPage: page,
+//         totalPages: Math.ceil(totalUsers / limit),
+//         limit,
+//       },
+//     });
+//   } catch (error) {
+//     console.error('Error fetching users:', error);
+//     res.status(500).json({ message: 'Internal server error', error: error.message });
+//   }
+// };
+
+
 export const getAllUsers1 = async (req, res) => {
   try {
     const loggedInUserId = req.user.id;
-    const loggedInUserGender = req.user.gender; // Assuming gender is part of `req.user`
+    const loggedInUserGender = req.user.gender;
 
     const page = parseInt(req.query.page) || 1;
     const limit = 10;
@@ -1325,19 +1415,21 @@ export const getAllUsers1 = async (req, res) => {
         $addFields: {
           avgRating: { $avg: '$ratings.rating' }, // Calculate average rating
           reviewCount: { $size: '$ratings' }, // Count the number of reviews
+        },
+      },
+      {
+        $addFields: {
           isOppositeGender: {
-            $cond: {
-              if: { $ne: ['$gender', loggedInUserGender] },
-              then: 1, // Mark as opposite gender
-              else: 0, // Mark as same gender
-            },
+            $cond: { if: { $ne: ['$gender', loggedInUserGender] }, then: 1, else: 0 },
           },
+          isOnline: { $cond: { if: { $eq: ['$status', 'Online'] }, then: 1, else: 0 } }, // Assuming `status` field indicates online/offline
         },
       },
       {
         $sort: {
-          isOppositeGender: -1, // Prioritize opposite gender first
-          avgRating: -1, // Then sort by average rating
+          isOnline: -1, // Online users first
+          isOppositeGender: -1, // Opposite gender prioritization
+          avgRating: -1, // Higher ratings first
         },
       },
       {
@@ -1384,7 +1476,6 @@ export const getAllUsers1 = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
-
 
 
 export const addBio = async (req, res) => {
