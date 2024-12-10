@@ -4,7 +4,7 @@ import logger from '../logger/winston.logger.js';
 import User from '../models/Users.js';
 import Wallet from '../models/Wallet/Wallet.js'
 import admin from 'firebase-admin';
-
+// import { ChatMessage } from '../models/message.models.js';
 
 export const setupWebRTC = (io) => {
   // Store active users and their socket connections
@@ -934,6 +934,19 @@ export const setupWebRTC = (io) => {
           duration: 0,
           status: 'rejected'
         });
+
+        // await ChatMessage.call.push({
+
+        //   caller: new mongoose.Types.ObjectId(callerId),
+        //   receiver: new mongoose.Types.ObjectId(receiverId),
+        //   startTime: new Date(),
+        //   endTime: new Date(),
+        //   duration: 0,
+        //   status: 'rejected'
+
+
+        // })
+
       } catch (error) {
         logger.error(`Error in rejectCall handler: ${error.message}`);
         socket.emit('callError', { message: 'Failed to reject call' });
@@ -1277,6 +1290,8 @@ async function sendNotification(userId, title, message, type, receiverId, sender
     console.error("Error sending notification:", error);
   }
 }
+
+
 // async function sendMNotification(userId, title, message, type, receiverId, senderName, senderAvatar) {
 //   try {
 //     // Fetch the user from the database

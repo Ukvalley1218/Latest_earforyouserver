@@ -1,6 +1,6 @@
 import express from 'express';
 // import { verifyPayment } from '../../controllers/Recharge/RechargeWallet.js'
-import { initiatePayment,validatePayment,getRechargeHistory,getAllPlans,transferEarningsToWallet} from '../../controllers/Recharge/RechargeWallet.js'
+import { initiatePayment,validatePayment,getRechargeHistory,getAllPlans,transferEarningsToWallet,getEarningHistory} from '../../controllers/Recharge/RechargeWallet.js'
 import { deductPerMinute } from '../../controllers/Recharge/Decudition.js'
 import { protect } from '../../middlewares/auth/authMiddleware.js'
 const router = express.Router();
@@ -12,9 +12,12 @@ router.post("/validate",validatePayment);
 
 //  router.post('/buyPlan',buyPlan);
 
- router.get("/getAllPlans",getAllPlans);
-router.post('/recharges/:userId', getRechargeHistory);
-// router.get("/validate/:merchantTransactionId/:userId", validatePayment);
+router.get("/getAllPlans",getAllPlans);
+
+ router.post('/recharges/:userId', getRechargeHistory);
+
+router.post('/earning/:userId', getEarningHistory);
+// router.get("/validate/:merchantTransactionId/:userId", validatePayment); 
 
 
 // router.post('/verify-payment', verifyPayment);

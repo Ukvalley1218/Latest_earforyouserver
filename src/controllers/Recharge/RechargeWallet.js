@@ -511,6 +511,7 @@ export const validatePayment = async (req, res) => {
 //   }
 
 
+
 export const getRechargeHistory = async (req, res) => {
   try {
     const { userId } = req.params; // Assuming userId is passed as a route parameter
@@ -532,6 +533,40 @@ export const getRechargeHistory = async (req, res) => {
       message: "Recharge history retrieved successfully",
       data: rechargeHistory,
       balance: wallet.balance,
+    });
+  } catch (error) {
+    console.error("Error retrieving recharge history:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve recharge history",
+      error: error.message,
+    });
+  }
+};
+
+
+//get Erraning Wallet 
+export const getEarningHistory = async (req, res) => {
+  try {
+    const { userId } = req.params; // Assuming userId is passed as a route parameter
+
+    // Find the wallet for the specified userId
+    const earning = await EarningWallet.findOne({ userId });
+
+    if (!earning) {
+      return res.status(404).json({
+        success: false,
+        message: "earning not found for this user",
+      });
+    }
+    const earningHistory = earning.earnings.slice(-20); // Fetch the most recent 20 recharges
+
+    // Return the recharges array from the earning
+    return res.status(200).json({
+      success: true,
+      message: "Recharge history retrieved successfully",
+      data: earningHistory,
+      balance: earning.balance,
     });
   } catch (error) {
     console.error("Error retrieving recharge history:", error);
@@ -575,6 +610,35 @@ export const getAllPlans = async (req, res) => {
 };
 
 
+// export const getearningtotal = async (req, res) => {
+//   try {
+//     // Fetch all plans
+//     const earning = await EarningWallet.find();
+
+//     if (!earning || earning.length === 0) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "No subscription earning found",
+//       });
+//     }
+
+//     // Respond with the fetched earning
+//     return res.status(200).json({
+//       success: true,
+//       message: "Subscription earning retrieved successfully",
+//       data: earning,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching subscription earning:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch subscription earning",
+//       error: error.message,
+//     });
+//   }
+// };
+
+
 
 
 
@@ -586,7 +650,8 @@ export const transferEarningsToWallet = async (req, res) => {
   session.startTransaction();
 
   try {
-    const { userId, amount } = req.body;
+    const userId = req.user._id;
+    const {  amount } = req.body;
 
     // Validate input
     if (!userId || !amount || amount <= 0) {
