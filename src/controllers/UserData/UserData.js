@@ -1,10 +1,11 @@
 import Review from "../../models/LeaderBoard/Review.js";
 import CallLog from "../../models/Talk-to-friend/callLogModel.js";
+import User from "../../models/Users.js";
 
 export const userStatics = async (req, res) => {
     try {
-        const userId = req.user._id;
-
+        const userId = req.user._id ||req.user.id;
+        console.log(userId)
         // Total reviews by the user
         const totalReviews = await Review.countDocuments({ user: userId });
 
