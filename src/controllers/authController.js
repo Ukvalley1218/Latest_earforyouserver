@@ -17,6 +17,7 @@ import emailValidator from 'email-validator';
 import Review from "../models/LeaderBoard/Review.js";
 import { title } from "process";
 import EarningWallet from "../models/Wallet/EarningWallet.js";
+import { ChatMessage } from "../models/message.models.js";
 
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
@@ -1171,6 +1172,100 @@ export const getAllUsers1 = async (req, res) => {
     const skip = (page - 1) * limit;
 
     // Optimized Mongoose Aggregation Pipeline
+    // const pipeline = [
+    //   {
+    //     $match: {
+    //       _id: { $ne: loggedInUserId }, // Exclude the logged-in user
+    //       UserStatus: { $nin: ['inActive', 'Blocked', 'InActive'] }, // Exclude specific statuses
+    //     },
+    //   },
+    //   {
+    //     $lookup: {
+    //       from: 'calllogs', // Reference to the CallLog collection
+    //       let: { userId: '$_id' },
+    //       pipeline: [
+    //         {
+    //           $match: {
+    //             $expr: {
+    //               $and: [
+    //                 {
+    //                   $or: [
+    //                     { $eq: ['$caller', loggedInUserId] }, // Logged-in user made the call
+    //                     { $eq: ['$receiver', loggedInUserId] }, // Logged-in user received the call
+    //                   ],
+    //                 },
+    //                 {
+    //                   $or: [
+    //                     { $eq: ['$caller', '$$userId'] }, // Other user made the call
+    //                     { $eq: ['$receiver', '$$userId'] }, // Other user received the call
+    //                   ],
+    //                 },
+    //               ],
+    //             },
+    //           },
+    //         },
+    //         { $sort: { startTime: -1 } }, // Sort by most recent call
+    //         { $limit: 1 }, // Get the most recent call
+    //         {
+    //           $project: {
+    //             startTime: 1, // Only retrieve the necessary field
+    //           },
+    //         },
+    //       ],
+    //       as: 'recentCall',
+    //     },
+    //   },
+    //   {
+    //     $addFields: {
+    //       recentCallTime: {
+    //         $ifNull: [{ $arrayElemAt: ['$recentCall.startTime', 0] }, null],
+    //       },
+    //     },
+    //   },
+    //   {
+    //     $lookup: {
+    //       from: 'reviews', // Reference to the Review collection
+    //       localField: '_id',
+    //       foreignField: 'user',
+    //       as: 'ratings',
+    //     },
+    //   },
+    //   {
+    //     $addFields: {
+    //       avgRating: { $avg: '$ratings.rating' }, // Calculate average rating
+    //       reviewCount: { $size: '$ratings' }, // Count the number of reviews
+    //       isOppositeGender: {
+    //         $cond: { if: { $ne: ['$gender', loggedInUserGender] }, then: 1, else: 0 },
+    //       },
+    //       isOnline: { $cond: { if: { $eq: ['$status', 'Online'] }, then: 1, else: 0 } }, // Assuming `status` field indicates online/offline
+    //     },
+    //   },
+    //   {
+    //     $sort: {
+    //       recentCallTime: -1, // Most recent calls first
+    //       isOnline: -1, // Online users next
+    //       isOppositeGender: -1, // Opposite gender prioritization
+    //       avgRating: -1, // Higher ratings next
+    //     },
+    //   },
+    //   {
+    //     $facet: {
+    //       metadata: [{ $count: 'totalUsers' }], // Get total user count
+    //       users: [
+    //         { $skip: skip },
+    //         { $limit: limit },
+    //         {
+    //           $project: {
+    //             password: 0,
+    //             refreshToken: 0,
+    //             ratings: 0, // Exclude sensitive fields and unnecessary data
+    //             recentCall: 0, // Hide detailed call log data
+    //           },
+    //         },
+    //       ],
+    //     },
+    //   },
+    // ];
     const pipeline = [
       {
         $match: {
@@ -1223,6 +1318,49 @@ export const getAllUsers1 = async (req, res) => {
       },
       {
         $lookup: {
+          from: 'chatmessages', // Reference to the ChatMessage collection
+          let: { userId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    {
+                      $or: [
+                        { $eq: ['$sender', loggedInUserId] }, // Logged-in user sent a message
+                        { $eq: ['$sender', '$$userId'] }, // Current user sent a message
+                      ],
+                    },
+                    {
+                      $or: [
+                        { $eq: ['$chat', loggedInUserId] }, // Chat involving the logged-in user
+                        { $eq: ['$chat', '$$userId'] }, // Chat involving the current user
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+            { $sort: { createdAt: -1 } }, // Sort by most recent message
+            { $limit: 1 }, // Get the most recent message
+            {
+              $project: {
+                createdAt: 1, // Retrieve only the timestamp
+              },
+            },
+          ],
+          as: 'recentChat',
+        },
+      },
+      {
+        $addFields: {
+          recentChatTime: {
+            $ifNull: [{ $arrayElemAt: ['$recentChat.createdAt', 0] }, null],
+          },
+        },
+      },
+      {
+        $lookup: {
           from: 'reviews', // Reference to the Review collection
           localField: '_id',
           foreignField: 'user',
@@ -1241,7 +1379,8 @@ export const getAllUsers1 = async (req, res) => {
       },
       {
         $sort: {
-          recentCallTime: -1, // Most recent calls first
+          recentChatTime: -1, // Sort by most recent chat time
+          recentCallTime: -1, // Sort by most recent call time
           isOnline: -1, // Online users next
           isOppositeGender: -1, // Opposite gender prioritization
           avgRating: -1, // Higher ratings next
@@ -1259,6 +1398,7 @@ export const getAllUsers1 = async (req, res) => {
                 refreshToken: 0,
                 ratings: 0, // Exclude sensitive fields and unnecessary data
                 recentCall: 0, // Hide detailed call log data
+                recentChat: 0, // Hide detailed chat log data
               },
             },
           ],

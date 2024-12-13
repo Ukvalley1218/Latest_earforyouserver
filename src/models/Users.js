@@ -156,6 +156,8 @@ userSchema.methods.generateRefreshToken = function () {
   );
 };
 
+
+
 // Exporting the User model
 const User = mongoose.models.User || mongoose.model('User', userSchema);
 export default User;
