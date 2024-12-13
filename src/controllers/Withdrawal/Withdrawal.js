@@ -1,5 +1,5 @@
-import EarningWallet from "../../models/Wallet/EarningWallet";
-import WithdrawalRequest from "../../models/Wallet/WithWrdal";
+import EarningWallet from "../../models/Wallet/EarningWallet.js";
+import WithdrawalRequest from "../../models/Wallet/WithWrdal.js";
 
 export const requestWithdrawal = async (req, res) => {
     try {
