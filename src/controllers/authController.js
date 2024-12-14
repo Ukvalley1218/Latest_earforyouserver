@@ -41,12 +41,13 @@ export const getCachedUsers = (req, res, next) => {
     const originalJson = res.json.bind(res);
     res.json = (data) => {
       try {
-        const uniqueData = removeDuplicates(data); // Remove duplicates before caching
+        // Ensure data is cleaned before caching
+        const uniqueData = Array.isArray(data) ? removeDuplicates(data) : data;
         myCache.set(cacheKey, uniqueData, 3600); // Cache the response for 1 hour
       } catch (cacheError) {
         console.error('Error setting cache:', cacheError);
       }
-      originalJson(data); // Send the unique response to the client
+      originalJson(data); // Send the original response to the client
     };
 
     next(); // Proceed to the next middleware/controller
@@ -61,6 +62,11 @@ export const getCachedUsers = (req, res, next) => {
 
 
 const removeDuplicates = (data, uniqueKey = '_id') => {
+  if (!Array.isArray(data)) {
+    console.error('Expected an array in removeDuplicates, received:', data);
+    return data; // Return as is if not an array
+  }
+
   const seen = new Set();
   return data.filter((item) => {
     const keyValue = item[uniqueKey];
@@ -71,6 +77,7 @@ const removeDuplicates = (data, uniqueKey = '_id') => {
     return true;
   });
 };
+
 
 
 const generateAccessAndRefreshTokens = async (userId) => {
