@@ -1298,6 +1298,17 @@ export const getAllUsers1 = async (req, res) => {
                   ],
                 },
               },
+              $sort: {
+                startTime: -1, // Sort by `startTime` in descending order
+              },
+            },
+            {
+              $limit: 1, // Get the most recent call
+            },
+            {
+              $project: {
+                startTime: 1, // Only retrieve the `startTime` field
+              },
             },
             { $sort: { startTime: -1 } }, // Sort by most recent call
             { $limit: 1 }, // Get the most recent call
@@ -1381,10 +1392,10 @@ export const getAllUsers1 = async (req, res) => {
       {
         $sort: {
           isOnline: -1, // Online users next
-          recentChatTime: -1, // Sort by most recent chat time
+          recentChatTime: -1,
           recentCallTime: -1, // Sort by most recent call time
           isOppositeGender: -1, // Opposite gender prioritization
-          avgRating: -1, // Higher ratings next
+          avgRating: -1,
         },
       },
       {
