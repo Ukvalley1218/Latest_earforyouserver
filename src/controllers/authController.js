@@ -21,6 +21,7 @@ import { ChatMessage } from "../models/message.models.js";
 import callLog from '.././models/Talk-to-friend/callLogModel.js'
 import NodeCache from 'node-cache';
 
+const myCache = new NodeCache({ stdTTL: 3600, checkperiod: 120 })
 
 export const getCachedUsers = (req, res, next) => {
   const cacheKey = `users:${req.user.id}`;
