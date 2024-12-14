@@ -78,7 +78,7 @@ export const getCachedUsers = (req, res, next) => {
 
 const removeDuplicates = (data, uniqueKey = "_id") => {
   if (!Array.isArray(data)) {
-    
+
     return data; // Return as is if not an array
   }
 
@@ -1965,7 +1965,7 @@ export const Reporte_User = async (req, res) => {
 
 
 export const addBankDetails = async (req, res) => {
-  const  userId  = req.user._id||req.user.id;
+  const userId = req.user._id || req.user.id;
   const {
     bankName,
     accountNumber,
@@ -1975,7 +1975,7 @@ export const addBankDetails = async (req, res) => {
 
   try {
     // Validate input
-    if (!bankName || !accountNumber || !ifscCode || !accountHolderName ) {
+    if (!bankName || !accountNumber || !ifscCode || !accountHolderName) {
       return res.status(400).json({ message: 'All fields are required.' });
     }
 
@@ -2008,6 +2008,29 @@ export const addBankDetails = async (req, res) => {
 
     res.status(201).json({
       message: 'Bank details added successfully.',
+      bankDetails: user.bankDetails,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
+
+export const getBankDetails = async (req, res) => {
+  const userId = req.user._id || req.user.id; // Assuming user info is in `req.user`
+
+  try {
+    // Find the user by ID
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    // Return the user's bank details
+    res.status(200).json({
+      message: 'Bank details retrieved successfully.',
       bankDetails: user.bankDetails,
     });
   } catch (error) {
