@@ -24,21 +24,52 @@ import NodeCache from 'node-cache';
 const myCache = new NodeCache({ stdTTL: 3600, checkperiod: 120 })
 
 export const getCachedUsers = (req, res, next) => {
-  const cacheKey = `users:${req.user.id}`;
-  const cachedData = myCache.get(cacheKey);
+  try {
+    const cacheKey = `users:${req.user.id}`;
+    const cachedData = myCache.get(cacheKey);
 
-  if (cachedData) {
-    // Return cached data if available
-    return res.status(200).json(cachedData);
-  } else {
-    // Proceed to fetch data from DB and cache it in `getAllUsers1`
-    res.originalJson = res.json; // Preserve the original res.json method
+    if (cachedData) {
+      // Return cached data if available
+      return res.status(200).json({
+        success: true,
+        data: removeDuplicates(cachedData), // Ensure no duplicates in cached data
+        message: 'Data fetched from cache.',
+      });
+    }
+
+    // No cached data: Override res.json to cache the DB response
+    const originalJson = res.json.bind(res);
     res.json = (data) => {
-      myCache.set(cacheKey, data, 3600); // Cache the response for 1 hour
-      res.originalJson(data); // Send the response to the client
+      try {
+        const uniqueData = removeDuplicates(data); // Remove duplicates before caching
+        myCache.set(cacheKey, uniqueData, 3600); // Cache the response for 1 hour
+      } catch (cacheError) {
+        console.error('Error setting cache:', cacheError);
+      }
+      originalJson(data); // Send the unique response to the client
     };
-    next();
+
+    next(); // Proceed to the next middleware/controller
+  } catch (error) {
+    console.error('Error in getCachedUsers middleware:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error while handling cache.',
+    });
   }
+};
+
+
+const removeDuplicates = (data, uniqueKey = '_id') => {
+  const seen = new Set();
+  return data.filter((item) => {
+    const keyValue = item[uniqueKey];
+    if (seen.has(keyValue)) {
+      return false;
+    }
+    seen.add(keyValue);
+    return true;
+  });
 };
 
 

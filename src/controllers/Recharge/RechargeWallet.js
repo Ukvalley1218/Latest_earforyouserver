@@ -658,6 +658,7 @@ export const transferEarningsToWallet = async (req, res) => {
 
     // Validate input
     if (!userId || !amount || amount <= 0) {
+      
       return res.status(400).json({ 
         success: false, 
         message: 'Invalid transfer parameters' 
