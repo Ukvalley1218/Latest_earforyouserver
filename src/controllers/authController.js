@@ -1313,11 +1313,11 @@ export const getAllUsers1 = async (req, res) => {
       {
         $sort: {
 
-          chatPriority: -1, // Prioritize received chats, then sent chats
-          isOnline: -1, // Online users first
-          recentChatTime: -1, // Sort by most recent chat time
+          // Prioritize received chats, then sent chats
+          recentChatTime: -1,
           recentCallTime: -1,
-
+          chatPriority: -1, 
+          isOnline: -1, // Online users first
           isOppositeGender: -1, // Prioritize opposite gender
           avgRating: -1, // Then by highest average rating
         },
