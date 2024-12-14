@@ -1266,7 +1266,7 @@ export const getAllUsers1 = async (req, res) => {
     //     },
     //   },
     // ];
-    
+
     const pipeline = [
       {
         $match: {
@@ -1380,9 +1380,9 @@ export const getAllUsers1 = async (req, res) => {
       },
       {
         $sort: {
+          isOnline: -1, // Online users next
           recentChatTime: -1, // Sort by most recent chat time
           recentCallTime: -1, // Sort by most recent call time
-          isOnline: -1, // Online users next
           isOppositeGender: -1, // Opposite gender prioritization
           avgRating: -1, // Higher ratings next
         },
