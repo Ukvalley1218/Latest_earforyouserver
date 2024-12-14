@@ -1435,6 +1435,7 @@ export const getAllUsers1 = async (req, res) => {
           pipeline: [
             {
               $match: {
+                 
                 $expr: {
                   $and: [
                     {
@@ -1605,15 +1606,15 @@ export const getAllUsers1 = async (req, res) => {
 
     const results = await User.aggregate(pipeline);
     const totalUsers = results[0]?.metadata[0]?.totalUsers || 0;
-    const users = results[0]?.users || [];
+    const user = results[0]?.user || [];
 
-    if (users.length === 0) {
+    if (user.length === 0) {
       return res.status(404).json({ message: "No users found" });
     }
 
     res.status(200).json({
       message: "Users fetched successfully",
-      users,
+      user,
       pagination: {
         totalUsers,
         currentPage: page,
