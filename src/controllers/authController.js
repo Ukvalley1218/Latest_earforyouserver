@@ -1862,7 +1862,7 @@ export const getAllUsers1 = async (req , res) => {
                   as: "chat",
                   in: {
                     type: "chat",
-                    timestamp: "$$chat.createdAt",
+                    timestamp: "$$chat.timestamps",
                     direction: {
                       $cond: {
                         if: { $eq: ["$$chat.sender", loggedInUserId] },
