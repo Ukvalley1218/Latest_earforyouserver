@@ -1863,34 +1863,42 @@ export const getChatsWithLatestMessages = async (req, res) => {
       .skip(skip) // Skip documents for pagination
       .limit(limit); // Limit number of documents
 
-    // Transform chats to include other participants
-    const sanitizedChats = chats.map(chat => {
-      // Filter out logged-in user and create a new participants array
-      const otherParticipants = chat.participants
-        .filter(participant => participant._id.toString() !== userId.toString())
-        .map(participant => {
-          const { password, refreshToken, ...userDetails } = participant.toObject();
-          return userDetails;
-        });
+    // Deduplicate participants within each chat
+    const uniqueChats = chats.map(chat => {
+      const uniqueParticipantsMap = new Map(); // To store unique participants by user ID
+      const uniqueParticipants = chat.participants.filter(participant => {
+        if (uniqueParticipantsMap.has(participant._id.toString())) {
+          return false; // Skip duplicate participants
+        }
+        uniqueParticipantsMap.set(participant._id.toString(), true);
+        return true; // Include unique participants only
+      });
 
       return {
-        participants: otherParticipants,
-       
+        chatId: chat._id.toString(),
+        lastMessage: chat.lastMessage || null, // Assuming there's a lastMessage field
+        updatedAt: chat.updatedAt,
+        participants: uniqueParticipants.map(participant => {
+          const { password, refreshToken, ...userDetails } = participant.toObject();
+          return userDetails; // Return sanitized participant details
+        }),
       };
     });
 
-    // Respond with sanitized chats and pagination info
+    // Respond with sanitized chats
     res.json({
       page,
       limit,
       totalChats: await Chat.countDocuments({ participants: userId }), // Total number of chats
-      chats: sanitizedChats,
+      chats: uniqueChats,
     });
   } catch (error) {
     console.error('Error fetching chats with latest messages:', error);
     res.status(500).json({ error: 'Failed to fetch chats' });
   }
 };
+
+
 
 
 
