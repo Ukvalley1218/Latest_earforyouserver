@@ -1845,32 +1845,34 @@ export const getBankDetails = async (req, res) => {
 
 
 
-
-
 export const getChatsWithLatestMessages = async (req, res) => {
   try {
     const userId = req.user.id || req.user._id; // Get logged-in user ID
 
-    console.log("Logged-in User ID:", userId);
-
     // Fetch chats where the user is a participant
     const chats = await Chat.find({ participants: userId })
-     
       .populate({
         path: 'participants',
         model: User,
+        select: '-password -accessToken' // Exclude password and accessToken
       })
-     
-      .sort({ updatedAt: -1 }); // Sort chats by update time
+      .sort({ updatedAt: -1 }); // Sort chats by most recently updated
 
-    console.log("Chats found for user:", chats);
-
-    // Remove the logged-in user from participants
+    // Transform chats to include other participants
     const sanitizedChats = chats.map(chat => {
-      const participants = chat.participants.filter(
-        participant => participant._id.toString() !== userId.toString()
-      );
-      return { ...chat.toObject(), participants }; // Convert chat to plain object and update participants
+      // Filter out logged-in user and create a new participants array
+      const otherParticipants = chat.participants
+        .filter(participant => participant._id.toString() !== userId.toString())
+        .map(participant => {
+          // Destructure to create a new object with all fields except password and accessToken
+          const { password, accessToken, ...userDetails } = participant.toObject();
+          return userDetails;
+        });
+
+      return { 
+        ...chat.toObject(), 
+        participants: otherParticipants // Set participants array
+      };
     });
 
     // Respond with sanitized chats
