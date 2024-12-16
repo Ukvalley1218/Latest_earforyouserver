@@ -1962,7 +1962,7 @@ export const getUserById = async (req, res) => {
 export const getAllUsers1 = async (req, res) => {
   try {
     // Extract logged-in user's details
-    const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
+    const loggedInUserId = req.user.id || req.user._id;
 
     // Pagination parameters
     const page = parseInt(req.query.page) || 1;
@@ -2003,6 +2003,7 @@ export const getAllUsers1 = async (req, res) => {
               },
             },
             { $sort: { timestamps: -1 } },
+            { $limit: 1 } // Only keep the most recent chat
           ],
           as: "chats",
         },
@@ -2034,67 +2035,27 @@ export const getAllUsers1 = async (req, res) => {
               },
             },
             { $sort: { startTime: -1 } },
+            { $limit: 1 } // Only keep the most recent call
           ],
           as: "calls",
         },
       },
-      // Combine and sort activities
+      // Determine the latest activity timestamp
       {
         $addFields: {
-          SortedActivities: {
-            $concatArrays: [
-              {
-                $map: {
-                  input: "$chats",
-                  as: "chat",
-                  in: {
-                    type: "chat",
-                    timestamp: "$$chat.timestamps",
-                    direction: {
-                      $cond: {
-                        if: { $eq: ["$$chat.sender", loggedInUserId] },
-                        then: "sent",
-                        else: "received",
-                      },
-                    },
-                  },
-                },
-              },
-              {
-                $map: {
-                  input: "$calls",
-                  as: "call",
-                  in: {
-                    type: "call",
-                    timestamp: "$$call.startTime",
-                    direction: {
-                      $cond: {
-                        if: { $eq: ["$$call.caller", loggedInUserId] },
-                        then: "outgoing",
-                        else: "incoming",
-                      },
-                    },
-                  },
-                },
-              },
-            ],
-          },
-        },
-      },
-      // Extract latest activity timestamp
-      {
-        $addFields: {
+          latestChatTimestamp: { $ifNull: [{ $arrayElemAt: ["$chats.timestamps", 0] }, new Date(0)] },
+          latestCallTimestamp: { $ifNull: [{ $arrayElemAt: ["$calls.startTime", 0] }, new Date(0)] },
           latestActivityTimestamp: {
-            $ifNull: [
-              { $max: "$SortedActivities.timestamp" },
-              new Date(0), // Default to the earliest date if no activities
-            ],
-          },
-        },
+            $max: [
+              { $ifNull: [{ $arrayElemAt: ["$chats.timestamps", 0] }, new Date(0)] },
+              { $ifNull: [{ $arrayElemAt: ["$calls.startTime", 0] }, new Date(0)] }
+            ]
+          }
+        }
       },
-      // Sort users by latest activity timestamp
+      // Sort users by latest activity timestamp in descending order
       {
-        $sort: { latestActivityTimestamp: -1 },
+        $sort: { latestActivityTimestamp: -1 }
       },
       // Pagination
       {
@@ -2110,6 +2071,9 @@ export const getAllUsers1 = async (req, res) => {
                 chats: 0,
                 calls: 0,
                 ratings: 0,
+                latestChatTimestamp: 0,
+                latestCallTimestamp: 0,
+                latestActivityTimestamp: 0
               },
             },
           ],
