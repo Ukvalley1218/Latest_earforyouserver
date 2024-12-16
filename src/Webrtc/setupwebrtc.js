@@ -1318,7 +1318,7 @@ export const setupWebRTC = (io) => {
               );
               if (updatedUser) {
                 io.emit('userStatusChanged', { userId: disconnectedUserId, status: 'offline' });
-                logger.error(`  update offline status for user ${disconnectedUserId}: ${updatedUser} Userid ${userId}`);
+                // logger.error(`  update offline status for user ${disconnectedUserId}: ${updatedUser} Userid ${userId}`);
               }
             } catch (error) {
               logger.error(`Failed to update offline status for user ${disconnectedUserId}: ${error.message}`);
