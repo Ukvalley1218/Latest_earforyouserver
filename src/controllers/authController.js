@@ -2032,14 +2032,18 @@ export const getChatsWithLatestMessages = async (req, res) => {
           filteredParticipants.map(async participant => {
             // Calculate average rating for each participant
             const reviews = await Review.find({ reviewedUser: participant._id });
+            console.log("reviews",reviews)
             const totalRatings = reviews.reduce((sum, review) => sum + review.rating, 0);
+            console.log("totalRatings",totalRatings)
             const averageRating = reviews.length > 0 ? totalRatings / reviews.length : null;
 
             // Sanitize participant details
             const { password, refreshToken, ...userDetails } = participant.toObject();
             return {
               ...userDetails,
-              averageRating, // Include average rating in the response
+              averageRating, // Include average rating in the response,
+              
+
             };
           })
         );
@@ -2056,6 +2060,8 @@ export const getChatsWithLatestMessages = async (req, res) => {
     // Respond with formatted chat data
     res.json({
       chats: uniqueChats, // Only the relevant chat details
+      limit,
+      page,
     });
   } catch (error) {
     console.error('Error fetching chats with latest messages:', error);
