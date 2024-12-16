@@ -1854,7 +1854,7 @@ export const getChatsWithLatestMessages = async (req, res) => {
       .populate({
         path: 'participants',
         model: User,
-        select: '-password -accessToken' // Exclude password and accessToken
+        select: '-password -refreshToken' // Exclude password and accessToken
       })
       .sort({ updatedAt: -1 }); // Sort chats by most recently updated
 
@@ -1865,12 +1865,11 @@ export const getChatsWithLatestMessages = async (req, res) => {
         .filter(participant => participant._id.toString() !== userId.toString())
         .map(participant => {
           // Destructure to create a new object with all fields except password and accessToken
-          const { password, accessToken, ...userDetails } = participant.toObject();
+          const { password, refreshToken, ...userDetails } = participant.toObject();
           return userDetails;
         });
 
       return { 
-        ...chat.toObject(), 
         participants: otherParticipants // Set participants array
       };
     });
