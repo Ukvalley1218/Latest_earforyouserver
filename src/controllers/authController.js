@@ -1587,8 +1587,8 @@ export const getAllUsers1 = async (req, res) => {
     const users = await User.aggregate([
       {
         $match: {
-          _id: { $ne: loggedInUserId },
-          UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
+          _id: { $ne: loggedInUserId }, // Exclude the logged-in user
+          UserStatus: { $nin: ["inActive", "Blocked", "InActive"] }, // Exclude users with these statuses
           gender: { $ne: loggedInUserGender }, // Opposite gender
           status: "Online", // Online users only
         },
@@ -1659,6 +1659,7 @@ export const getAllUsers1 = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
+
 
 
 export const addBio = async (req, res) => {
