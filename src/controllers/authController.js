@@ -20,6 +20,7 @@ import EarningWallet from "../models/Wallet/EarningWallet.js";
 import { ChatMessage } from "../models/message.models.js";
 import callLog from '.././models/Talk-to-friend/callLogModel.js'
 import NodeCache from 'node-cache';
+import { Chat } from "../models/chat.modal.js";
 
 const myCache = new NodeCache({ stdTTL: 3600, checkperiod: 120 })
 
@@ -1773,15 +1774,13 @@ export const getUserById = async (req, res) => {
 export const getAllUsers1 = async (req, res) => {
   try {
     // Extract logged-in user's details
-    const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
-    const loggedInUserGender = req.user.gender;
+    const loggedInUserId = req.user.id || req.user._id;
 
     // Pagination parameters
     const page = parseInt(req.query.page) || 1;
     const limit = 21;
     const skip = (page - 1) * limit;
 
-    // Find users excluding the logged-in user and specific statuses
     const users = await User.aggregate([
       {
         $match: {
@@ -1789,112 +1788,67 @@ export const getAllUsers1 = async (req, res) => {
           UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
         },
       },
-      // Lookup recent chat messages
+      // Lookup chats involving the logged-in user
       {
         $lookup: {
-          from: ChatMessage.collection.name,
-          let: { userId: "$_id" },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $or: [
-                    {
-                      $and: [
-                        { $eq: ["$sender", loggedInUserId] },
-                        { $eq: ["$chat", "$$userId"] },
-                      ],
-                    },
-                    {
-                      $and: [
-                        { $eq: ["$sender", "$$userId"] },
-                        { $eq: ["$chat", loggedInUserId] },
-                      ],
-                    },
-                  ],
-                },
-              },
-            },
-            { $sort: { createdAt: -1 } },
-          ],
-          as: "chats",
-        },
-      },
-      // Lookup recent call logs
-      {
-        $lookup: {
-          from: callLog.collection.name,
+          from: Chat.collection.name,
           let: { userId: "$_id" },
           pipeline: [
             {
               $match: {
                 $expr: {
                   $and: [
-                    {
-                      $or: [
-                        { $eq: ["$caller", loggedInUserId] },
-                        { $eq: ["$receiver", loggedInUserId] },
-                      ],
-                    },
-                    {
-                      $or: [
-                        { $eq: ["$caller", "$$userId"] },
-                        { $eq: ["$receiver", "$$userId"] },
-                      ],
-                    },
+                    { $in: [loggedInUserId, "$participants"] }, // Logged-in user is a participant
+                    { $in: ["$$userId", "$participants"] }, // Current user is a participant
                   ],
                 },
               },
             },
-            { $sort: { startTime: -1 } },
+            {
+              $lookup: {
+                from: ChatMessage.collection.name,
+                let: { chatId: "$_id" },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: { $eq: ["$chat", "$$chatId"] },
+                    },
+                  },
+                  { $sort: { createdAt: -1 } }, // Sort messages by timestamp
+                  { $limit: 1 }, // Get the most recent message
+                ],
+                as: "lastMessage",
+              },
+            },
           ],
-          as: "calls",
+          as: "chats",
         },
       },
       // Add SortedActivities field
       {
         $addFields: {
           SortedActivities: {
-            $concatArrays: [
-              {
-                $map: {
-                  input: "$chats",
-                  as: "chat",
-                  in: {
-                    type: "chat",
-                    timestamp: "$$chat.createdAt",
-                    direction: {
-                      $cond: {
-                        if: { $eq: ["$$chat.sender", loggedInUserId] },
-                        then: "sent",
-                        else: "received",
-                      },
-                    },
+            $map: {
+              input: "$chats",
+              as: "chat",
+              in: {
+                type: "chat",
+                timestamp: {
+                  $arrayElemAt: ["$$chat.lastMessage.createdAt", 0], // Timestamp of the latest message
+                },
+                direction: {
+                  $cond: {
+                    if: { $eq: [{ $arrayElemAt: ["$$chat.lastMessage.sender", 0] }, loggedInUserId] },
+                    then: "sent",
+                    else: "received",
                   },
                 },
               },
-              {
-                $map: {
-                  input: "$calls",
-                  as: "call",
-                  in: {
-                    type: "call",
-                    timestamp: "$$call.startTime",
-                    direction: {
-                      $cond: {
-                        if: { $eq: ["$$call.caller", loggedInUserId] },
-                        then: "outgoing",
-                        else: "incoming",
-                      },
-                    },
-                  },
-                },
-              },
-            ],
+            },
           },
         },
       },
-      // Add field for latest timestamp in SortedActivities
+      // Calculate the latest activity timestamp
       {
         $addFields: {
           latestActivityTimestamp: {
@@ -1905,10 +1859,10 @@ export const getAllUsers1 = async (req, res) => {
           },
         },
       },
-      // Sort by the latest activity timestamp
+      // Sort users by latest activity timestamp
       {
         $sort: {
-          latestActivityTimestamp: -1, // Most recent activity comes first
+          latestActivityTimestamp: -1,
         },
       },
       // Pagination using $facet
@@ -1923,7 +1877,6 @@ export const getAllUsers1 = async (req, res) => {
                 password: 0,
                 refreshToken: 0,
                 chats: 0,
-                calls: 0,
                 ratings: 0,
               },
             },
@@ -1957,6 +1910,7 @@ export const getAllUsers1 = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
+
 
 
 
