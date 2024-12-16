@@ -1770,7 +1770,7 @@ export const getUserById = async (req, res) => {
 // };
 
 
-export const getAllUsers1 = async (req , res) => {
+export const getAllUsers1 = async (req, res) => {
   try {
     // Extract logged-in user's details
     const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
@@ -1894,20 +1894,21 @@ export const getAllUsers1 = async (req , res) => {
           },
         },
       },
-      // Sort SortedActivities by timestamp
+      // Add field for latest timestamp in SortedActivities
       {
         $addFields: {
-          SortedActivities: {
-            $slice: [
-              {
-                $sortArray: {
-                  input: "$SortedActivities",
-                  sortBy: { timestamp: -1 },
-                },
-              },
-              50, // Limit to 50 activities per user for performance
+          latestActivityTimestamp: {
+            $ifNull: [
+              { $max: "$SortedActivities.timestamp" },
+              new Date(0), // Default to earliest date if no activities
             ],
           },
+        },
+      },
+      // Sort by the latest activity timestamp
+      {
+        $sort: {
+          latestActivityTimestamp: -1, // Most recent activity comes first
         },
       },
       // Pagination using $facet
@@ -1956,6 +1957,7 @@ export const getAllUsers1 = async (req , res) => {
     res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
+
 
 
 
