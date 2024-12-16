@@ -1857,46 +1857,48 @@ export const getChatsWithLatestMessages = async (req, res) => {
       .populate({
         path: 'participants',
         model: User,
-        select: '-password -refreshToken' // Exclude password and refreshToken
+        select: '-password -refreshToken', // Exclude sensitive fields
       })
       .sort({ updatedAt: -1 }) // Sort chats by most recently updated
       .skip(skip) // Skip documents for pagination
       .limit(limit); // Limit number of documents
 
-    // Deduplicate participants within each chat
-    const uniqueChats = chats.map(chat => {
-      const uniqueParticipantsMap = new Map(); // To store unique participants by user ID
-      const uniqueParticipants = chat.participants.filter(participant => {
-        if (uniqueParticipantsMap.has(participant._id.toString())) {
-          return false; // Skip duplicate participants
+    // Deduplicate users within each chat and filter out the logged-in user
+    const uniqueChats = [];
+    const seenUserIds = new Set();
+
+    chats.forEach(chat => {
+      const filteredParticipants = chat.participants.filter(participant => {
+        if (participant._id.toString() === userId.toString() || seenUserIds.has(participant._id.toString())) {
+          return false; // Skip logged-in user and duplicate users
         }
-        uniqueParticipantsMap.set(participant._id.toString(), true);
-        return true; // Include unique participants only
+        seenUserIds.add(participant._id.toString()); // Track unique user IDs
+        return true;
       });
 
-      return {
-        chatId: chat._id.toString(),
-        lastMessage: chat.lastMessage || null, // Assuming there's a lastMessage field
-        updatedAt: chat.updatedAt,
-        participants: uniqueParticipants.map(participant => {
-          const { password, refreshToken, ...userDetails } = participant.toObject();
-          return userDetails; // Return sanitized participant details
-        }),
-      };
+      if (filteredParticipants.length > 0) {
+        uniqueChats.push({
+          chatId: chat._id,
+          lastMessage: chat.lastMessage || null, // Assuming there's a `lastMessage` field
+          updatedAt: chat.updatedAt,
+          participants: filteredParticipants.map(participant => {
+            const { password, refreshToken, ...userDetails } = participant.toObject();
+            return userDetails; // Return sanitized participant details
+          }),
+        });
+      }
     });
 
-    // Respond with sanitized chats
+    // Respond with formatted chat data
     res.json({
-      page,
-      limit,
-      totalChats: await Chat.countDocuments({ participants: userId }), // Total number of chats
-      chats: uniqueChats,
+      chats: uniqueChats, // Only the relevant chat details
     });
   } catch (error) {
     console.error('Error fetching chats with latest messages:', error);
     res.status(500).json({ error: 'Failed to fetch chats' });
   }
 };
+
 
 
 
