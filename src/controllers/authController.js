@@ -1592,7 +1592,6 @@ export const getAllUsers1 = async (req, res) => {
           UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
         },
       },
-      // Fetch recent chat messages
       {
         $lookup: {
           from: ChatMessage.collection.name,
@@ -1646,7 +1645,6 @@ export const getAllUsers1 = async (req, res) => {
           },
         },
       },
-      // Fetch chats directly where the user is a participant
       {
         $lookup: {
           from: Chat.collection.name,
@@ -1674,7 +1672,6 @@ export const getAllUsers1 = async (req, res) => {
           as: "sanitizedChats",
         },
       },
-      // Add call logs
       {
         $lookup: {
           from: callLog.collection.name,
@@ -1714,7 +1711,6 @@ export const getAllUsers1 = async (req, res) => {
           },
         },
       },
-      // Add ratings and additional fields for sorting
       {
         $lookup: {
           from: "reviews",
@@ -1735,7 +1731,6 @@ export const getAllUsers1 = async (req, res) => {
           },
         },
       },
-      // Sort based on multiple criteria
       {
         $sort: {
           recentChatTime: -1,
@@ -1745,7 +1740,6 @@ export const getAllUsers1 = async (req, res) => {
           avgRating: -1,
         },
       },
-      // Pagination
       {
         $facet: {
           metadata: [{ $count: "totalUsers" }],
@@ -1754,15 +1748,20 @@ export const getAllUsers1 = async (req, res) => {
             { $limit: limit },
             {
               $project: {
-                password: 0,
-                refreshToken: 0,
-                ratings: 0,
-                recentCall: 0,
-                recentChat: 0,
+                _id: 1,
+                name: 1,
+                gender: 1,
+                status: 1,
+                avgRating: 1,
+                reviewCount: 1,
+                isOnline: 1,
+                isOppositeGender: 1,
+                recentChatTime: 1,
+                recentCallTime: 1,
                 sanitizedChats: {
                   participants: {
                     $filter: {
-                      input: "$sanitizedChats.participants",
+                      input: { $arrayElemAt: ["$sanitizedChats.participants", 0] },
                       as: "participant",
                       cond: { $ne: ["$$participant", loggedInUserId] },
                     },
@@ -1774,6 +1773,7 @@ export const getAllUsers1 = async (req, res) => {
         },
       },
     ]);
+    
 
     const totalUsers = users[0]?.metadata[0]?.totalUsers || 0;
     const userList = users[0]?.users || [];
