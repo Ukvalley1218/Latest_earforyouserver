@@ -1352,6 +1352,227 @@ export const getUserById = async (req, res) => {
 
 
 
+// export const getAllUsers1 = async (req, res) => {
+//   try {
+//     // Extract logged-in user's details
+//     const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
+//     const loggedInUserGender = req.user.gender;
+
+//     // Pagination parameters
+//     const page = parseInt(req.query.page) || 1;
+//     const limit = 21;
+//     const skip = (page - 1) * limit;
+
+//     // Find users excluding the logged-in user and specific statuses
+//     const users = await User.aggregate([
+//       {
+//         $match: {
+//           _id: { $ne: loggedInUserId },
+//           UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
+//         },
+//       },
+//       // Lookup recent chat messages using ChatMessage model
+//       {
+//         $lookup: {
+//           from: ChatMessage.collection.name,
+//           let: { userId: "$_id" },
+//           pipeline: [
+//             {
+//               $match: {
+//                 $expr: {
+//                   $or: [
+//                     {
+//                       $and: [
+//                         { $eq: ["$sender", loggedInUserId] },
+//                         { $eq: ["$chat", "$$userId"] },
+//                       ],
+//                     },
+//                     {
+//                       $and: [
+//                         { $eq: ["$sender", "$$userId"] },
+//                         { $eq: ["$chat", loggedInUserId] },
+//                       ],
+//                     },
+//                   ],
+//                 },
+//               },
+//             },
+//             {
+//               $sort: { createdAt: -1 }
+//             },
+
+//             { $limit: 1 },
+//             {
+//               $project: {
+//                 createdAt: 1,
+//                 chatDirection: {
+//                   $cond: {
+//                     if: { $eq: ["$sender", loggedInUserId] },
+//                     then: "sent",
+//                     else: "received",
+//                   },
+//                 },
+//               },
+//             },
+//           ],
+//           as: "recentChat",
+//         },
+//       },
+//       // Add fields for recent chat
+//       {
+//         $addFields: {
+//           recentChatTime: {
+//             $ifNull: [{ $arrayElemAt: ["$recentChat.createdAt", 0] }, null],
+//           },
+//           chatDirection: {
+//             $ifNull: [{ $arrayElemAt: ["$recentChat.chatDirection", 0] }, null],
+//           },
+//         },
+//       },
+//       // Lookup recent call logs using callLog model
+//       {
+//         $lookup: {
+//           from: callLog.collection.name,
+//           let: { userId: "$_id" },
+//           pipeline: [
+//             {
+//               $match: {
+//                 $expr: {
+//                   $and: [
+//                     {
+//                       $or: [
+//                         { $eq: ["$caller", loggedInUserId] },
+//                         { $eq: ["$receiver", loggedInUserId] },
+//                       ],
+//                     },
+//                     {
+//                       $or: [
+//                         { $eq: ["$caller", "$$userId"] },
+//                         { $eq: ["$receiver", "$$userId"] },
+//                       ],
+//                     },
+//                   ],
+//                 },
+//               },
+//             },
+//             { $sort: { startTime: -1 } },
+//             { $limit: 1 },
+//             { $project: { startTime: 1 } },
+//           ],
+//           as: "recentCall",
+//         },
+//       },
+//       // Add field for recent call
+//       {
+//         $addFields: {
+//           recentCallTime: {
+//             $ifNull: [{ $arrayElemAt: ["$recentCall.startTime", 0] }, null],
+//           },
+//         },
+//       },
+//       // Lookup reviews for ratings
+//       {
+//         $lookup: {
+//           from: "reviews",
+//           localField: "_id",
+//           foreignField: "user",
+//           as: "ratings",
+//         },
+//       },
+//       // Add computed fields for sorting and filtering
+//       {
+//         $addFields: {
+//           chatPriority: {
+//             $switch: {
+//               branches: [
+//                 { case: { $eq: ["$chatDirection", "received"] }, then: 2 },
+//                 { case: { $eq: ["$chatDirection", "sent"] }, then: 1 },
+//               ],
+//               default: 0,
+//             },
+//           },
+//           avgRating: { $avg: "$ratings.rating" },
+//           reviewCount: { $size: "$ratings" },
+//           isOppositeGender: {
+//             $cond: { if: { $ne: ["$gender", loggedInUserGender] }, then: 1, else: 0 },
+//           },
+//           isOnline: {
+//             $cond: { if: { $eq: ["$status", "Online"] }, then: 1, else: 0 },
+//           },
+
+//         },
+//       },
+//       // Sort users based on criteria
+//       {
+//         $sort: {
+//           recentChatTime: -1,   // Chronological sort based on recent chat time
+//           recentCallTime: -1,    // Chronological sort based on recent call time
+//           chatPriority: -1,      // Higher priority for received chats
+//           isOnline: -1,          // Online users prioritized
+//           isOppositeGender: -1,  // Opposite gender prioritized
+//           avgRating: -1,         // Higher ratings prioritized
+//         },
+//       },
+//       // Pagination using $facet
+//       {
+//         $facet: {
+//           metadata: [{ $count: "totalUsers" }],
+//           users: [
+//             { $skip: skip },
+//             { $limit: limit },
+//             {
+//               $project: {
+//                 password: 0,
+//                 refreshToken: 0,
+//                 ratings: 0,
+//                 recentCall: 0,
+//                 recentChat: 0,
+//               },
+//             },
+//           ],
+//         },
+//       },
+//     ]);
+
+//     // Extract results
+//     const totalUsers = users[0]?.metadata[0]?.totalUsers || 0;
+//     const userList = users[0]?.users || [];
+
+//     // Handle no users found
+//     if (userList.length === 0) {
+//       return res.status(404).json({ message: "No users found" });
+//     }
+
+//     // // Cache the response
+//     // myCache.set(`users:${req.user.id}`, {
+//     //   users: userList,
+//     //   pagination: {
+//     //     totalUsers,
+//     //     currentPage: page,
+//     //     totalPages: Math.ceil(totalUsers / limit),
+//     //     limit,
+//     //   },
+//     // }, 3600); // Cache for 1 hour
+
+//     // Send response
+//     res.status(200).json({
+//       message: "Users fetched successfully",
+//       users: userList,
+//       pagination: {
+//         totalUsers,
+//         currentPage: page,
+//         totalPages: Math.ceil(totalUsers / limit),
+//         limit,
+//       },
+//     });
+
+//   } catch (error) {
+//     console.error("Error fetching users:", error);
+//     res.status(500).json({ message: "Internal server error", error: error.message });
+//   }
+// };
+
+
 export const getAllUsers1 = async (req, res) => {
   try {
     // Extract logged-in user's details
@@ -1363,7 +1584,7 @@ export const getAllUsers1 = async (req, res) => {
     const limit = 21;
     const skip = (page - 1) * limit;
 
-    // Find users excluding the logged-in user and specific statuses
+    // Fetch users and chats
     const users = await User.aggregate([
       {
         $match: {
@@ -1371,7 +1592,7 @@ export const getAllUsers1 = async (req, res) => {
           UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
         },
       },
-      // Lookup recent chat messages using ChatMessage model
+      // Fetch recent chat messages
       {
         $lookup: {
           from: ChatMessage.collection.name,
@@ -1397,10 +1618,7 @@ export const getAllUsers1 = async (req, res) => {
                 },
               },
             },
-            {
-              $sort: { createdAt: -1 }
-            },
-
+            { $sort: { createdAt: -1 } },
             { $limit: 1 },
             {
               $project: {
@@ -1418,7 +1636,6 @@ export const getAllUsers1 = async (req, res) => {
           as: "recentChat",
         },
       },
-      // Add fields for recent chat
       {
         $addFields: {
           recentChatTime: {
@@ -1429,7 +1646,35 @@ export const getAllUsers1 = async (req, res) => {
           },
         },
       },
-      // Lookup recent call logs using callLog model
+      // Fetch chats directly where the user is a participant
+      {
+        $lookup: {
+          from: Chat.collection.name,
+          let: { userId: "$_id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $in: [loggedInUserId, "$participants"] },
+                    { $in: ["$$userId", "$participants"] },
+                  ],
+                },
+              },
+            },
+            { $sort: { updatedAt: -1 } },
+            { $limit: 1 },
+            {
+              $project: {
+                updatedAt: 1,
+                participants: 1,
+              },
+            },
+          ],
+          as: "sanitizedChats",
+        },
+      },
+      // Add call logs
       {
         $lookup: {
           from: callLog.collection.name,
@@ -1462,7 +1707,6 @@ export const getAllUsers1 = async (req, res) => {
           as: "recentCall",
         },
       },
-      // Add field for recent call
       {
         $addFields: {
           recentCallTime: {
@@ -1470,7 +1714,7 @@ export const getAllUsers1 = async (req, res) => {
           },
         },
       },
-      // Lookup reviews for ratings
+      // Add ratings and additional fields for sorting
       {
         $lookup: {
           from: "reviews",
@@ -1479,18 +1723,8 @@ export const getAllUsers1 = async (req, res) => {
           as: "ratings",
         },
       },
-      // Add computed fields for sorting and filtering
       {
         $addFields: {
-          chatPriority: {
-            $switch: {
-              branches: [
-                { case: { $eq: ["$chatDirection", "received"] }, then: 2 },
-                { case: { $eq: ["$chatDirection", "sent"] }, then: 1 },
-              ],
-              default: 0,
-            },
-          },
           avgRating: { $avg: "$ratings.rating" },
           reviewCount: { $size: "$ratings" },
           isOppositeGender: {
@@ -1499,21 +1733,19 @@ export const getAllUsers1 = async (req, res) => {
           isOnline: {
             $cond: { if: { $eq: ["$status", "Online"] }, then: 1, else: 0 },
           },
-
         },
       },
-      // Sort users based on criteria
+      // Sort based on multiple criteria
       {
         $sort: {
-          recentChatTime: -1,   // Chronological sort based on recent chat time
-          recentCallTime: -1,    // Chronological sort based on recent call time
-          chatPriority: -1,      // Higher priority for received chats
-          isOnline: -1,          // Online users prioritized
-          isOppositeGender: -1,  // Opposite gender prioritized
-          avgRating: -1,         // Higher ratings prioritized
+          recentChatTime: -1,
+          recentCallTime: -1,
+          isOnline: -1,
+          isOppositeGender: -1,
+          avgRating: -1,
         },
       },
-      // Pagination using $facet
+      // Pagination
       {
         $facet: {
           metadata: [{ $count: "totalUsers" }],
@@ -1527,6 +1759,15 @@ export const getAllUsers1 = async (req, res) => {
                 ratings: 0,
                 recentCall: 0,
                 recentChat: 0,
+                sanitizedChats: {
+                  participants: {
+                    $filter: {
+                      input: "$sanitizedChats.participants",
+                      as: "participant",
+                      cond: { $ne: ["$$participant", loggedInUserId] },
+                    },
+                  },
+                },
               },
             },
           ],
@@ -1534,29 +1775,16 @@ export const getAllUsers1 = async (req, res) => {
       },
     ]);
 
-    // Extract results
     const totalUsers = users[0]?.metadata[0]?.totalUsers || 0;
     const userList = users[0]?.users || [];
 
-    // Handle no users found
-    if (userList.length === 0) {
-      return res.status(404).json({ message: "No users found" });
+    if (!userList.length) {
+      return res.status(404).json({ message: "No users or chats found" });
     }
 
-    // // Cache the response
-    // myCache.set(`users:${req.user.id}`, {
-    //   users: userList,
-    //   pagination: {
-    //     totalUsers,
-    //     currentPage: page,
-    //     totalPages: Math.ceil(totalUsers / limit),
-    //     limit,
-    //   },
-    // }, 3600); // Cache for 1 hour
-
-    // Send response
+    // Response
     res.status(200).json({
-      message: "Users fetched successfully",
+      message: "Users and chats fetched successfully",
       users: userList,
       pagination: {
         totalUsers,
@@ -1565,9 +1793,8 @@ export const getAllUsers1 = async (req, res) => {
         limit,
       },
     });
-
   } catch (error) {
-    console.error("Error fetching users:", error);
+    console.error("Error fetching users and chats:", error);
     res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
