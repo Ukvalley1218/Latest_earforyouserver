@@ -1849,14 +1849,21 @@ export const getChatsWithLatestMessages = async (req, res) => {
   try {
     const userId = req.user.id || req.user._id; // Get logged-in user ID
 
-    // Fetch chats where the user is a participant
+    // Parse pagination parameters
+    const page = parseInt(req.query.page, 10) || 1; // Default to page 1
+    const limit = parseInt(req.query.limit, 10) || 20; // Default to 20 items per page
+    const skip = (page - 1) * limit; // Calculate the number of documents to skip
+
+    // Fetch chats where the user is a participant with pagination
     const chats = await Chat.find({ participants: userId })
       .populate({
         path: 'participants',
         model: User,
-        select: '-password -refreshToken' // Exclude password and accessToken
+        select: '-password -refreshToken' // Exclude sensitive fields
       })
-      .sort({ updatedAt: -1 }); // Sort chats by most recently updated
+      .sort({ updatedAt: -1 }) // Sort chats by most recently updated
+      .skip(skip) // Skip documents for pagination
+      .limit(limit); // Limit the number of documents fetched
 
     // Transform chats to include other participants
     const sanitizedChats = chats.map(chat => {
@@ -1869,19 +1876,27 @@ export const getChatsWithLatestMessages = async (req, res) => {
           return userDetails;
         });
 
-      return { 
-        participants: otherParticipants // Set participants array
+      return {
+        _id: chat._id,
+        participants: otherParticipants, // Set participants array
+        updatedAt: chat.updatedAt
       };
     });
 
-    // Respond with sanitized chats
-    res.json(sanitizedChats);
+    // Respond with sanitized chats and pagination details
+    res.json({
+      chats: sanitizedChats,
+      pagination: {
+        page,
+        limit,
+        total: await Chat.countDocuments({ participants: userId }) // Total number of matching documents
+      }
+    });
   } catch (error) {
     console.error('Error fetching chats with latest messages:', error);
     res.status(500).json({ error: 'Failed to fetch chats' });
   }
 };
-
 
 
 //Notification
