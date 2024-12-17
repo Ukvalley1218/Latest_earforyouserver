@@ -1898,7 +1898,7 @@ export const getChatsWithLatestMessages = async (req, res) => {
         model: User,
         select: '-password -refreshToken',
       })
-      .sort({ updatedAt: -1 })
+      .sort({ updatedAt: -1 }) // Sort by the latest chat
       .skip(skip)
       .limit(limit);
 
@@ -1908,25 +1908,33 @@ export const getChatsWithLatestMessages = async (req, res) => {
       return res.json(emptyResponse);
     }
 
-    // Step 3: Collect unique participant IDs excluding the logged-in user
-    const participantIds = new Set();
-    chats.forEach((chat) => {
+    // Step 3: Use a Map to filter unique users
+    const uniqueUsersMap = new Map();
+
+    for (const chat of chats) {
       chat.participants.forEach((participant) => {
         if (participant._id.toString() !== userId.toString()) {
-          participantIds.add(participant._id.toString());
+          if (!uniqueUsersMap.has(participant._id.toString())) {
+            uniqueUsersMap.set(participant._id.toString(), {
+              user: participant,
+              chatId: chat._id,
+              lastMessage: chat.lastMessage || null,
+              updatedAt: chat.updatedAt,
+            });
+          }
         }
       });
-    });
+    }
 
     // Step 4: Check if ratings are already cached for participants
     const cachedRatings = {};
     const uncachedIds = [];
-    participantIds.forEach((id) => {
-      const cachedRating = cache.get(`rating_${id}`);
+    uniqueUsersMap.forEach((value, key) => {
+      const cachedRating = cache.get(`rating_${key}`);
       if (cachedRating) {
-        cachedRatings[id] = cachedRating;
+        cachedRatings[key] = cachedRating;
       } else {
-        uncachedIds.push(id);
+        uncachedIds.push(key);
       }
     });
 
@@ -1954,21 +1962,16 @@ export const getChatsWithLatestMessages = async (req, res) => {
       });
     }
 
-    // Step 6: Format chat data
-    const formattedChats = chats.map((chat) => {
-      const participantsWithRatings = chat.participants
-        .filter((participant) => participant._id.toString() !== userId.toString())
-        .map((participant) => {
-          const avgRating = userRatingsMap[participant._id.toString()] || 0;
-          const { password, refreshToken, ...userDetails } = participant.toObject();
-          return { ...userDetails, averageRating: avgRating };
-        });
+    // Step 6: Format unique user chat data
+    const formattedChats = Array.from(uniqueUsersMap.values()).map((item) => {
+      const avgRating = userRatingsMap[item.user._id.toString()] || 0;
+      const { password, refreshToken, ...userDetails } = item.user.toObject();
 
       return {
-        chatId: chat._id,
-        lastMessage: chat.lastMessage || null,
-        updatedAt: chat.updatedAt,
-        participants: participantsWithRatings,
+        user: { ...userDetails, averageRating: avgRating },
+        chatId: item.chatId,
+        lastMessage: item.lastMessage,
+        updatedAt: item.updatedAt,
       };
     });
 
@@ -1982,6 +1985,7 @@ export const getChatsWithLatestMessages = async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch chats' });
   }
 };
+
 
 
 
