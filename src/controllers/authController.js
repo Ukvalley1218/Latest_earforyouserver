@@ -1792,83 +1792,260 @@ export const getBankDetails = async (req, res) => {
 
 
 
+// export const getChatsWithLatestMessages = async (req, res) => {
+//   try {
+//     const userId = req.user.id || req.user._id; // Get logged-in user ID
+//     const page = parseInt(req.query.page) || 1; // Get page number from query or default to 1
+//     const limit = parseInt(req.query.limit) || 20; // Get limit from query or default to 20
+//     const skip = (page - 1) * limit; // Calculate how many documents to skip
+
+//     // Fetch chats where the user is a participant, with pagination
+//     const chats = await Chat.find({ participants: userId })
+//       .populate({
+//         path: 'participants',
+//         model: User,
+//         select: '-password -refreshToken', // Exclude sensitive fields
+//       })
+//       .sort({ updatedAt: -1 }) // Sort chats by most recently updated
+//       .skip(skip) // Skip documents for pagination
+//       .limit(limit); // Limit number of documents
+
+//     const uniqueChats = [];
+//     const seenUserIds = new Set();
+
+//     for (const chat of chats) {
+//       // Filter participants to exclude logged-in user and duplicate users
+//       const filteredParticipants = chat.participants.filter((participant) => {
+//         if (
+//           participant._id.toString() === userId.toString() ||
+//           seenUserIds.has(participant._id.toString())
+//         ) {
+//           return false;
+//         }
+//         seenUserIds.add(participant._id.toString()); // Track unique user IDs
+//         return true;
+//       });
+
+//       if (filteredParticipants.length > 0) {
+//         const participantsWithRatings = await Promise.all(
+//           filteredParticipants.map(async (participant) => {
+//             try {
+//               // Fetch reviews for the participant
+//               const reviews = await Review.find({ user: participant._id });
+//               // console.log(reviews.rating)
+//               const avgRating = reviews.length > 0
+//                 ? reviews.reduce((sum, review) => sum + (review.rating || 0), 0) / reviews.length
+//                 : 0; // Calculate average rating or default to 0
+
+//               // Sanitize participant details
+//               const { password, refreshToken, ...userDetails } = participant.toObject();
+
+//               return {
+//                 ...userDetails,
+//                 averageRating: avgRating, // Include average rating in the response
+//               };
+//             } catch (err) {
+//               console.error(`Error calculating rating for user ${participant._id}:`, err);
+//               return null; // Handle errors gracefully
+//             }
+//           })
+//         );
+
+//         uniqueChats.push({
+//           chatId: chat._id,
+//           lastMessage: chat.lastMessage || null, // Assuming there's a `lastMessage` field
+//           updatedAt: chat.updatedAt,
+//           participants: participantsWithRatings.filter(Boolean), // Exclude null participants
+//         });
+//       }
+//     }
+
+//     // Respond with formatted chat data
+//     res.json({
+//       chats: uniqueChats, // Only the relevant chat details
+//       limit,
+//       page,
+//     });
+//   } catch (error) {
+//     console.error('Error fetching chats with latest messages:', error);
+//     res.status(500).json({ error: 'Failed to fetch chats' });
+//   }
+// };
+
+
 export const getChatsWithLatestMessages = async (req, res) => {
   try {
-    const userId = req.user.id || req.user._id; // Get logged-in user ID
-    const page = parseInt(req.query.page) || 1; // Get page number from query or default to 1
-    const limit = parseInt(req.query.limit) || 20; // Get limit from query or default to 20
-    const skip = (page - 1) * limit; // Calculate how many documents to skip
+    // Validate and sanitize input
+    const userId = mongoose.Types.ObjectId(req.user.id || req.user._id);
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const skip = (page - 1) * limit;
 
-    // Fetch chats where the user is a participant, with pagination
-    const chats = await Chat.find({ participants: userId })
-      .populate({
-        path: 'participants',
-        model: User,
-        select: '-password -refreshToken', // Exclude sensitive fields
-      })
-      .sort({ updatedAt: -1 }) // Sort chats by most recently updated
-      .skip(skip) // Skip documents for pagination
-      .limit(limit); // Limit number of documents
-
-    const uniqueChats = [];
-    const seenUserIds = new Set();
-
-    for (const chat of chats) {
-      // Filter participants to exclude logged-in user and duplicate users
-      const filteredParticipants = chat.participants.filter((participant) => {
-        if (
-          participant._id.toString() === userId.toString() ||
-          seenUserIds.has(participant._id.toString())
-        ) {
-          return false;
-        }
-        seenUserIds.add(participant._id.toString()); // Track unique user IDs
-        return true;
-      });
-
-      if (filteredParticipants.length > 0) {
-        const participantsWithRatings = await Promise.all(
-          filteredParticipants.map(async (participant) => {
-            try {
-              // Fetch reviews for the participant
-              const reviews = await Review.find({ user: participant._id });
-              // console.log(reviews.rating)
-              const avgRating = reviews.length > 0
-                ? reviews.reduce((sum, review) => sum + (review.rating || 0), 0) / reviews.length
-                : 0; // Calculate average rating or default to 0
-
-              // Sanitize participant details
-              const { password, refreshToken, ...userDetails } = participant.toObject();
-
-              return {
-                ...userDetails,
-                averageRating: avgRating, // Include average rating in the response
-              };
-            } catch (err) {
-              console.error(`Error calculating rating for user ${participant._id}:`, err);
-              return null; // Handle errors gracefully
+    const chatsPipeline = [
+      // Match chats where the user is a participant
+      { 
+        $match: { 
+          participants: userId 
+        } 
+      },
+      // Sort by most recently updated
+      { 
+        $sort: { updatedAt: -1 } 
+      },
+      // Lookup last message details
+      {
+        $lookup: {
+          from: 'messages', // Assuming messages collection exists
+          localField: 'lastMessage',
+          foreignField: '_id',
+          as: 'lastMessageDetails',
+          pipeline: [
+            { 
+              $limit: 1 
             }
-          })
-        );
-
-        uniqueChats.push({
-          chatId: chat._id,
-          lastMessage: chat.lastMessage || null, // Assuming there's a `lastMessage` field
-          updatedAt: chat.updatedAt,
-          participants: participantsWithRatings.filter(Boolean), // Exclude null participants
-        });
+          ]
+        }
+      },
+      // Lookup participants and exclude sensitive fields
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'participants',
+          foreignField: '_id',
+          as: 'participantDetails',
+          pipeline: [
+            {
+              $project: {
+                name: 1,
+                email: 1,
+                avatar: 1,
+                _id: 1
+              }
+            }
+          ]
+        }
+      },
+      // Lookup reviews for calculating ratings
+      {
+        $lookup: {
+          from: 'reviews',
+          let: { participants: '$participants' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $in: ['$user', '$$participants']
+                }
+              }
+            },
+            {
+              $group: {
+                _id: '$user',
+                averageRating: { $avg: '$rating' }
+              }
+            }
+          ],
+          as: 'userRatings'
+        }
+      },
+      // Pagination
+      { 
+        $skip: skip 
+      },
+      { 
+        $limit: limit 
+      },
+      // Process and enrich participants with ratings
+      {
+        $addFields: {
+          participants: {
+            $map: {
+              input: '$participantDetails',
+              as: 'participant',
+              in: {
+                $mergeObjects: [
+                  '$$participant',
+                  {
+                    averageRating: {
+                      $ifNull: [
+                        {
+                          $arrayElemAt: [
+                            {
+                              $filter: {
+                                input: '$userRatings',
+                                cond: { 
+                                  $eq: ['$$this._id', '$$participant._id'] 
+                                }
+                              }
+                            },
+                            0
+                          ]
+                        },
+                        { averageRating: 0 }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      // Final projection
+      {
+        $project: {
+          chatId: '$_id',
+          lastMessage: { 
+            $ifNull: [
+              { $arrayElemAt: ['$lastMessageDetails', 0] }, 
+              null 
+            ]
+          },
+          updatedAt: 1,
+          participants: {
+            $map: {
+              input: '$participants',
+              as: 'p',
+              in: {
+                _id: '$$p._id',
+                name: '$$p.name',
+                email: '$$p.email',
+                avatar: '$$p.avatar',
+                averageRating: '$$p.averageRating.averageRating'
+              }
+            }
+          }
+        }
       }
-    }
+    ];
 
-    // Respond with formatted chat data
+    // Execute aggregation with total count
+    const [results, totalCountResult] = await Promise.all([
+      Chat.aggregate(chatsPipeline),
+      Chat.aggregate([
+        { $match: { participants: userId } },
+        { $count: 'totalChats' }
+      ])
+    ]);
+
+    const totalChats = totalCountResult[0]?.totalChats || 0;
+    const totalPages = Math.ceil(totalChats / limit);
+
     res.json({
-      chats: uniqueChats, // Only the relevant chat details
-      limit,
-      page,
+      chats: results,
+      pagination: {
+        total: totalChats,
+        page,
+        limit,
+        totalPages
+      }
     });
   } catch (error) {
     console.error('Error fetching chats with latest messages:', error);
-    res.status(500).json({ error: 'Failed to fetch chats' });
+    res.status(500).json({ 
+      error: 'Failed to fetch chats', 
+      details: error.message 
+    });
   }
 };
 
