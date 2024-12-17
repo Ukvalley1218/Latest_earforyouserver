@@ -979,7 +979,8 @@ export const listener = async (req, res) => {
     // Query the database for users with userType 'RECEIVER' and exclude logged-in user
     const query = {
       userType: 'RECEIVER',
-      _id: { $ne: userId } // Exclude the logged-in user's ID
+      _id: { $ne: userId }, // Exclude the logged-in user's ID
+      UserStatus: { $nin: ['inActive', 'Blocked', 'InActive'] } // Exclude unwanted statuses
     };
 
     const users = await User.find(query)
@@ -1016,9 +1017,10 @@ export const listener = async (req, res) => {
 
 export const UserCategoryData = async (req, res) => {
   try {
-    const userId = req.user._id || req.user.id;
+    const userId = req.user._id || req.user.id; // Logged-in user's ID
     const { Category } = req.body;
 
+    // Check if userId is provided
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -1029,21 +1031,23 @@ export const UserCategoryData = async (req, res) => {
     // Retrieve pagination parameters
     const { page = 1, limit = 20 } = req.query;
 
-    // Convert to integers
+    // Convert to integers for pagination
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
 
-    // Query the database for users with userType 'RECEIVER' and exclude logged-in user
+    // Query the database for users
     const query = {
-      userCategory: Category,
-      _id: { $ne: userId } // Exclude the logged-in user's ID
+      userCategory: Category, // Filter by category
+      _id: { $ne: userId },   // Exclude the logged-in user's ID
+      UserStatus: { $nin: ["inActive", "Blocked", "InActive"] }, // Exclude users with unwanted statuses
     };
 
+    // Fetch users with pagination
     const users = await User.find(query)
       .skip((pageNumber - 1) * limitNumber)
       .limit(limitNumber);
 
-    // Count total documents for this query
+    // Count total documents for pagination
     const totalUsers = await User.countDocuments(query);
 
     // Calculate total pages
@@ -1287,65 +1291,6 @@ export const getUserById = async (req, res) => {
   }
 };
 
-// // getAllUsers
-// export const getAllUsers = async (req, res) => {
-//   try {
-//     // Get the logged-in user's ID (assuming it's stored in req.user)
-//     const loggedInUserId = req.user.id;
-
-//     // Find all users except the logged-in user, excluding password and refreshToken fields
-
-//     // const users = await User.find(
-//     //   { _id: { $ne: loggedInUserId } }, // Exclude the logged-in user
-//     //   { password: 0, refreshToken: 0 }
-//     // );
-
-//     const users = await User.find(
-//       {
-//         _id: { $ne: loggedInUserId }, // Exclude the logged-in user
-//         UserStatus: { $nin: ['inActive', 'Blocked'] } // Exclude users with these statuses
-//       },
-//       { password: 0, refreshToken: 0 } // Exclude sensitive fields
-//     );
-
-//     const userRatings = await Review.aggregate([
-//       {
-//         $group: {
-//           _id: '$reviewedUserId', // Group by reviewed user's ID
-//           avgRating: { $avg: '$rating' }, // Calculate average rating
-//         },
-//       },
-//     ]);
-
-//     // Map average ratings to users
-//     const userRatingsMap = userRatings.reduce((acc, rating) => {
-//       acc[rating._id] = rating.avgRating;
-//       return acc;
-//     }, {});
-
-//     // Attach average rating to each user
-//     const usersWithRatings = users.map((user) => ({
-//       ...user.toObject(),
-//       avgRating: userRatingsMap[user._id] || 0, // Default to 0 if no rating exists
-//     }));
-
-//     // If no other users are found, return an appropriate message
-//     if (users.length === 0) {
-//       return res.status(404).json({ message: 'No other users found' });
-//     }
-
-//     // Return the list of users
-//     res.status(200).json({
-//       message: 'Users found successfully',
-//       users: usersWithRatings,
-//     });
-//   } catch (error) {
-//     // Handle any errors that occur
-//     console.error('Error fetching users:', error);
-//     res.status(500).json({ message: 'Internal server error', error: error.message });
-//   }
-// };
-
 
 
 
@@ -1571,94 +1516,6 @@ export const getAllUsers1 = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
-
-// export const getAllUsers1 = async (req, res) => {
-//   try {
-//     // Extract logged-in user's details
-//     const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
-//     const loggedInUserGender = req.user.gender;
-
-//     // Pagination parameters
-//     const page = parseInt(req.query.page) || 1;
-//     const limit = 21;
-//     const skip = (page - 1) * limit;
-
-//     // Find users filtered by online status, average rating, and opposite gender
-//     const users = await User.aggregate([
-//       {
-//         $match: {
-//           _id: { $ne: loggedInUserId }, // Exclude the logged-in user
-//           UserStatus: { $nin: ["inActive", "Blocked", "InActive"] }, // Exclude users with these statuses
-//           gender: { $ne: loggedInUserGender }, // Opposite gender
-//           status: "Online", // Online users only
-//         },
-//       },
-//       // Lookup reviews for ratings
-//       {
-//         $lookup: {
-//           from: "reviews",
-//           localField: "_id",
-//           foreignField: "user",
-//           as: "ratings",
-//         },
-//       },
-//       // Compute average rating and review count
-//       {
-//         $addFields: {
-//           avgRating: { $avg: "$ratings.rating" },
-//           reviewCount: { $size: "$ratings" },
-//         },
-//       },
-//       // Sort users by average rating
-//       {
-//         $sort: {
-//           avgRating: -1, // Higher ratings prioritized
-//         },
-//       },
-//       // Pagination using $facet
-//       {
-//         $facet: {
-//           metadata: [{ $count: "totalUsers" }],
-//           users: [
-//             { $skip: skip },
-//             { $limit: limit },
-//             {
-//               $project: {
-//                 password: 0,
-//                 refreshToken: 0,
-//                 ratings: 0,
-//               },
-//             },
-//           ],
-//         },
-//       },
-//     ]);
-
-//     // Extract results
-//     const totalUsers = users[0]?.metadata[0]?.totalUsers || 0;
-//     const userList = users[0]?.users || [];
-
-//     // Handle no users found
-//     if (userList.length === 0) {
-//       return res.status(404).json({ message: "No users found" });
-//     }
-
-//     // Send response
-//     res.status(200).json({
-//       message: "Users fetched successfully",
-//       users: userList,
-//       pagination: {
-//         totalUsers,
-//         currentPage: page,
-//         totalPages: Math.ceil(totalUsers / limit),
-//         limit,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Error fetching users:", error);
-//     res.status(500).json({ message: "Internal server error", error: error.message });
-//   }
-// };
 
 
 
@@ -1934,68 +1791,6 @@ export const getBankDetails = async (req, res) => {
 
 
 
-// export const getChatsWithLatestMessages = async (req, res) => {
-//   try {
-//     const userId = req.user.id || req.user._id; // Get logged-in user ID
-//     const page = parseInt(req.query.page) || 1; // Get page number from query or default to 1
-//     const limit = parseInt(req.query.limit) || 20; // Get limit from query or default to 20
-//     const skip = (page - 1) * limit; // Calculate how many documents to skip
-
-//     // Fetch chats where the user is a participant, with pagination
-//     const chats = await Chat.find({ participants: userId })
-//       .populate({
-//         path: 'participants',
-//         model: User,
-//         select: '-password -refreshToken', // Exclude sensitive fields
-//       })
-//       .sort({ updatedAt: -1 }) // Sort chats by most recently updated
-//       .skip(skip) // Skip documents for pagination
-//       .limit(limit); // Limit number of documents
-
-//     // Deduplicate users within each chat and filter out the logged-in user
-//     const uniqueChats = [];
-//     const seenUserIds = new Set();
-
-//     chats.forEach(chat => {
-//       const filteredParticipants = chat.participants.filter(participant => {
-//         if (participant._id.toString() === userId.toString() || seenUserIds.has(participant._id.toString())) {
-//           return false; // Skip logged-in user and duplicate users
-//         }
-//         seenUserIds.add(participant._id.toString()); // Track unique user IDs
-//         return true;
-//       });
-
-//       if (filteredParticipants.length > 0) {
-//         uniqueChats.push({
-//           chatId: chat._id,
-//           lastMessage: chat.lastMessage || null, // Assuming there's a `lastMessage` field
-//           updatedAt: chat.updatedAt,
-//           participants: filteredParticipants.map(participant => {
-//             const { password, refreshToken, ...userDetails } = participant.toObject();
-//             return userDetails; // Return sanitized participant details
-//           }),
-//         });
-//       }
-//     });
-
-//     // Respond with formatted chat data
-//     res.json({
-//       chats: uniqueChats, // Only the relevant chat details
-//     });
-//   } catch (error) {
-//     console.error('Error fetching chats with latest messages:', error);
-//     res.status(500).json({ error: 'Failed to fetch chats' });
-//   }
-// };
-
-
-
-
-
-
-//Notification
-
-
 
 export const getChatsWithLatestMessages = async (req, res) => {
   try {
@@ -2037,7 +1832,7 @@ export const getChatsWithLatestMessages = async (req, res) => {
             try {
               // Fetch reviews for the participant
               const reviews = await Review.find({ user: participant._id });
-              console.log(reviews.rating)
+              // console.log(reviews.rating)
               const avgRating = reviews.length > 0
                 ? reviews.reduce((sum, review) => sum + (review.rating || 0), 0) / reviews.length
                 : 0; // Calculate average rating or default to 0
