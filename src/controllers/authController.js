@@ -22,6 +22,7 @@ import callLog from '.././models/Talk-to-friend/callLogModel.js'
 import NodeCache from 'node-cache';
 import { Chat } from "../models/chat.modal.js";
 const myCache = new NodeCache({ stdTTL: 3600, checkperiod: 120 })
+const cache = new NodeCache({ stdTTL: 600, checkperiod: 120 }); // Cache TTL: 10 minutes
 
 export const getCachedUsers = (req, res, next) => {
   try {
@@ -1873,181 +1874,116 @@ export const getBankDetails = async (req, res) => {
 // };
 
 
+
+
+
 export const getChatsWithLatestMessages = async (req, res) => {
   try {
-    // Validate and sanitize input
-    const userId = req.user.id || req.user._id;
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const userId = req.user.id || req.user._id; // Get logged-in user ID
+    const page = parseInt(req.query.page) || 1; // Page number
+    const limit = parseInt(req.query.limit) || 20; // Results per page
     const skip = (page - 1) * limit;
 
-    const chatsPipeline = [
-      // Match chats where the user is a participant
-      { 
-        $match: { 
-          participants: userId 
-        } 
-      },
-      // Sort by most recently updated
-      { 
-        $sort: { updatedAt: -1 } 
-      },
-      // Lookup last message details
-      {
-        $lookup: {
-          from: 'messages', // Assuming messages collection exists
-          localField: 'lastMessage',
-          foreignField: '_id',
-          as: 'lastMessageDetails',
-          pipeline: [
-            { 
-              $limit: 1 
-            }
-          ]
-        }
-      },
-      // Lookup participants and exclude sensitive fields
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'participants',
-          foreignField: '_id',
-          as: 'participantDetails',
-          pipeline: [
-            {
-              $project: {
-                name: 1,
-                email: 1,
-                avatar: 1,
-                _id: 1
-              }
-            }
-          ]
-        }
-      },
-      // Lookup reviews for calculating ratings
-      {
-        $lookup: {
-          from: 'reviews',
-          let: { participants: '$participants' },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $in: ['$user', '$$participants']
-                }
-              }
-            },
-            {
-              $group: {
-                _id: '$user',
-                averageRating: { $avg: '$rating' }
-              }
-            }
-          ],
-          as: 'userRatings'
-        }
-      },
-      // Pagination
-      { 
-        $skip: skip 
-      },
-      { 
-        $limit: limit 
-      },
-      // Process and enrich participants with ratings
-      {
-        $addFields: {
-          participants: {
-            $map: {
-              input: '$participantDetails',
-              as: 'participant',
-              in: {
-                $mergeObjects: [
-                  '$$participant',
-                  {
-                    averageRating: {
-                      $ifNull: [
-                        {
-                          $arrayElemAt: [
-                            {
-                              $filter: {
-                                input: '$userRatings',
-                                cond: { 
-                                  $eq: ['$$this._id', '$$participant._id'] 
-                                }
-                              }
-                            },
-                            0
-                          ]
-                        },
-                        { averageRating: 0 }
-                      ]
-                    }
-                  }
-                ]
-              }
-            }
-          }
-        }
-      },
-      // Final projection
-      {
-        $project: {
-          chatId: '$_id',
-          lastMessage: { 
-            $ifNull: [
-              { $arrayElemAt: ['$lastMessageDetails', 0] }, 
-              null 
-            ]
-          },
-          updatedAt: 1,
-          participants: {
-            $map: {
-              input: '$participants',
-              as: 'p',
-              in: {
-                _id: '$$p._id',
-                name: '$$p.name',
-                email: '$$p.email',
-                avatar: '$$p.avatar',
-                averageRating: '$$p.averageRating.averageRating'
-              }
-            }
-          }
-        }
-      }
-    ];
+    // Step 1: Check if cached data exists for this user and page
+    const cacheKey = `chats_${userId}_page_${page}_limit_${limit}`;
+    const cachedChats = cache.get(cacheKey);
+    if (cachedChats) {
+      return res.json(cachedChats); // Return cached response
+    }
 
-    // Execute aggregation with total count
-    const [results, totalCountResult] = await Promise.all([
-      Chat.aggregate(chatsPipeline),
-      Chat.aggregate([
-        { $match: { participants: userId } },
-        { $count: 'totalChats' }
-      ])
-    ]);
+    // Step 2: Fetch chats where the user is a participant with pagination
+    const chats = await Chat.find({ participants: userId })
+      .populate({
+        path: 'participants',
+        model: User,
+        select: '-password -refreshToken',
+      })
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
-    const totalChats = totalCountResult[0]?.totalChats || 0;
-    const totalPages = Math.ceil(totalChats / limit);
+    if (!chats.length) {
+      const emptyResponse = { chats: [], page, limit };
+      cache.set(cacheKey, emptyResponse); // Cache empty response
+      return res.json(emptyResponse);
+    }
 
-    res.json({
-      chats: results,
-      pagination: {
-        total: totalChats,
-        page,
-        limit,
-        totalPages
+    // Step 3: Collect unique participant IDs excluding the logged-in user
+    const participantIds = new Set();
+    chats.forEach((chat) => {
+      chat.participants.forEach((participant) => {
+        if (participant._id.toString() !== userId.toString()) {
+          participantIds.add(participant._id.toString());
+        }
+      });
+    });
+
+    // Step 4: Check if ratings are already cached for participants
+    const cachedRatings = {};
+    const uncachedIds = [];
+    participantIds.forEach((id) => {
+      const cachedRating = cache.get(`rating_${id}`);
+      if (cachedRating) {
+        cachedRatings[id] = cachedRating;
+      } else {
+        uncachedIds.push(id);
       }
     });
+
+    // Step 5: Fetch reviews for uncached IDs and calculate ratings
+    const userRatingsMap = { ...cachedRatings };
+
+    if (uncachedIds.length > 0) {
+      const reviews = await Review.find({ user: { $in: uncachedIds } });
+
+      reviews.forEach((review) => {
+        const userId = review.user.toString();
+        if (!userRatingsMap[userId]) {
+          userRatingsMap[userId] = { sum: 0, count: 0 };
+        }
+        userRatingsMap[userId].sum += review.rating || 0;
+        userRatingsMap[userId].count += 1;
+      });
+
+      // Cache calculated ratings for uncached IDs
+      uncachedIds.forEach((id) => {
+        const avgRating =
+          (userRatingsMap[id]?.sum || 0) / (userRatingsMap[id]?.count || 1);
+        cache.set(`rating_${id}`, avgRating, 600); // Cache for 10 minutes
+        userRatingsMap[id] = avgRating;
+      });
+    }
+
+    // Step 6: Format chat data
+    const formattedChats = chats.map((chat) => {
+      const participantsWithRatings = chat.participants
+        .filter((participant) => participant._id.toString() !== userId.toString())
+        .map((participant) => {
+          const avgRating = userRatingsMap[participant._id.toString()] || 0;
+          const { password, refreshToken, ...userDetails } = participant.toObject();
+          return { ...userDetails, averageRating: avgRating };
+        });
+
+      return {
+        chatId: chat._id,
+        lastMessage: chat.lastMessage || null,
+        updatedAt: chat.updatedAt,
+        participants: participantsWithRatings,
+      };
+    });
+
+    // Step 7: Cache the final response
+    const response = { chats: formattedChats, page, limit };
+    cache.set(cacheKey, response, 600); // Cache for 10 minutes
+
+    res.json(response);
   } catch (error) {
     console.error('Error fetching chats with latest messages:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch chats', 
-      details: error.message 
-    });
+    res.status(500).json({ error: 'Failed to fetch chats' });
   }
 };
+
+
 
 
 async function sendNotification(userId, title, message) {
