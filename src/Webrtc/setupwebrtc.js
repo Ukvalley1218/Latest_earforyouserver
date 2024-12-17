@@ -1104,6 +1104,7 @@ export const setupWebRTC = (io) => {
         }
       }
     });
+    
     socket.on('rejectCall', async ({ receiverId, callerId }) => {
       try {
         logger.info(`User ${receiverId} rejected call from User ${callerId}`);
