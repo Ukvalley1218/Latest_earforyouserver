@@ -185,165 +185,97 @@ const searchAvailableUsers = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, users, "Users fetched successfully"));
 });
 
-// const createOrGetAOneOnOneChat = asyncHandler(async (req, res) => {
-//   const { receiverId } = req.params;
-
-//   // Check if it's a valid receiver
-//   const receiver = await User.findById(receiverId);
-
-//   if (!receiver) {
-//     throw new ApiError(404, "Receiver does not exist");
-//   }
-//   console.log(req.user._id);
-//   // check if receiver is not the user who is requesting a chat
-//   if (receiver._id.toString() === req.user._id.toString()) {
-//     throw new ApiError(400, "You cannot chat with yourself");
-//   }
-//   // Check if a chat already exists between these two participants
-//   const existingChat = await Chat.findOne({
-//     participants: { $all: [req.user._id, receiverId] },
-//   });
-
-//   if (existingChat) {
-//     // If chat exists, return the existing chat
-//     return res.status(200).json({ data: existingChat });
-//   }
-//   const chat = await Chat.aggregate([
-//     {
-//       $match: {
-//         isGroupChat: false, // This controller is responsible for one on one chats
-//         // Also, filter chats with participants having receiver and logged in user only
-//         $and: [
-//           {
-//             participants: { $elemMatch: { $eq: req.user._id } },
-//           },
-//           {
-//             participants: {
-//               $elemMatch: { $eq: new mongoose.Types.ObjectId(receiverId) },
-//             },
-//           },
-//         ],
-//       },
-//     },
-//     ...chatCommonAggregation(),
-//   ]);
-
-//   if (chat.length) {
-//     // if we find the chat that means user already has created a chat
-//     return res
-//       .status(200)
-//       .json(new ApiResponse(200, chat[0], "Chat retrieved successfully"));
-//   }
-
-//   // if not we need to create a new one on one chat
-//   const newChatInstance = await Chat.create({
-//     name: "One on one chat",
-//     participants: [req.user._id, new mongoose.Types.ObjectId(receiverId)], // add receiver and logged in user as participants
-//     admin: req.user._id,
-//   });
-
-//   // structure the chat as per the common aggregation to keep the consistency
-//   const createdChat = await Chat.aggregate([
-//     {
-//       $match: {
-//         _id: newChatInstance._id,
-//       },
-//     },
-//     ...chatCommonAggregation(),
-//   ]);
-
-//   const payload = createdChat[0]; // store the aggregation result
-
-//   if (!payload) {
-//     throw new ApiError(500, "Internal server error");
-//   }
-
-//   // logic to emit socket event about the new chat added to the participants
-//   payload?.participants?.forEach((participant) => {
-//     if (participant._id.toString() === req.user._id.toString()) return; // don't emit the event for the logged in use as he is the one who is initiating the chat
-
-//     // emit event to other participants with new chat as a payload
-//     emitSocketEvent(
-//       req,
-//       participant._id?.toString(),
-//       ChatEventEnum.NEW_CHAT_EVENT,
-//       payload
-//     );
-//   });
-
-//   return res
-//     .status(201)
-//     .json(new ApiResponse(201, payload, "Chat retrieved successfully"));
-// });
-
 const createOrGetAOneOnOneChat = asyncHandler(async (req, res) => {
   const { receiverId } = req.params;
 
-  if (receiverId === req.user._id.toString()) {
-    throw new ApiError(400, "You cannot chat with yourself");
-  }
-
-  // Perform receiver validation and existing chat lookup in parallel
-  const [receiver, existingChat] = await Promise.all([
-    User.findById(receiverId),
-    Chat.findOne({
-      participants: { $all: [req.user._id, receiverId] },
-      isGroupChat: false,
-    }),
-  ]);
+  // Check if it's a valid receiver
+  const receiver = await User.findById(receiverId);
 
   if (!receiver) {
     throw new ApiError(404, "Receiver does not exist");
   }
-
-  if (existingChat) {
-    // Return the existing chat immediately
-    return res
-      .status(200)
-      .json(new ApiResponse(200, existingChat, "Chat retrieved successfully"));
+  console.log(req.user._id);
+  // check if receiver is not the user who is requesting a chat
+  if (receiver._id.toString() === req.user._id.toString()) {
+    throw new ApiError(400, "You cannot chat with yourself");
   }
-
-  // Create a new chat instance directly
-  const newChatInstance = await Chat.create({
-    name: "One on one chat",
-    participants: [req.user._id, new mongoose.Types.ObjectId(receiverId)],
-    admin: req.user._id,
-    isGroupChat: false,
+  // Check if a chat already exists between these two participants
+  const existingChat = await Chat.findOne({
+    participants: { $all: [req.user._id, receiverId] },
   });
 
-  // Emit socket events after response
-  const emitSocketEvents = async () => {
-    const createdChat = await Chat.aggregate([
-      { $match: { _id: newChatInstance._id } },
-      ...chatCommonAggregation(),
-    ]);
+  if (existingChat) {
+    // If chat exists, return the existing chat
+    return res.status(200).json({ data: existingChat });
+  }
+  const chat = await Chat.aggregate([
+    {
+      $match: {
+        isGroupChat: false, // This controller is responsible for one on one chats
+        // Also, filter chats with participants having receiver and logged in user only
+        $and: [
+          {
+            participants: { $elemMatch: { $eq: req.user._id } },
+          },
+          {
+            participants: {
+              $elemMatch: { $eq: new mongoose.Types.ObjectId(receiverId) },
+            },
+          },
+        ],
+      },
+    },
+    ...chatCommonAggregation(),
+  ]);
 
-    const payload = createdChat[0];
-    if (payload) {
-      payload?.participants?.forEach((participant) => {
-        if (participant._id.toString() === req.user._id.toString()) return;
+  if (chat.length) {
+    // if we find the chat that means user already has created a chat
+    return res
+      .status(200)
+      .json(new ApiResponse(200, chat[0], "Chat retrieved successfully"));
+  }
 
-        emitSocketEvent(
-          req,
-          participant._id?.toString(),
-          ChatEventEnum.NEW_CHAT_EVENT,
-          payload
-        );
-      });
-    }
-  };
+  // if not we need to create a new one on one chat
+  const newChatInstance = await Chat.create({
+    name: "One on one chat",
+    participants: [req.user._id, new mongoose.Types.ObjectId(receiverId)], // add receiver and logged in user as participants
+    admin: req.user._id,
+  });
 
-  // Run emitSocketEvents after response (non-blocking)
-  emitSocketEvents().catch((err) =>
-    console.error("Error emitting socket events:", err)
-  );
+  // structure the chat as per the common aggregation to keep the consistency
+  const createdChat = await Chat.aggregate([
+    {
+      $match: {
+        _id: newChatInstance._id,
+      },
+    },
+    ...chatCommonAggregation(),
+  ]);
+
+  const payload = createdChat[0]; // store the aggregation result
+
+  if (!payload) {
+    throw new ApiError(500, "Internal server error");
+  }
+
+  // logic to emit socket event about the new chat added to the participants
+  payload?.participants?.forEach((participant) => {
+    if (participant._id.toString() === req.user._id.toString()) return; // don't emit the event for the logged in use as he is the one who is initiating the chat
+
+    // emit event to other participants with new chat as a payload
+    emitSocketEvent(
+      req,
+      participant._id?.toString(),
+      ChatEventEnum.NEW_CHAT_EVENT,
+      payload
+    );
+  });
 
   return res
     .status(201)
-    .json(
-      new ApiResponse(201, newChatInstance, "Chat created successfully")
-    );
+    .json(new ApiResponse(201, payload, "Chat retrieved successfully"));
 });
+
 
 
 
