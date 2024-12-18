@@ -517,7 +517,6 @@ export const setupWebRTC = (io) => {
 
               // Cleanup timeout if the call is accepted, rejected, or ended
               const cleanupTimeout = () => {
-                clearTimeout(callTimeout);
                 logger.info(`Call timeout cleared for User ${receiverId}`);
               };
 
@@ -687,7 +686,7 @@ export const setupWebRTC = (io) => {
 
     // Handle call rejection
 
-  
+
 
     socket.on('missedcall', async ({ receiverId, callerId }) => {
       try {
