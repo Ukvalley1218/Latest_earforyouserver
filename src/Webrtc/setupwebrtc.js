@@ -908,203 +908,58 @@ export const setupWebRTC = (io) => {
 
 
     socket.on('missedcall', async ({ receiverId, callerId }) => {
-      // Input validation
-      if (!receiverId || !callerId) {
-        logger.error('Missing required parameters: receiverId or callerId');
-        return socket.emit('callError', {
-          message: 'Invalid call parameters'
-        });
-      }
-    
-      const CALL_TIMEOUT = 60000; // 1 minute in milliseconds
-      let autoEndCallTimeout;
-    
-      async function handleMissedCall() {
-        try {
-          // Fetch caller and receiver details
-          const [caller, receiver] = await Promise.all([
-            User.findById(callerId).select('username name profilePicture'),
-            User.findById(receiverId).select('username deviceToken notificationSettings -_id')
-          ]);
-    
-          if (!caller || !receiver) {
-            throw new Error('Caller or receiver not found');
-          }
-    
-          // Emit call ended event to both caller and receiver
-          if (users[callerId]) {
-            users[callerId].forEach((socketId) => {
-              socket.to(socketId).emit('callEnded', {
-                callerId,
-                receiverId,
-                reason: 'timeout'
-              });
-            });
-          }
-    
-          if (users[receiverId]) {
-            users[receiverId].forEach((socketId) => {
-              socket.to(socketId).emit('callEnded', {
-                callerId,
-                receiverId,
-                reason: 'timeout'
-              });
-            });
-          }
-    
-          // Clean up call status
-          if (activeCalls[callerId]) delete activeCalls[callerId];
-          if (activeCalls[receiverId]) delete activeCalls[receiverId];
-    
-          // Notify receiver through socket about missed call
-          if (users[receiverId]) {
-            const receiverSockets = users[receiverId];
-            if (Array.isArray(receiverSockets) && receiverSockets.length > 0) {
-              receiverSockets.forEach((socketId) => {
-                socket.to(socketId).emit('callMissed', {
-                  callerId,
-                  callerName: caller.name || caller.username,
-                  callerPicture: caller.profilePicture,
-                  timestamp: new Date()
-                });
-              });
-            }
-          }
-    
-          // Send push notification if enabled
-          if (receiver.deviceToken &&
-            (!receiver.notificationSettings || receiver.notificationSettings.missedCalls !== false)) {
-            try {
-              const notificationData = {
-                title: 'Missed Call',
-                body: `You missed a call from ${caller.name || caller.username}`,
-                data: {
-                  type: 'missed_call',
-                  callerId,
-                  callerName: caller.name || caller.username
-                }
-              };
-    
-              await sendNotification(receiver.deviceToken, notificationData);
-              logger.info(`Push notification sent to User ${receiverId} for missed call`);
-            } catch (notificationError) {
-              logger.error('Failed to send push notification:', {
-                error: notificationError.message,
-                receiverId,
-                deviceToken: receiver.deviceToken
-              });
-            }
-          }
-    
-          // Stop caller tune
-          socket.emit('stopCallerTune', {
-            callerId,
-            status: 'missed'
-          });
-    
-          // Create call log
-          const currentTime = new Date();
-          const callLog = await CallLog.create({
-            caller: callerId,
-            receiver: receiverId,
-            startTime: currentTime,
-            endTime: currentTime,
-            duration: 0,
-            status: 'Missed Call',
-            metadata: {
-              reason: 'timeout',
-              platform: socket.handshake?.headers?.platform || 'unknown',
-              notificationSent: Boolean(receiver.deviceToken),
-              callerName: caller.name || caller.username
-            }
-          });
-    
-          logger.info(`Call log created with ID: ${callLog._id}`);
-    
-        } catch (error) {
-          logger.error('Error in handleMissedCall:', {
-            error: error.message,
-            callerId,
-            receiverId,
-            stackTrace: error.stack
-          });
-          throw error;
-        }
-      }
-    
       try {
-        // Validate ObjectId format
-        if (!mongoose.Types.ObjectId.isValid(receiverId) ||
-          !mongoose.Types.ObjectId.isValid(callerId)) {
-          throw new Error('Invalid user ID format');
+        // Validate input
+        if (!receiverId || !callerId) {
+          return socket.emit('callError', { message: 'Invalid call parameters' });
         }
-    
-        // Set auto-cut timer
-        autoEndCallTimeout = setTimeout(async () => {
-          try {
-            if (activeCalls[callerId] || activeCalls[receiverId]) {
-              logger.info(`Auto-cutting call after timeout: Caller ${callerId} to Receiver ${receiverId}`);
-              
-              // Force end the call for both parties
-              await handleMissedCall();
-              
-              // Additional force disconnect logic
-              if (users[callerId]) {
-                users[callerId].forEach((socketId) => {
-                  socket.to(socketId).emit('forceDisconnect', {
-                    reason: 'Call timeout reached'
-                  });
-                });
-              }
-              
-              if (users[receiverId]) {
-                users[receiverId].forEach((socketId) => {
-                  socket.to(socketId).emit('forceDisconnect', {
-                    reason: 'Call timeout reached'
-                  });
-                });
-              }
-            }
-          } catch (error) {
-            logger.error('Error in auto-end call handler:', {
-              error: error.message,
-              callerId,
-              receiverId,
-              stackTrace: error.stack
-            });
-          }
-        }, CALL_TIMEOUT);
-    
-        logger.info(`User ${receiverId} missed call from User ${callerId}`);
-        await handleMissedCall();
-        clearTimeout(autoEndCallTimeout);
-    
+
+        // Fetch user details
+        const caller = await User.findById(callerId).select('username name profilePicture');
+        const receiver = await User.findById(receiverId).select('username deviceToken notificationSettings -_id');
+
+        if (!caller || !receiver) {
+          return socket.emit('callError', { message: 'Caller or receiver not found' });
+        }
+
+        // Notify receiver
+        users[receiverId]?.forEach((socketId) => {
+          socket.to(socketId).emit('callMissed', {
+            callerId,
+            callerName: caller.name || caller.username,
+            callerPicture: caller.profilePicture,
+            timestamp: new Date(),
+          });
+        });
+
+        // Send push notification
+        if (receiver.deviceToken && receiver.notificationSettings?.missedCalls !== false) {
+          await sendNotification(
+            receiverId,
+            'Missed Call',
+            `You missed a call from ${caller.name || caller.username}`,
+            'missed_call',
+            receiverId,
+            caller.name || caller.username,
+            caller.profilePicture
+          );
+        }
+
+        // Log missed call
+        await CallLog.create({
+          caller: callerId,
+          receiver: receiverId,
+          startTime: new Date(),
+          endTime: new Date(),
+          duration: 0,
+          status: 'missed',
+        });
       } catch (error) {
-        if (autoEndCallTimeout) {
-          clearTimeout(autoEndCallTimeout);
-        }
-        logger.error('Error in missedcall handler:', {
-          error: error.message,
-          callerId,
-          receiverId,
-          stackTrace: error.stack
-        });
-    
-        socket.emit('callError', {
-          message: 'Failed to process missed call',
-          details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-    
-        // Cleanup remaining call states
-        try {
-          if (activeCalls[callerId]) delete activeCalls[callerId];
-          if (activeCalls[receiverId]) delete activeCalls[receiverId];
-        } catch (cleanupError) {
-          logger.error('Error during cleanup:', cleanupError);
-        }
+        socket.emit('callError', { message: 'Failed to process missed call' });
       }
     });
-    
+
+
     socket.on('rejectCall', async ({ receiverId, callerId }) => {
       try {
         logger.info(`User ${receiverId} rejected call from User ${callerId}`);
@@ -1152,17 +1007,17 @@ export const setupWebRTC = (io) => {
     });
 
 
-      // getAllUsersSocket recent call
+    // getAllUsersSocket recent call
     // const getAllUsersSocket = async (socket) => {
     //   socket.on('getAllUsers', async (data) => {
     //     try {
     //       const { userId, gender, page = 1 } = data;
-    
+
     //       const loggedInUserId = new mongoose.Types.ObjectId(userId);
     //       const loggedInUserGender = gender;
     //       const limit = 31;
     //       const skip = (page - 1) * limit;
-    
+
     //       // Mongoose Aggregation Pipeline
     //       const pipeline = [
     //         {
@@ -1233,10 +1088,10 @@ export const setupWebRTC = (io) => {
     //           },
     //         },
     //       ];
-    
+
     //       // Execute the aggregation pipeline
     //       const users = await User.aggregate(pipeline);
-    
+
     //       if (users.length === 0) {
     //         return socket.emit('usersResponse', {
     //           message: 'No users found',
@@ -1249,13 +1104,13 @@ export const setupWebRTC = (io) => {
     //           },
     //         });
     //       }
-    
+
     //       // Count total users for pagination metadata
     //       const totalUsers = await User.countDocuments({
     //         _id: { $ne: loggedInUserId },
     //         UserStatus: { $nin: ['inActive', 'Blocked', 'InActive'] },
     //       });
-    
+
     //       // Emit the response with sorted users and pagination details
     //       socket.emit('usersResponse', {
     //         message: 'Users fetched successfully',
@@ -1276,7 +1131,7 @@ export const setupWebRTC = (io) => {
     //     }
     //   });
     // };
-    
+
 
     socket.on('endCall', async ({ receiverId, callerId }) => {
       try {

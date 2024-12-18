@@ -8,7 +8,10 @@ import { ApiError } from "../../../src/utils/ApiError.js";
 import { ApiResponse } from "../../../src/utils/ApiResponse.js";
 import { asyncHandler } from "../../../src/utils/asyncHandler.js";
 import { removeLocalFile } from "../../../src/utils/helpers.js";
+import NodeCache from 'node-cache';
 
+const ITEMS_PER_PAGE = 20;
+const cache = new NodeCache({ stdTTL: 600, checkperiod: 120 }); // Cache TTL: 10 minutes
 
 /**
  * @description Marks a message as read and updates the seen status
@@ -130,6 +133,7 @@ const chatCommonAggregation = () => {
  * @param {string} chatId
  * @description utility function responsible for removing all the messages and file attachments attached to the deleted chat
  */
+
 const deleteCascadeChatMessages = async (chatId) => {
   // fetch the messages associated with the chat to remove
   const messages = await ChatMessage.find({
@@ -337,55 +341,164 @@ const deleteOneOnOneChat = asyncHandler(async (req, res) => {
 //       new ApiResponse(200, chats || [], "User chats fetched successfully!")
 //     );
 // });
+
+
+// const getAllChats = asyncHandler(async (req, res) => {
+//   const chats = await Chat.aggregate([
+//     {
+//       $match: {
+//         participants: { $elemMatch: { $eq: req.user._id } }, // Match chats with the logged-in user as a participant
+//       },
+//     },
+//     {
+//       $lookup: {
+//         from: "messages", // Assuming messages are stored in a separate collection
+//         localField: "_id", // Chat ID
+//         foreignField: "chatId", // Corresponding chat ID in the messages collection
+//         as: "messages",
+//         pipeline: [
+//           { $sort: { createdAt: -1 } }, // Sort messages by creation time in descending order
+//           { $limit: 1 }, // Fetch only the most recent message
+//         ],
+//       },
+//     },
+//     {
+//       $addFields: {
+//         lastMessage: { $arrayElemAt: ["$messages", 0] }, // Extract the most recent message
+//       },
+//     },
+//     {
+//       $project: {
+//         messages: 0, // Exclude the `messages` field as it's no longer needed
+//       },
+//     },
+//     {
+//       $sort: {
+//         updatedAt: -1, // Sort chats by update time
+//       },
+//     },
+//     ...chatCommonAggregation(), // Include your common aggregation steps if necessary
+//   ]);
+
+//   return res
+//     .status(200)
+//     .json(
+//       new ApiResponse(200, chats || [], "User chats fetched successfully!")
+//     );
+// });
+
+
+
+
 const getAllChats = asyncHandler(async (req, res) => {
-  const chats = await Chat.aggregate([
-    {
-      $match: {
-        participants: { $elemMatch: { $eq: req.user._id } }, // Match chats with the logged-in user as a participant
+  const page = parseInt(req.query.page || 1);
+  const limit = parseInt(req.query.limit || ITEMS_PER_PAGE);
+  const skip = (page - 1) * limit;
+  
+  // Generate cache key based on user ID and pagination parameters
+  const cacheKey = `chats_${req.user._id}_${page}_${limit}`;
+  
+  // Try to get data from cache first
+  const cachedData = cache.get(cacheKey);
+  if (cachedData) {
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(200, cachedData, "User chats fetched successfully (from cache)!")
+      );
+  }
+
+  // If not in cache, fetch from database
+  const [chats, totalCount] = await Promise.all([
+    Chat.aggregate([
+      {
+        $match: {
+          participants: { $elemMatch: { $eq: req.user._id } },
+        },
       },
-    },
-    {
-      $lookup: {
-        from: "messages", // Assuming messages are stored in a separate collection
-        localField: "_id", // Chat ID
-        foreignField: "chatId", // Corresponding chat ID in the messages collection
-        as: "messages",
-        pipeline: [
-          { $sort: { createdAt: -1 } }, // Sort messages by creation time in descending order
-          { $limit: 1 }, // Fetch only the most recent message
-        ],
+      {
+        $lookup: {
+          from: "messages",
+          localField: "_id",
+          foreignField: "chatId",
+          as: "messages",
+          pipeline: [
+            { $sort: { createdAt: -1 } },
+            { $limit: 1 },
+          ],
+        },
       },
-    },
-    {
-      $addFields: {
-        lastMessage: { $arrayElemAt: ["$messages", 0] }, // Extract the most recent message
+      {
+        $addFields: {
+          lastMessage: { $arrayElemAt: ["$messages", 0] },
+        },
       },
-    },
-    {
-      $project: {
-        messages: 0, // Exclude the `messages` field as it's no longer needed
+      {
+        $project: {
+          messages: 0,
+        },
       },
-    },
-    {
-      $sort: {
-        updatedAt: -1, // Sort chats by update time
+      {
+        $sort: {
+          updatedAt: -1,
+        },
       },
-    },
-    ...chatCommonAggregation(), // Include your common aggregation steps if necessary
+      ...chatCommonAggregation(),
+      {
+        $skip: skip
+      },
+      {
+        $limit: limit
+      }
+    ]),
+    
+    // Get total count for pagination
+    Chat.countDocuments({
+      participants: { $elemMatch: { $eq: req.user._id } }
+    })
   ]);
+
+  // Prepare pagination info
+  const paginationInfo = {
+    currentPage: page,
+    totalPages: Math.ceil(totalCount / limit),
+    totalItems: totalCount,
+    itemsPerPage: limit,
+    hasNextPage: page * limit < totalCount,
+    hasPrevPage: page > 1
+  };
+
+  // Prepare response data
+  const responseData = {
+    chats,
+    pagination: paginationInfo
+  };
+
+  // Store in cache
+  cache.set(cacheKey, responseData);
 
   return res
     .status(200)
     .json(
-      new ApiResponse(200, chats || [], "User chats fetched successfully!")
+      new ApiResponse(200, responseData, "User chats fetched successfully!")
     );
 });
+
+// Helper function to invalidate cache when chats are modified
+const invalidateChatsCache = (userId) => {
+  const keys = cache.keys();
+  const userCacheKeys = keys.filter(key => key.startsWith(`chats_${userId}`));
+  userCacheKeys.forEach(key => cache.del(key));
+};
+
+export {  };
 
 
 export {
   createOrGetAOneOnOneChat,
   deleteOneOnOneChat,
-  getAllChats,
   searchAvailableUsers,
-  markMessageAsRead
+  markMessageAsRead,
+  getAllChats, 
+  invalidateChatsCache
 };
