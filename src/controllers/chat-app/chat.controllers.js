@@ -344,155 +344,57 @@ const deleteOneOnOneChat = asyncHandler(async (req, res) => {
 // });
 
 
-// const getAllChats = asyncHandler(async (req, res) => {
-//   const chats = await Chat.aggregate([
-//     {
-//       $match: {
-//         participants: { $elemMatch: { $eq: req.user._id } }, // Match chats with the logged-in user as a participant
-//       },
-//     },
-//     {
-//       $lookup: {
-//         from: "messages", // Assuming messages are stored in a separate collection
-//         localField: "_id", // Chat ID
-//         foreignField: "chatId", // Corresponding chat ID in the messages collection
-//         as: "messages",
-//         pipeline: [
-//           { $sort: { createdAt: -1 } }, // Sort messages by creation time in descending order
-//           { $limit: 1 }, // Fetch only the most recent message
-//         ],
-//       },
-//     },
-//     {
-//       $addFields: {
-//         lastMessage: { $arrayElemAt: ["$messages", 0] }, // Extract the most recent message
-//       },
-//     },
-//     {
-//       $project: {
-//         messages: 0, // Exclude the `messages` field as it's no longer needed
-//       },
-//     },
-//     {
-//       $sort: {
-//         updatedAt: -1, // Sort chats by update time
-//       },
-//     },
-//     ...chatCommonAggregation(), // Include your common aggregation steps if necessary
-//   ]);
-
-//   return res
-//     .status(200)
-//     .json(
-//       new ApiResponse(200, chats || [], "User chats fetched successfully!")
-//     );
-// });
-
-
-
-
 const getAllChats = asyncHandler(async (req, res) => {
-  const page = parseInt(req.query.page || 1);
-  const limit = parseInt(req.query.limit || ITEMS_PER_PAGE);
-  const skip = (page - 1) * limit;
-  
-  // Generate cache key based on user ID and pagination parameters
-  const cacheKey = `chats_${req.user._id}_${page}_${limit}`;
-  
-  // Try to get data from cache first
-  const cachedData = cache.get(cacheKey);
-  if (cachedData) {
-    return res
-      .status(200)
-      .json(
-        new ApiResponse(200, cachedData, "User chats fetched successfully (from cache)!")
-      );
-  }
-
-  // If not in cache, fetch from database
-  const [chats, totalCount] = await Promise.all([
-    Chat.aggregate([
-      {
-        $match: {
-          participants: { $elemMatch: { $eq: req.user._id } },
-        },
+  const chats = await Chat.aggregate([
+    {
+      $match: {
+        participants: { $elemMatch: { $eq: req.user._id } }, // Match chats with the logged-in user as a participant
       },
-      {
-        $lookup: {
-          from: "messages",
-          localField: "_id",
-          foreignField: "chatId",
-          as: "messages",
-          pipeline: [
-            { $sort: { createdAt: -1 } },
-            { $limit: 1 },
-          ],
-        },
+    },
+    {
+      $lookup: {
+        from: "messages", // Assuming messages are stored in a separate collection
+        localField: "_id", // Chat ID
+        foreignField: "chatId", // Corresponding chat ID in the messages collection
+        as: "messages",
+        pipeline: [
+          { $sort: { createdAt: -1 } }, // Sort messages by creation time in descending order
+          { $limit: 1 }, // Fetch only the most recent message
+        ],
       },
-      {
-        $addFields: {
-          lastMessage: { $arrayElemAt: ["$messages", 0] },
-        },
+    },
+    {
+      $addFields: {
+        lastMessage: { $arrayElemAt: ["$messages", 0] }, // Extract the most recent message
       },
-      {
-        $project: {
-          messages: 0,
-        },
+    },
+    {
+      $project: {
+        messages: 0, // Exclude the `messages` field as it's no longer needed
       },
-      {
-        $sort: {
-          updatedAt: -1,
-        },
+    },
+    {
+      $sort: {
+        updatedAt: -1, // Sort chats by update time
       },
-      ...chatCommonAggregation(),
-      {
-        $skip: skip
-      },
-      {
-        $limit: limit
-      }
-    ]),
-    
-    // Get total count for pagination
-    Chat.countDocuments({
-      participants: { $elemMatch: { $eq: req.user._id } }
-    })
+    },
+    ...chatCommonAggregation(), // Include your common aggregation steps if necessary
   ]);
-
-  // Prepare pagination info
-  const paginationInfo = {
-    currentPage: page,
-    totalPages: Math.ceil(totalCount / limit),
-    totalItems: totalCount,
-    itemsPerPage: limit,
-    hasNextPage: page * limit < totalCount,
-    hasPrevPage: page > 1
-  };
-
-  // Prepare response data
-  const responseData = {
-    chats,
-    pagination: paginationInfo
-  };
-
-  // Store in cache
-  cache.set(cacheKey, responseData);
 
   return res
     .status(200)
     .json(
-      new ApiResponse(200, responseData, "User chats fetched successfully!")
+      new ApiResponse(200, chats || [], "User chats fetched successfully!")
     );
 });
 
-// Helper function to invalidate cache when chats are modified
-const invalidateChatsCache = (userId) => {
-  const keys = cache.keys();
-  const userCacheKeys = keys.filter(key => key.startsWith(`chats_${userId}`));
-  userCacheKeys.forEach(key => cache.del(key));
-};
 
-export {  };
+
+
+
+
+
+
 
 
 export {
