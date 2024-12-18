@@ -609,6 +609,42 @@ export const setupWebRTC = (io) => {
 
 
 
+
+    // socket.on('acceptCall', async ({ receiverId, callerId }) => {
+    //   try {
+    //     logger.info(`User ${receiverId} accepted call from User ${callerId}`);
+
+    //     // Store start time as a Date object
+    //     const callKey = `${receiverId}_${callerId}`;
+    //     logger.info(`callKey ${callKey}`);
+
+    //     callTimings[callKey] = {
+    //       startTime: new Date() // Start time as a Date object
+    //     };
+
+    //     // Notify the caller that the call has been accepted
+    //     if (users[callerId]) {
+    //       users[callerId].forEach((socketId) => {
+    //         socket.to(socketId).emit('callAccepted', {
+    //           receiverId,
+    //           socketId: socket.id
+    //         });
+    //         socket.to(socketId).emit('activeCall',{
+    //           callerId,
+    //           receiverId,
+    //           socketId:socket.id
+    //         }
+    //       });
+
+    //       // Stop the caller's tune after call acceptance
+    //       socket.emit('stopCallerTune', { callerId });
+    //     }
+    //   } catch (error) {
+    //     logger.error(`Error in acceptCall handler: ${error.message}`);
+    //     socket.emit('callError', { message: 'Failed to accept call' });
+    //   }
+    // });
+
     socket.on('acceptCall', async ({ receiverId, callerId }) => {
       try {
         logger.info(`User ${receiverId} accepted the call from User ${callerId}`);
@@ -677,7 +713,7 @@ export const setupWebRTC = (io) => {
 
     // Handle call rejection
 
-
+  
 
     socket.on('missedcall', async ({ receiverId, callerId }) => {
       try {
@@ -1218,12 +1254,15 @@ export const setupWebRTC = (io) => {
 
 
 
+
+
+
 async function sendNotification(userId, title, message, type, receiverId, senderName, senderAvatar) {
   try {
     // Fetch the user from the database
     const user = await User.findById(userId);
     if (!user || !user.deviceToken) {
-      console.error(`No device token found for user: ${userId}`);
+      console.error("No device token found for user:", userId);
       return;
     }
 
@@ -1237,74 +1276,26 @@ async function sendNotification(userId, title, message, type, receiverId, sender
       },
       data: {
         screen: 'incoming_Call', // Target screen
-        callId: userId, // Unique Call ID (e.g., userId or generated UUID)
-        type: type, // Type of call (e.g., video/audio)
-        receiverId: receiverId, // Receiver's ID
-        senderName: senderName, // Name of the sender
-        senderAvatar: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png', // Sender's avatar with fallback
+        params: JSON.stringify({
+          user_id: userId, // Include Call ID
+          type: type, // Type of call
+          agent_id: receiverId, // Receiver ID
+          username: senderName, // Sender name
+          imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png', // Sender avatar with default fallback
+        }),
+        // Add any additional parameters if needed
       },
       token: deviceToken,
-      android: {
-        priority: "high",
-      },
-      apns: {
-        headers: {
-          "apns-priority": "10",
-        },
-      },
     };
+    logger.info(`Push notification sent to User  in  notification  function`);
 
     // Send the notification
     const response = await admin.messaging().send(payload);
-    console.log(`Notification sent successfully to user ${userId}:`, response);
+    console.log("Notification sent successfully:", response);
   } catch (error) {
-    console.error(`Error sending notification to user ${userId}:`, error.message);
+    console.error("Error sending notification:", error);
   }
 }
-
-
-
-
-
-// async function sendNotification(userId, title, message, type, receiverId, senderName, senderAvatar) {
-//   try {
-//     // Fetch the user from the database
-//     const user = await User.findById(userId);
-//     if (!user || !user.deviceToken) {
-//       console.error("No device token found for user:", userId);
-//       return;
-//     }
-
-//     const deviceToken = user.deviceToken;
-
-//     // Construct the payload for FCM
-//     const payload = {
-//       notification: {
-//         title: title,
-//         body: message,
-//       },
-//       data: {
-//         screen: 'incoming_Call', // Target screen
-//         params: JSON.stringify({
-//           user_id: userId, // Include Call ID
-//           type: type, // Type of call
-//           agent_id: receiverId, // Receiver ID
-//           username: senderName, // Sender name
-//           imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png', // Sender avatar with default fallback
-//         }),
-//         // Add any additional parameters if needed
-//       },
-//       token: deviceToken,
-//     };
-//     logger.info(`Push notification sent to User  in  notification  function`);
-
-//     // Send the notification
-//     const response = await admin.messaging().send(payload);
-//     console.log("Notification sent successfully:", response);
-//   } catch (error) {
-//     console.error("Error sending notification:", error);
-//   }
-// }
 
 
 // async function sendMNotification(userId, title, message, type, receiverId, senderName, senderAvatar) {
