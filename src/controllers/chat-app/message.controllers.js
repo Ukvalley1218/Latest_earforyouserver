@@ -48,18 +48,22 @@ const chatMessageCommonAggregation = () => {
 
 const getAllMessages = asyncHandler(async (req, res) => {
   const { chatId } = req.params;
+  const { page = 1, limit = 20 } = req.query;
 
   const selectedChat = await Chat.findById(chatId);
-
   if (!selectedChat) {
     throw new ApiError(404, "Chat does not exist");
   }
 
-  // Only send messages if the logged in user is a part of the chat he is requesting messages of
+  // Ensure the logged-in user is a participant of the chat
   if (!selectedChat.participants?.includes(req.user?._id)) {
     throw new ApiError(400, "User is not a part of this chat");
   }
 
+  // Calculate skip value for pagination
+  const skip = (page - 1) * limit;
+
+  // Fetch paginated messages
   const messages = await ChatMessage.aggregate([
     {
       $match: {
@@ -69,17 +73,23 @@ const getAllMessages = asyncHandler(async (req, res) => {
     ...chatMessageCommonAggregation(),
     {
       $sort: {
-        createdAt: 1,
+        createdAt: -1, // Sort by latest messages
       },
+    },
+    {
+      $skip: skip, // Skip messages for pagination
+    },
+    {
+      $limit: parseInt(limit, 10), // Limit to 20 messages per page
     },
   ]);
 
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(200, messages || [], "Messages fetched successfully")
-    );
+  // Response
+  return res.status(200).json(
+    new ApiResponse(200, messages || [], "Messages fetched successfully")
+  );
 });
+
 
 
 const sendMessage = asyncHandler(async (req, res) => {
