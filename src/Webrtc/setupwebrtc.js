@@ -945,15 +945,32 @@ export const setupWebRTC = (io) => {
           );
         }
 
-        // Log missed call
-        await CallLog.create({
-          caller: callerId,
-          receiver: receiverId,
+        
+        // Log missed call for caller
+
+        const logForCaller = await CallLog.create({
+          caller: new mongoose.Types.ObjectId(callerId),
+          receiver: new mongoose.Types.ObjectId(receiverId),
           startTime: new Date(),
           endTime: new Date(),
           duration: 0,
           status: 'missed',
         });
+
+
+
+
+        // Log missed call for receiver
+        const logForReceiver = await CallLog.create({
+          caller: new mongoose.Types.ObjectId(receiverId),
+          receiver: new mongoose.Types.ObjectId(callerId),
+          startTime: new Date(),
+          endTime: new Date(),
+          duration: 0,
+          status: 'missed',
+        });
+
+        console.log('Missed call logs created:', { logForCaller, logForReceiver });
       } catch (error) {
         socket.emit('callError', { message: 'Failed to process missed call' });
       }
