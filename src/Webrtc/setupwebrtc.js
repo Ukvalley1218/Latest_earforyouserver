@@ -325,6 +325,7 @@ export const setupWebRTC = (io) => {
 
     // Initial call request
 
+
     // socket.on('call', async ({ callerId, receiverId }) => {
     //   try {
     //     logger.info(`User ${callerId} is calling User ${receiverId}`);
@@ -344,21 +345,21 @@ export const setupWebRTC = (io) => {
 
     //     if (!receiver) {
     //       socket.emit('receiverUnavailable', { receiverId });
-    //       logger.warn(`User ${receiverId} not found`);
+    //       logger.warn(`Receiver user ${receiverId} not found`);
     //       return;
     //     }
 
     //     if (!caller) {
     //       socket.emit('callerUnavailable', { callerId });
-    //       logger.warn(`User ${callerId} not found`);
+    //       logger.warn(`Caller user ${callerId} not found`);
     //       return;
     //     }
 
     //     // Initialize socket arrays if needed
-    //     if (!users[callerId]) users[callerId] = [];
-    //     if (!users[receiverId]) users[receiverId] = [];
+    //     users[callerId] = users[callerId] || [];
+    //     users[receiverId] = users[receiverId] || [];
 
-    //     // Add current socket to caller's sockets if not already present
+    //     // Add current socket to caller's list if not already present
     //     if (!users[callerId].includes(socket.id)) {
     //       users[callerId].push(socket.id);
     //     }
@@ -378,7 +379,7 @@ export const setupWebRTC = (io) => {
     //       // Send push notification if the receiver has a device token
     //       if (receiver.deviceToken) {
     //         const title = 'Incoming Call';
-    //         const message = `${caller.username} is calling you!`;
+    //         const message = `${caller.username || 'Unknown Caller'} is calling you!`;
     //         const type = 'incoming_Call';
     //         const senderName = caller.username || 'Unknown Caller';
     //         const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
@@ -387,6 +388,7 @@ export const setupWebRTC = (io) => {
     //         logger.info(`Push notification sent to User ${receiverId}`);
     //       }
     //     } else {
+    //       // Handle case where receiver is offline or unavailable
     //       if (receiver.deviceToken) {
     //         const title = 'Incoming Call';
     //         const message = `${caller.username || 'Unknown Caller'} is calling you!`;
@@ -395,11 +397,11 @@ export const setupWebRTC = (io) => {
     //         const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
     //         try {
-    //           // Initial notification
+    //           // Send initial notification
     //           await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
     //           logger.info(`Push notification sent to User ${receiverId}`);
 
-    //           // Retry after 30 seconds if still not connected
+    //           // Retry notification after 30 seconds if no response
     //           const callTimeout = setTimeout(async () => {
     //             try {
     //               await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
@@ -409,22 +411,15 @@ export const setupWebRTC = (io) => {
     //             }
     //           }, 30000); // 30 seconds
 
-    //           // Cleanup timeout if the call is accepted or rejected
-    //           socket.on('acceptCall', () => {
+    //           // Cleanup timeout if the call is accepted, rejected, or ended
+    //           const cleanupTimeout = () => {
     //             clearTimeout(callTimeout);
-    //             logger.info(`Call accepted by User ${receiverId}`);
-    //           });
+    //             logger.info(`Call timeout cleared for User ${receiverId}`);
+    //           };
 
-    //           socket.on('rejectCall', () => {
-    //             clearTimeout(callTimeout);
-    //             logger.info(`Call rejected by User ${receiverId}`);
-    //           });
-
-    //           socket.on('endCall', () => {
-    //             clearTimeout(callTimeout);
-    //             logger.info(`Call ended by User ${receiverId}`);
-    //           });
-
+    //           socket.on('acceptCall', cleanupTimeout);
+    //           socket.on('rejectCall', cleanupTimeout);
+    //           socket.on('endCall', cleanupTimeout);
     //         } catch (error) {
     //           logger.error(`Failed to send push notification to User ${receiverId}: ${error.message}`);
     //         }
@@ -432,145 +427,233 @@ export const setupWebRTC = (io) => {
     //         logger.warn(`No device token available for User ${receiverId}, skipping notification`);
     //       }
     //     }
-
     //   } catch (error) {
     //     logger.error(`Error in call handler: ${error.message}`);
     //     socket.emit('callError', { message: 'Failed to initiate call' });
     //   }
     // });
 
-    socket.on('call', async ({ callerId, receiverId }) => {
-      try {
-        logger.info(`User ${callerId} is calling User ${receiverId}`);
 
-        // Check if either user is already in a call
+    // Constants for timeouts and states
+    const NOTIFICATION_TIMEOUT = 30000; // 30 seconds
+    const callAttempts = new Map();
+    const CALL_STATES = {
+      PENDING: 'pending',
+      ACCEPTED: 'accepted',
+      REJECTED: 'rejected',
+      ENDED: 'ended'
+    };
+
+    // Track call attempts and notifications
+
+
+    // Helper to clean up call attempt
+    const cleanupCallAttempt = (callKey) => {
+      const attempt = callAttempts.get(callKey);
+      if (attempt?.timeoutId) {
+        clearTimeout(attempt.timeoutId);
+      }
+      callAttempts.delete(callKey);
+    };
+
+    // Optimized call handler
+    socket.on('call', async ({ callerId, receiverId }) => {
+      const callKey = `${callerId}_${receiverId}`;
+
+      try {
+        logger.info(`Call initiated`, { callerId, receiverId });
+
+        // Prevent duplicate call attempts
+        if (callAttempts.has(callKey)) {
+          socket.emit('callError', {
+            message: 'Call already in progress',
+            code: 'DUPLICATE_CALL'
+          });
+          return;
+        }
+
+        // Check active calls
         if (activeCalls[receiverId] || activeCalls[callerId]) {
           socket.emit('userBusy', { receiverId });
-          logger.warn(`User ${receiverId} or ${callerId} is already in a call`);
+          logger.warn(`Call blocked - user busy`, { callerId, receiverId });
           return;
         }
 
-        // Fetch user details
+        // Fetch users efficiently with projection
         const [receiver, caller] = await Promise.all([
-          User.findById(receiverId),
-          User.findById(callerId),
+          User.findById(receiverId).select('deviceToken username avatarUrl').lean(),
+          User.findById(callerId).select('username avatarUrl').lean()
         ]);
 
-        if (!receiver) {
-          socket.emit('receiverUnavailable', { receiverId });
-          logger.warn(`Receiver user ${receiverId} not found`);
+        if (!receiver || !caller) {
+          socket.emit(receiver ? 'callerUnavailable' : 'receiverUnavailable',
+            { callerId, receiverId });
+          logger.warn(`User not found`, { receiver: !!receiver, caller: !!caller });
           return;
         }
 
-        if (!caller) {
-          socket.emit('callerUnavailable', { callerId });
-          logger.warn(`Caller user ${callerId} not found`);
-          return;
-        }
+        // Initialize call attempt state
+        callAttempts.set(callKey, {
+          state: CALL_STATES.PENDING,
+          startTime: Date.now(),
+          notificationSent: false
+        });
 
         // Initialize socket arrays if needed
         users[callerId] = users[callerId] || [];
         users[receiverId] = users[receiverId] || [];
 
-        // Add current socket to caller's list if not already present
+        // Add current socket to caller's list if needed
         if (!users[callerId].includes(socket.id)) {
           users[callerId].push(socket.id);
         }
 
-        if (users[receiverId].length > 0) {
-          // Notify all receiver's sockets about the incoming call
-          users[receiverId].forEach((socketId) => {
-            socket.to(socketId).emit('incomingCall', {
-              callerId,
-              callerSocketId: socket.id, // Provide caller's socket ID
-            });
-          });
+        // Prepare notification payload
+        const notificationPayload = {
+          title: 'Incoming Call',
+          message: `${caller.username || 'Unknown Caller'} is calling you!`,
+          type: 'incoming_call',
+          data: {
+            callerId,
+            senderName: caller.username || 'Unknown Caller',
+            senderAvatar: caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png'
+          }
+        };
 
-          // Notify the caller to play caller tune
+        // Handle online users
+        if (users[receiverId].length > 0) {
+          // Notify receiver's sockets
+          const socketPromises = users[receiverId].map(socketId =>
+            new Promise(resolve => {
+              socket.to(socketId).timeout(5000).emit('incomingCall', {
+                callerId,
+                callerSocketId: socket.id
+              }, () => resolve());
+            })
+          );
+
+          // Wait for socket notifications with timeout
+          await Promise.race([
+            Promise.allSettled(socketPromises),
+            new Promise(resolve => setTimeout(resolve, 5000))
+          ]);
+
+          // Play caller tune
           socket.emit('playCallerTune', { callerId });
 
-          // Send push notification if the receiver has a device token
-          if (receiver.deviceToken) {
-            const title = 'Incoming Call';
-            const message = `${caller.username || 'Unknown Caller'} is calling you!`;
-            const type = 'incoming_Call';
-            const senderName = caller.username || 'Unknown Caller';
-            const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
-
-            await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
-            logger.info(`Push notification sent to User ${receiverId}`);
-          }
-        } else {
-          // Handle case where receiver is offline or unavailable
-          if (receiver.deviceToken) {
-            const title = 'Incoming Call';
-            const message = `${caller.username || 'Unknown Caller'} is calling you!`;
-            const type = 'incoming_Call';
-            const senderName = caller.username || 'Unknown Caller';
-            const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
-
+          // Send single notification if user has device token
+          if (receiver.deviceToken && !callAttempts.get(callKey)?.notificationSent) {
             try {
-              // Send initial notification
-              await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
-              logger.info(`Push notification sent to User ${receiverId}`);
+              await sendNotification(
+                receiverId,
+                notificationPayload.title,
+                notificationPayload.message,
+                notificationPayload.type,
+                notificationPayload.data
+              );
 
-              // Retry notification after 30 seconds if no response
-              const callTimeout = setTimeout(async () => {
-                try {
-                  await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
-                  logger.info(`Retry push notification sent to User ${receiverId}`);
-                } catch (retryError) {
-                  logger.error(`Retry push notification failed for User ${receiverId}: ${retryError.message}`);
-                }
-              }, 30000); // 30 seconds
-
-              // Cleanup timeout if the call is accepted, rejected, or ended
-              const cleanupTimeout = () => {
-                clearTimeout(callTimeout);
-                logger.info(`Call timeout cleared for User ${receiverId}`);
-              };
-
-              socket.on('acceptCall', cleanupTimeout);
-              socket.on('rejectCall', cleanupTimeout);
-              socket.on('endCall', cleanupTimeout);
+              const attempt = callAttempts.get(callKey);
+              if (attempt) {
+                attempt.notificationSent = true;
+                callAttempts.set(callKey, attempt);
+              }
             } catch (error) {
-              logger.error(`Failed to send push notification to User ${receiverId}: ${error.message}`);
+              logger.error(`Notification failed`, { error: error.message });
             }
-          } else {
-            logger.warn(`No device token available for User ${receiverId}, skipping notification`);
           }
         }
+        // Handle offline users
+        else if (receiver.deviceToken) {
+          try {
+            // Send single notification
+            await sendNotification(
+              receiverId,
+              notificationPayload.title,
+              notificationPayload.message,
+              notificationPayload.type,
+              notificationPayload.data
+            );
+
+            const attempt = callAttempts.get(callKey);
+            if (attempt) {
+              attempt.notificationSent = true;
+              callAttempts.set(callKey, attempt);
+            }
+
+            // Set single timeout for call attempt
+            const timeoutId = setTimeout(() => {
+              if (callAttempts.get(callKey)?.state === CALL_STATES.PENDING) {
+                socket.emit('callTimeout', { receiverId });
+                cleanupCallAttempt(callKey);
+              }
+            }, NOTIFICATION_TIMEOUT);
+
+            // Update attempt with timeout ID
+            callAttempts.set(callKey, {
+              ...callAttempts.get(callKey),
+              timeoutId
+            });
+
+          } catch (error) {
+            logger.error(`Notification failed`, { error: error.message });
+            socket.emit('callError', {
+              message: 'Failed to reach user',
+              code: 'NOTIFICATION_FAILED'
+            });
+            cleanupCallAttempt(callKey);
+          }
+        } else {
+          socket.emit('userUnavailable', { receiverId });
+          cleanupCallAttempt(callKey);
+        }
+
+        // Cleanup listeners for call state changes
+        const cleanup = () => {
+          cleanupCallAttempt(callKey);
+        };
+
+        socket.once('acceptCall', cleanup);
+        socket.once('rejectCall', cleanup);
+        socket.once('endCall', cleanup);
+
       } catch (error) {
-        logger.error(`Error in call handler: ${error.message}`);
-        socket.emit('callError', { message: 'Failed to initiate call' });
+        logger.error(`Call handler error`, {
+          error: error.message,
+          callerId,
+          receiverId
+        });
+        socket.emit('callError', {
+          message: 'Failed to initiate call',
+          code: 'SYSTEM_ERROR'
+        });
+        cleanupCallAttempt(callKey);
       }
     });
-
 
 
     // Handle WebRTC offer
-    socket.on('offer', async ({ offer, callerId, receiverId }) => {
-      try {
-        logger.info(`User ${callerId} sending offer to User ${receiverId}`);
+    // socket.on('offer', async ({ offer, callerId, receiverId }) => {
+    //   try {
+    //     logger.info(`User ${callerId} sending offer to User ${receiverId}`);
 
-        // Set active call status during WebRTC setup
-        activeCalls[callerId] = receiverId;
-        activeCalls[receiverId] = callerId;
+    //     // Set active call status during WebRTC setup
+    //     activeCalls[callerId] = receiverId;
+    //     activeCalls[receiverId] = callerId;
 
-        if (users[receiverId]) {
-          users[receiverId].forEach((socketId) => {
-            socket.to(socketId).emit('offer', { offer, callerId });
-          });
-          logger.info(`Offer sent to User ${receiverId}`);
-        } else {
-          socket.emit('userUnavailable', { receiverId });
-          logger.warn(`User ${receiverId} not found during offer`);
-        }
-      } catch (error) {
-        logger.error(`Error in offer handler: ${error.message}`);
-        socket.emit('callError', { message: 'Failed to process offer' });
-      }
-    });
+    //     if (users[receiverId]) {
+    //       users[receiverId].forEach((socketId) => {
+    //         socket.to(socketId).emit('offer', { offer, callerId });
+    //       });
+    //       logger.info(`Offer sent to User ${receiverId}`);
+    //     } else {
+    //       socket.emit('userUnavailable', { receiverId });
+    //       logger.warn(`User ${receiverId} not found during offer`);
+    //     }
+    //   } catch (error) {
+    //     logger.error(`Error in offer handler: ${error.message}`);
+    //     socket.emit('callError', { message: 'Failed to process offer' });
+    //   }
+    // });
 
     // Handle WebRTC answer
     socket.on('answer', ({ answer, receiverId, callerId }) => {
@@ -588,18 +671,284 @@ export const setupWebRTC = (io) => {
       }
     });
 
-    // Handle ICE candidates
-    socket.on('iceCandidate', ({ candidate, callerId, receiverId }) => {
-      try {
-        if (users[receiverId]) {
-          users[receiverId].forEach((socketId) => {
-            socket.to(socketId).emit('iceCandidate', { candidate, callerId });
-          });
+    // Handle ICE candidates offer
+    // socket.on('iceCandidate', ({ candidate, callerId, receiverId }) => {
+    //   try {
+    //     if (users[receiverId]) {
+    //       users[receiverId].forEach((socketId) => {
+    //         socket.to(socketId).emit('iceCandidate', { candidate, callerId });
+    //       });
+    //     }
+    //   } catch (error) {
+    //     logger.error(`Error in iceCandidate handler: ${error.message}`);
+    //   }
+    // });
+
+
+    const CONFIG = {
+      OFFER_TIMEOUT: 15000,     // 15 seconds max for offer
+      ICE_BATCH_SIZE: 8,        // Larger batch size for efficiency
+      ICE_BATCH_TIMEOUT: 200,   // Shorter timeout for faster processing
+      MAX_RETRIES: 2,           // Keep retries minimal
+      CLEANUP_INTERVAL: 30000,  // Cleanup every 30 seconds
+      MAX_OFFERS_PER_USER: 3,   // Limit concurrent offers per user
+      MAX_BATCH_AGE: 5000,     // Max age for ICE batch
+      RATE_LIMIT_WINDOW: 5000,  // 5 second window for rate limiting
+      RATE_LIMIT_MAX: 5         // Max offers per window
+    };
+
+    // Efficient state tracking with TTL
+    class TTLMap {
+      constructor(ttl) {
+        this.store = new Map();
+        this.ttl = ttl;
+      }
+
+      set(key, value) {
+        this.store.set(key, {
+          value,
+          timestamp: Date.now()
+        });
+      }
+
+      get(key) {
+        const item = this.store.get(key);
+        if (!item) return null;
+        if (Date.now() - item.timestamp > this.ttl) {
+          this.store.delete(key);
+          return null;
         }
+        return item.value;
+      }
+
+      has(key) {
+        return this.get(key) !== null;
+      }
+
+      delete(key) {
+        return this.store.delete(key);
+      }
+
+      cleanup() {
+        const now = Date.now();
+        for (const [key, item] of this.store.entries()) {
+          if (now - item.timestamp > this.ttl) {
+            this.store.delete(key);
+          }
+        }
+      }
+    }
+
+    // State management with automatic cleanup
+    const activeOffers = new TTLMap(CONFIG.OFFER_TIMEOUT);
+    const iceBatches = new TTLMap(CONFIG.MAX_BATCH_AGE);
+    const userOfferCounts = new Map();
+    const rateLimiter = new Map();
+
+    // Regular cleanup to prevent memory leaks
+    setInterval(() => {
+      activeOffers.cleanup();
+      iceBatches.cleanup();
+
+      // Cleanup rate limiter
+      const cutoff = Date.now() - CONFIG.RATE_LIMIT_WINDOW;
+      for (const [key, timestamps] of rateLimiter.entries()) {
+        rateLimiter.set(key, timestamps.filter(t => t > cutoff));
+        if (rateLimiter.get(key).length === 0) {
+          rateLimiter.delete(key);
+        }
+      }
+    }, CONFIG.CLEANUP_INTERVAL);
+
+    // Rate limiting function
+    const checkRateLimit = (userId) => {
+      const now = Date.now();
+      const timestamps = rateLimiter.get(userId) || [];
+      const recentAttempts = timestamps.filter(t => t > now - CONFIG.RATE_LIMIT_WINDOW);
+
+      if (recentAttempts.length >= CONFIG.RATE_LIMIT_MAX) {
+        return false;
+      }
+
+      rateLimiter.set(userId, [...recentAttempts, now]);
+      return true;
+    };
+
+    // Optimized offer handler
+    socket.on('offer', async ({ offer, callerId, receiverId }) => {
+      const offerKey = `${callerId}-${receiverId}`;
+
+      try {
+        // Rate limiting check
+        if (!checkRateLimit(callerId)) {
+          socket.emit('callError', {
+            message: 'Too many connection attempts. Please wait.',
+            code: 'RATE_LIMIT'
+          });
+          return;
+        }
+
+        // Check concurrent offers limit
+        const userOffers = userOfferCounts.get(callerId) || 0;
+        if (userOffers >= CONFIG.MAX_OFFERS_PER_USER) {
+          socket.emit('callError', {
+            message: 'Too many active calls',
+            code: 'MAX_CALLS'
+          });
+          return;
+        }
+
+        // Check if offer already being processed
+        if (activeOffers.has(offerKey)) {
+          return;
+        }
+
+        // Update user offer count
+        userOfferCounts.set(callerId, userOffers + 1);
+        activeOffers.set(offerKey, {
+          timestamp: Date.now(),
+          retryCount: 0
+        });
+
+        const sendOffer = async () => {
+          try {
+            if (!users[receiverId]) {
+              cleanup();
+              socket.emit('userUnavailable', { receiverId });
+              return;
+            }
+
+            const offerState = activeOffers.get(offerKey);
+            if (!offerState) return; // Offer expired
+
+            const offerPayload = {
+              offer,
+              callerId,
+              timestamp: Date.now(),
+              retryCount: offerState.retryCount
+            };
+
+            // Efficient socket emission with promise
+            await Promise.race(
+              users[receiverId].map(socketId =>
+                new Promise((resolve, reject) => {
+                  socket.to(socketId).timeout(5000).emit('offer', offerPayload, (err) => {
+                    if (err) reject(err);
+                    else resolve();
+                  });
+                })
+              )
+            );
+
+          } catch (error) {
+            const offerState = activeOffers.get(offerKey);
+            if (offerState && offerState.retryCount < CONFIG.MAX_RETRIES) {
+              offerState.retryCount++;
+              activeOffers.set(offerKey, offerState);
+              setTimeout(sendOffer, 2000);
+            } else {
+              cleanup();
+              socket.emit('callError', {
+                message: 'Failed to connect - please try again',
+                code: 'RETRY_FAILED'
+              });
+            }
+          }
+        };
+
+        const cleanup = () => {
+          activeOffers.delete(offerKey);
+          const currentOffers = userOfferCounts.get(callerId) || 0;
+          if (currentOffers > 0) {
+            userOfferCounts.set(callerId, currentOffers - 1);
+          }
+        };
+
+        await sendOffer();
+
       } catch (error) {
-        logger.error(`Error in iceCandidate handler: ${error.message}`);
+        logger.error(`Offer error: ${error.message}`);
+        socket.emit('callError', {
+          message: 'Failed to process offer',
+          code: 'SYSTEM_ERROR'
+        });
       }
     });
+
+    // Optimized ICE candidate handler
+    socket.on('iceCandidate', ({ candidate, callerId, receiverId }) => {
+      const offerKey = `${callerId}-${receiverId}`;
+
+      try {
+        // Validate active offer exists
+        if (!activeOffers.has(offerKey)) {
+          return; // Ignore ICE candidates for inactive offers
+        }
+
+        let batch = iceBatches.get(offerKey) || {
+          candidates: [],
+          timer: null,
+          lastSend: Date.now()
+        };
+
+        batch.candidates.push({
+          candidate,
+          timestamp: Date.now()
+        });
+
+        if (batch.timer) {
+          clearTimeout(batch.timer);
+        }
+
+        const sendBatch = async () => {
+          if (!users[receiverId] || batch.candidates.length === 0) return;
+
+          try {
+            const batchPayload = {
+              candidates: batch.candidates,
+              callerId,
+              timestamp: Date.now()
+            };
+
+            // Efficient parallel send with timeout
+            await Promise.race(
+              users[receiverId].map(socketId =>
+                new Promise((resolve, reject) => {
+                  socket.to(socketId).timeout(3000).emit('iceCandidateBatch', batchPayload, (err) => {
+                    if (err) reject(err);
+                    else resolve();
+                  });
+                })
+              )
+            );
+
+            batch.candidates = [];
+            batch.lastSend = Date.now();
+            iceBatches.set(offerKey, batch);
+
+          } catch (error) {
+            logger.warn(`ICE batch send failed: ${error.message}`);
+            // Don't retry - WebRTC can handle some ICE candidate loss
+            batch.candidates = [];
+          }
+        };
+
+        // Optimized batch sending logic
+        if (batch.candidates.length >= CONFIG.ICE_BATCH_SIZE ||
+          Date.now() - batch.lastSend >= CONFIG.ICE_BATCH_TIMEOUT) {
+          sendBatch();
+        } else {
+          batch.timer = setTimeout(sendBatch, CONFIG.ICE_BATCH_TIMEOUT);
+        }
+
+        iceBatches.set(offerKey, batch);
+
+      } catch (error) {
+        logger.error(`ICE error: ${error.message}`);
+      }
+    });
+
+
 
 
     // socket.on('acceptCall', async ({ receiverId, callerId }) => {
@@ -1153,59 +1502,147 @@ export const setupWebRTC = (io) => {
     // };
 
 
-    socket.on('endCall', async ({ receiverId, callerId }) => {
+    const cleanupCallResources = (callerId, receiverId) => {
+      const callerCallKey = `${callerId}_${receiverId}`;
+      const receiverCallKey = `${receiverId}_${callerId}`;
+
+      // Cleanup all call-related states
+      activeOffers.delete(`${callerId}-${receiverId}`);
+      iceBatches.delete(`${callerId}-${receiverId}`);
+      delete activeCalls[callerId];
+      delete activeCalls[receiverId];
+      delete callTimings[callerCallKey];
+      delete callTimings[receiverCallKey];
+
+      // Update user offer counts
+      const callerOffers = userOfferCounts.get(callerId) || 0;
+      if (callerOffers > 0) userOfferCounts.set(callerId, callerOffers - 1);
+
+      const receiverOffers = userOfferCounts.get(receiverId) || 0;
+      if (receiverOffers > 0) userOfferCounts.set(receiverId, receiverOffers - 1);
+    };
+
+    // Helper for saving call logs
+    const saveCallLog = async (callerId, receiverId, startTime, endTime) => {
       try {
-        logger.info(`Call ended between ${callerId} and ${receiverId}`);
+        const duration = Math.round((endTime - new Date(startTime)) / 1000);
 
-        // Check if the call is active
-        if (activeCalls[callerId] === receiverId || activeCalls[receiverId] === callerId) {
-          // Notify the other party about the call ending
-          if (users[receiverId]) {
-            users[receiverId].forEach((socketId) => {
-              socket.to(socketId).emit('callEnded', { callerId });
-              socket.to(socketId).emit('inactiveCall', {
-                callerId,
-                receiverId,
-                socketId: socket.id, // Include the initiating socket ID
-              });
-            });
-          }
-
-          // Calculate call duration
-          const callerCallKey = `${callerId}_${receiverId}`;
-          const receiverCallKey = `${receiverId}_${callerId}`;
-          const startTime = callTimings[callerCallKey]?.startTime || callTimings[receiverCallKey]?.startTime;
-
-          if (!startTime) {
-            logger.warn(`Start time not found for call between ${callerId} and ${receiverId}`);
-            return;
-          }
-
-          const endTime = new Date();
-          const duration = Math.round((endTime - new Date(startTime)) / 1000); // Duration in seconds
-
-          // Log the call with duration
-          await CallLog.create({
-            caller: new mongoose.Types.ObjectId(callerId),
-            receiver: new mongoose.Types.ObjectId(receiverId),
-            startTime: new Date(startTime),
-            endTime,
-            duration,
-            status: 'completed',
-          });
-
-          logger.info(`Call log saved for call between ${callerId} and ${receiverId}`);
-
-          // Clean up call-related data
-          delete activeCalls[callerId];
-          delete activeCalls[receiverId];
-          delete callTimings[callerCallKey];
-          delete callTimings[receiverCallKey];
-        } else {
-          logger.warn(`No active call found between ${callerId} and ${receiverId}`);
+        // Validate duration
+        if (duration < 0 || duration > 86400) { // Max 24 hours
+          throw new Error('Invalid call duration');
         }
+
+        await CallLog.create({
+          caller: new mongoose.Types.ObjectId(callerId),
+          receiver: new mongoose.Types.ObjectId(receiverId),
+          startTime: new Date(startTime),
+          endTime,
+          duration,
+          status: 'completed',
+        });
+
+        return true;
       } catch (error) {
-        logger.error(`Error in endCall handler: ${error.message}`);
+        logger.error(`Failed to save call log: ${error.message}`, {
+          callerId,
+          receiverId,
+          startTime,
+          endTime,
+          error: error.stack
+        });
+        return false;
+      }
+    };
+
+    // Improved endCall handler
+    socket.on('endCall', async ({ receiverId, callerId }) => {
+      const logContext = { callerId, receiverId, socketId: socket.id };
+
+      try {
+        logger.info('Call end requested', logContext);
+
+        // Validate parameters
+        if (!receiverId || !callerId) {
+          throw new Error('Missing required parameters');
+        }
+
+        // Check if call is active
+        const isActiveCall = activeCalls[callerId] === receiverId ||
+          activeCalls[receiverId] === callerId;
+
+        if (!isActiveCall) {
+          logger.warn('No active call found', logContext);
+          return;
+        }
+
+        // Get call timing information
+        const callerCallKey = `${callerId}_${receiverId}`;
+        const receiverCallKey = `${receiverId}_${callerId}`;
+        const callTiming = callTimings[callerCallKey] || callTimings[receiverCallKey];
+
+        if (!callTiming?.startTime) {
+          logger.warn('Call timing information not found', logContext);
+          cleanupCallResources(callerId, receiverId);
+          return;
+        }
+
+        // Send end call notifications in parallel
+        const notificationPromises = [];
+
+        if (users[receiverId]) {
+          users[receiverId].forEach((socketId) => {
+            const notifyPromise = new Promise((resolve) => {
+              socket.to(socketId).timeout(5000).emit('callEnded', {
+                callerId,
+                timestamp: Date.now()
+              }, () => resolve());
+            });
+
+            notificationPromises.push(notifyPromise);
+          });
+        }
+
+        // Wait for notifications with timeout
+        await Promise.race([
+          Promise.allSettled(notificationPromises),
+          new Promise(resolve => setTimeout(resolve, 5000))
+        ]);
+
+        // Save call log
+        const endTime = new Date();
+        const logSaved = await saveCallLog(
+          callerId,
+          receiverId,
+          callTiming.startTime,
+          endTime
+        );
+
+        if (!logSaved) {
+          logger.warn('Failed to save call log', logContext);
+        }
+
+        // Cleanup resources
+        cleanupCallResources(callerId, receiverId);
+
+        logger.info('Call ended successfully', {
+          ...logContext,
+          duration: Math.round((endTime - new Date(callTiming.startTime)) / 1000)
+        });
+
+      } catch (error) {
+        logger.error('Error in endCall handler', {
+          ...logContext,
+          error: error.stack
+        });
+
+        // Always attempt cleanup on error
+        cleanupCallResources(callerId, receiverId);
+
+        // Notify caller of error
+        socket.emit('callError', {
+          message: 'Failed to end call properly',
+          code: 'END_CALL_ERROR'
+        });
       }
     });
 
@@ -1368,6 +1805,8 @@ export const setupWebRTC = (io) => {
     socket.on('disconnect', async () => {
       logger.info(`Socket disconnected: ${socket.id}`);
       removeUserFromQueue(socket.id);
+      userOfferCounts.delete(userId);
+      rateLimiter.delete(userId);
       console.log('Current queue:', userQueue);
 
       let disconnectedUserId;
