@@ -8,10 +8,8 @@ import { ApiError } from "../../../src/utils/ApiError.js";
 import { ApiResponse } from "../../../src/utils/ApiResponse.js";
 import { asyncHandler } from "../../../src/utils/asyncHandler.js";
 import { removeLocalFile } from "../../../src/utils/helpers.js";
-import NodeCache from 'node-cache';
 
-const ITEMS_PER_PAGE = 20;
-const cache = new NodeCache({ stdTTL: 600, checkperiod: 120 }); // Cache TTL: 10 minutes
+
 
 /**
  * @description Marks a message as read and updates the seen status
@@ -403,5 +401,4 @@ export {
   searchAvailableUsers,
   markMessageAsRead,
   getAllChats, 
-  invalidateChatsCache
 };
