@@ -500,6 +500,7 @@ export const setupWebRTC = (io) => {
             await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
             logger.info(`Push notification sent to User ${receiverId}`);
           }
+
         } else {
           // Handle case where receiver is offline or unavailable
           if (receiver.deviceToken) {
@@ -513,16 +514,6 @@ export const setupWebRTC = (io) => {
               // Send initial notification
               await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
               logger.info(`Push notification sent to User ${receiverId}`);
-
-              // Retry notification after 30 seconds if no response
-              const callTimeout = setTimeout(async () => {
-                try {
-                  await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
-                  logger.info(`Retry push notification sent to User ${receiverId}`);
-                } catch (retryError) {
-                  logger.error(`Retry push notification failed for User ${receiverId}: ${retryError.message}`);
-                }
-              }, 30000); // 30 seconds
 
               // Cleanup timeout if the call is accepted, rejected, or ended
               const cleanupTimeout = () => {
@@ -600,13 +591,6 @@ export const setupWebRTC = (io) => {
         logger.error(`Error in iceCandidate handler: ${error.message}`);
       }
     });
-
-
-
-
-
-
-
 
 
 
@@ -700,16 +684,6 @@ export const setupWebRTC = (io) => {
         });
       }
     });
-
-
-
-
-
-
-
-
-
-
 
     // Handle call rejection
 
@@ -833,132 +807,6 @@ export const setupWebRTC = (io) => {
         socket.emit('callError', { message: 'Failed to reject call' });
       }
     });
-
-
-    // getAllUsersSocket recent call
-    // const getAllUsersSocket = async (socket) => {
-    //   socket.on('getAllUsers', async (data) => {
-    //     try {
-    //       const { userId, gender, page = 1 } = data;
-
-    //       const loggedInUserId = new mongoose.Types.ObjectId(userId);
-    //       const loggedInUserGender = gender;
-    //       const limit = 31;
-    //       const skip = (page - 1) * limit;
-
-    //       // Mongoose Aggregation Pipeline
-    //       const pipeline = [
-    //         {
-    //           $match: {
-    //             _id: { $ne: loggedInUserId }, // Exclude the logged-in user
-    //             UserStatus: { $nin: ['inActive', 'Blocked', 'InActive'] }, // Exclude specific statuses
-    //           },
-    //         },
-    //         {
-    //           $lookup: {
-    //             from: 'calllogs', // Reference to the CallLog collection
-    //             localField: '_id',
-    //             foreignField: 'receiver',
-    //             pipeline: [
-    //               {
-    //                 $match: { caller: loggedInUserId }, // Fetch calls involving the logged-in user
-    //               },
-    //               {
-    //                 $sort: { startTime: -1 }, // Sort by most recent calls
-    //               },
-    //               {
-    //                 $limit: 1, // Only take the most recent call
-    //               },
-    //             ],
-    //             as: 'recentCall',
-    //           },
-    //         },
-    //         {
-    //           $lookup: {
-    //             from: 'reviews', // Reference to the Review collection
-    //             localField: '_id',
-    //             foreignField: 'user',
-    //             as: 'ratings',
-    //           },
-    //         },
-    //         {
-    //           $addFields: {
-    //             avgRating: { $avg: '$ratings.rating' }, // Calculate average rating
-    //             reviewCount: { $size: '$ratings' }, // Count the number of reviews
-    //             isOppositeGender: {
-    //               $cond: { if: { $ne: ['$gender', loggedInUserGender] }, then: 1, else: 0 },
-    //             },
-    //             isOnline: { $cond: { if: { $eq: ['$status', 'Online'] }, then: 1, else: 0 } }, // Online status
-    //             lastCallTime: {
-    //               $cond: { if: { $gt: [{ $size: '$recentCall' }, 0] }, then: { $arrayElemAt: ['$recentCall.startTime', 0] }, else: null },
-    //             },
-    //           },
-    //         },
-    //         {
-    //           $sort: {
-    //             isOnline: -1, // Online users first
-    //             isOppositeGender: -1, // Opposite gender prioritization
-    //             lastCallTime: -1, // Most recent call first
-    //             avgRating: -1, // Higher ratings next
-    //           },
-    //         },
-    //         {
-    //           $skip: skip,
-    //         },
-    //         {
-    //           $limit: limit,
-    //         },
-    //         {
-    //           $project: {
-    //             password: 0,
-    //             refreshToken: 0,
-    //             ratings: 0, // Exclude sensitive fields and unnecessary data
-    //           },
-    //         },
-    //       ];
-
-    //       // Execute the aggregation pipeline
-    //       const users = await User.aggregate(pipeline);
-
-    //       if (users.length === 0) {
-    //         return socket.emit('usersResponse', {
-    //           message: 'No users found',
-    //           users: [],
-    //           pagination: {
-    //             totalUsers: 0,
-    //             currentPage: page,
-    //             totalPages: 0,
-    //             limit,
-    //           },
-    //         });
-    //       }
-
-    //       // Count total users for pagination metadata
-    //       const totalUsers = await User.countDocuments({
-    //         _id: { $ne: loggedInUserId },
-    //         UserStatus: { $nin: ['inActive', 'Blocked', 'InActive'] },
-    //       });
-
-    //       // Emit the response with sorted users and pagination details
-    //       socket.emit('usersResponse', {
-    //         message: 'Users fetched successfully',
-    //         users,
-    //         pagination: {
-    //           totalUsers,
-    //           currentPage: page,
-    //           totalPages: Math.ceil(totalUsers / limit),
-    //           limit,
-    //         },
-    //       });
-    //     } catch (error) {
-    //       console.error('Error fetching users:', error);
-    //       socket.emit('error', {
-    //         message: 'Internal server error',
-    //         error: error.message,
-    //       });
-    //     }
-    //   });
-    // };
 
 
     socket.on('endCall', async ({ receiverId, callerId }) => {
