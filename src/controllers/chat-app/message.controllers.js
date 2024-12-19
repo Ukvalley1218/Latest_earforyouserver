@@ -100,7 +100,7 @@ const sendMessage = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Message content or attachment is required");
   }
 
-  const selectedChat = await Chat.findById(chatId);
+  const selectedChat = await Chat.findOne(chatId);
 
   if (!selectedChat) {
     throw new ApiError(404, "Chat does not exist");
@@ -174,9 +174,9 @@ const sendMessage = asyncHandler(async (req, res) => {
       ChatEventEnum.MESSAGE_RECEIVED_EVENT,
       receivedMessage
     );
-    const notificationTitle = `💬 Hey, ${senderName} sent you a message! ✨`;
+    const notificationTitle = ` ${senderName} New Message! ✨`;
     const notificationMessage = content 
-      ? `📨 "${content}"` 
+      ? `${content}` 
       : '📎 You’ve got an attachment waiting for you! Tap to check it out!';
     await sendNotification(participant, notificationTitle, notificationMessage, chatId, message._id, sender._id, senderName, avatarUrl);
 

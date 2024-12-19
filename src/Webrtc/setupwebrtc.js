@@ -439,6 +439,7 @@ export const setupWebRTC = (io) => {
     //   }
     // });
 
+
     socket.on('call', async ({ callerId, receiverId }) => {
       try {
         logger.info(`User ${callerId} is calling User ${receiverId}`);
@@ -523,12 +524,14 @@ export const setupWebRTC = (io) => {
               socket.on('acceptCall', cleanupTimeout);
               socket.on('rejectCall', cleanupTimeout);
               socket.on('endCall', cleanupTimeout);
+
             } catch (error) {
               logger.error(`Failed to send push notification to User ${receiverId}: ${error.message}`);
             }
           } else {
             logger.warn(`No device token available for User ${receiverId}, skipping notification`);
           }
+          
         }
       } catch (error) {
         logger.error(`Error in call handler: ${error.message}`);
