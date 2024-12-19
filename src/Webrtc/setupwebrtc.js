@@ -1108,27 +1108,22 @@ async function sendNotification_call(userId, title, message, type, callerId, sen
       return;
     }
 
-    // Payload optimized for React Native
     const payload = {
       notification: {
-        title: title,
-        body: message,
-        android_channel_id: 'calls', // Android notification channel for calls
-        sound: 'ringtone.mp3', // Default React Native sound
+        title: title || "Incoming Voice Call",
+        body: message || `${senderName} is calling you`
       },
       data: {
-        // Essential data for React Native handling
         type: 'incoming_call',
-        callType: type, // 'audio' or 'video'
+        callType: 'voice', // Specifically set for voice calls
         callerId: callerId,
         callerName: senderName,
         callerAvatar: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png',
         timestamp: Date.now().toString(),
-        
-        // React Native specific navigation data
-        screen: 'incoming_Call', // Target screen
-        
-        // Additional call metadata as stringified JSON
+        screen: 'incoming_Call',
+        channelId: 'EarforYou123',
+        playSound: 'true',
+        priority: 'high',
         callData: JSON.stringify({
           callId: `${callerId}_${Date.now()}`,
           caller: {
@@ -1137,48 +1132,49 @@ async function sendNotification_call(userId, title, message, type, callerId, sen
             avatar: senderAvatar
           },
           recipientId: userId,
-          isVideoCall: type === 'video'
+          isVoiceCall: true, // Indicating this is a voice call
+          callType: 'voice'
         })
       },
       android: {
         priority: 'high',
-        ttl: 60 * 1000, // 1 minute
+        ttl: '60s',
         notification: {
-          channelId: 'calls',
+          channel_id: 'EarforYou123',
           priority: 'high',
-          sound: 'ringtone',
-          color: '#FF0000', // Notification icon color
-          importance: 'high',
-          visibility: 'public',
-          vibrationPattern: [0, 250, 250, 250], // Vibration pattern
+          default_sound: true,
+          notification_priority: 'PRIORITY_MAX',
+          visibility: 'PUBLIC'
         }
       },
       apns: {
         payload: {
           aps: {
-            sound: 'ringtone.caf',
-            category: 'CALL',
-            contentAvailable: true,
-            priority: 10,
-            badge: 1
+            alert: {
+              title: title || "Incoming Voice Call",
+              body: message || `${senderName} is calling you`
+            },
+            sound: 'default',
+            category: 'VOICE_CALL',
+            'content-available': 1,
+            priority: '10'
           }
         },
-          headers: {
+        headers: {
           'apns-push-type': 'background',
           'apns-priority': '10',
-          'apns-expiration': (Math.floor(Date.now() / 1000) + 60).toString() // Convert to string
+          'apns-expiration': (Math.floor(Date.now() / 1000) + 60).toString()
         }
       },
       token: user.deviceToken
     };
 
-    logger.info(`Sending React Native call notification to user ${userId}`);
+    logger.info(`Sending voice call notification to user ${userId}`);
     const response = await admin.messaging().send(payload);
-    logger.info(`Call notification sent successfully: ${response}`);
-
+    logger.info(`Voice call notification sent successfully: ${response}`);
     return response;
   } catch (error) {
-    logger.error(`Failed to send call notification: ${error.message}`);
+    logger.error(`Failed to send voice call notification: ${error.message}`);
     throw error;
   }
 }
