@@ -1192,56 +1192,65 @@ async function sendNotification(userId, title, message, type, receiverId, sender
 
     const deviceToken = user.deviceToken;
 
+    // Prepare the data payload
+    const notificationData = {
+      screen: 'incoming_Call',
+      user_id: userId,
+      type: type,
+      agent_id: receiverId,
+      username: senderName,
+      imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png',
+      timestamp: new Date().toISOString(),
+    };
+
     // Construct the notification payload
     const payload = {
+      token: deviceToken,
+      
       notification: {
         title: title || "Incoming Voice Call",
         body: message || `${senderName} is calling you`,
-        sound: 'default', // Ensure sound plays on both platforms
       },
+      
       data: {
+        ...notificationData,
+        click_action: 'FLUTTER_NOTIFICATION_CLICK', // For handling notification clicks
         screen: 'incoming_Call',
-        params: JSON.stringify({
-          user_id: userId,
-          type: type,
-          agent_id: receiverId,
-          username: senderName,
-          imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png',
-          timestamp: new Date().toISOString(), // Add timestamp for tracking
-        }),
       },
-      token: deviceToken,
-      // Enhanced iOS configuration
+      
+      // Android specific
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'voice_calls',
+          priority: 'max',
+          defaultSound: true,
+          defaultVibrate: true
+        }
+      },
+      
+      // iOS specific
       apns: {
+        headers: {
+          'apns-priority': '10',
+          'apns-push-type': 'alert',
+        },
         payload: {
           aps: {
             alert: {
               title: title || "Incoming Voice Call",
               body: message || `${senderName} is calling you`,
             },
-            category: 'VOICE_CALL',
-            'content-available': 1,
-            priority: '10',
-            // Add badge number if needed
+            sound: 'default',
             badge: 1,
+            category: 'VOICE_CALL',
+            'content-available': 1
           },
-        },
-        headers: {
-          'apns-push-type': 'alert',
-          'apns-priority': '10',  // Now a string
-          'apns-expiration': String(Math.floor(Date.now() / 1000) + 86400)  // Now a string
+          // Custom data for iOS
+          screen: 'incoming_Call',
+          data: notificationData
         }
-      },
-      // Add Android specific configuration
-      android: {
-        priority: 'high',
-        notification: {
-          channelId: 'voice_calls',
-          clickAction: 'FLUTTER_NOTIFICATION_CLICK',
-          sound: 'default',
-          priority: 'max',
-        },
-      },
+      }
     };
 
     // Log the notification attempt
@@ -1249,13 +1258,13 @@ async function sendNotification(userId, title, message, type, receiverId, sender
       message: 'Sending push notification',
       userId,
       type,
-      receiverId,
+      deviceToken, // Log token for debugging
       timestamp: new Date().toISOString(),
     });
 
-    // Send the notification and wait for response
+    // Send the notification
     const response = await admin.messaging().send(payload);
-
+    
     // Log successful delivery
     logger.info({
       message: 'Push notification sent successfully',
@@ -1279,10 +1288,30 @@ async function sendNotification(userId, title, message, type, receiverId, sender
       timestamp: new Date().toISOString(),
     });
 
-    // Re-throw error for handling by caller
     throw new Error(`Failed to send notification: ${error.message}`);
   }
 }
+
+// Example of React Native notification channel setup:
+/*
+// In your React Native app initialization:
+import PushNotification from 'react-native-push-notification';
+
+PushNotification.createChannel(
+  {
+    channelId: 'voice_calls', // Must match the channelId in the payload
+    channelName: 'Voice Calls',
+    channelDescription: 'Notifications for incoming voice calls',
+    playSound: true,
+    soundName: 'default',
+    importance: 4, // max importance
+    vibrate: true,
+  },
+  (created) => console.log(`Channel 'voice_calls' created: ${created}`)
+);
+*/
+
+
 
 
 
