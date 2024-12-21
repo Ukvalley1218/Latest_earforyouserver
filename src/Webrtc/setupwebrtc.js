@@ -1228,9 +1228,10 @@ async function sendNotification(userId, title, message, type, receiverId, sender
           },
         },
         headers: {
-          'apns-priority': '10',
-          'apns-expiration': Math.floor(Date.now() / 1000) + 86400, // 24 hour expiration
-        },
+          'apns-push-type': 'alert',
+          'apns-priority': '10',  // Now a string
+          'apns-expiration': String(Math.floor(Date.now() / 1000) + 86400)  // Now a string
+        }
       },
       // Add Android specific configuration
       android: {
@@ -1255,7 +1256,7 @@ async function sendNotification(userId, title, message, type, receiverId, sender
 
     // Send the notification and wait for response
     const response = await admin.messaging().send(payload);
-    
+
     // Log successful delivery
     logger.info({
       message: 'Push notification sent successfully',
