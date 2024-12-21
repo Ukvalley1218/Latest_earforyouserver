@@ -1196,21 +1196,7 @@ async function sendNotification(userId, title, message, type, receiverId, sender
           imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png', // Sender avatar with default fallback
         }),
         // Add any additional parameters if needed
-      }, apns: {
-        payload: {
-          aps: {
-            alert: {
-              title: title || "Incoming Voice Call",
-              body: message || `${senderName} is calling you`
-            },
-            sound: 'default',
-            category: 'VOICE_CALL',
-            'content-available': 1,
-            priority: '10'
-          }
-        },
-
-      },
+      }, 
 
 
       token: deviceToken,
