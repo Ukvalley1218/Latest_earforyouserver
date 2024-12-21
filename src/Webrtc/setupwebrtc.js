@@ -1219,7 +1219,6 @@ async function sendNotification(userId, title, message, type, receiverId, sender
               title: title || "Incoming Voice Call",
               body: message || `${senderName} is calling you`,
             },
-            sound: 'default',
             category: 'VOICE_CALL',
             'content-available': 1,
             priority: '10',
