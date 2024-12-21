@@ -439,7 +439,6 @@ export const setupWebRTC = (io) => {
     //   }
     // });
 
-
     socket.on('call', async ({ callerId, receiverId }) => {
       try {
         logger.info(`User ${callerId} is calling User ${receiverId}`);
@@ -498,7 +497,7 @@ export const setupWebRTC = (io) => {
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
-            await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
+            await sendNotification_call(receiverId, title, message, type, callerId, senderName, senderAvatar);
             logger.info(`Push notification sent to User ${receiverId}`);
           }
 
@@ -524,14 +523,12 @@ export const setupWebRTC = (io) => {
               socket.on('acceptCall', cleanupTimeout);
               socket.on('rejectCall', cleanupTimeout);
               socket.on('endCall', cleanupTimeout);
-
             } catch (error) {
               logger.error(`Failed to send push notification to User ${receiverId}: ${error.message}`);
             }
           } else {
             logger.warn(`No device token available for User ${receiverId}, skipping notification`);
           }
-          
         }
       } catch (error) {
         logger.error(`Error in call handler: ${error.message}`);
@@ -1103,8 +1100,77 @@ export const setupWebRTC = (io) => {
 };
 
 
+async function sendNotification_call(userId, title, message, type, callerId, senderName, senderAvatar) {
+  try {
+    const user = await User.findById(userId);
+    if (!user || !user.deviceToken) {
+      logger.error(`No device token found for user: ${userId}`);
+      return;
+    }
 
+    const payload = {
+      notification: {
+        title: title || "Incoming Voice Call",
+        body: message || `${senderName} is calling you`
+      },
+      data: {
+        screen: 'incoming_Call',
+        params: JSON.stringify({
+          user_id: userId,
+          type: 'voice',
+          agent_id: callerId,
+          username: senderName,
+          imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png',
+          timestamp: Date.now().toString(),
+          call_id: `${callerId}_${Date.now()}`,
+          channel_id: 'EarforYou123',
+          priority: 'high',
+          notification_type: 'call',
+          action_answer: 'Answer Call',
+          action_decline: 'Decline Call'
+        })
+      },
+      android: {
+        priority: 'high',
+        ttl: 60000,
+        notification: {
+          channel_id: 'EarforYou123',
+          priority: 'high',
+          default_sound: true,
+          notification_priority: 'PRIORITY_HIGH'
+        }
+      },
+      apns: {
+        payload: {
+          aps: {
+            alert: {
+              title: title || "Incoming Voice Call",
+              body: message || `${senderName} is calling you`
+            },
+            sound: 'default',
+            category: 'VOICE_CALL',
+            'content-available': 1,
+            priority: '10'
+          }
+        },
+        headers: {
+          'apns-push-type': 'background',
+          'apns-priority': '10',
+          'apns-expiration': (Math.floor(Date.now() / 1000) + 60).toString()
+        }
+      },
+      token: user.deviceToken
+    };
 
+    logger.info(`Sending voice call notification to user ${userId}`);
+    const response = await admin.messaging().send(payload);
+    logger.info(`Voice call notification sent successfully: ${response}`);
+    return response;
+  } catch (error) {
+    logger.error(`Failed to send voice call notification: ${error.message}`);
+    throw error;
+  }
+}
 
 
 async function sendNotification(userId, title, message, type, receiverId, senderName, senderAvatar) {
