@@ -1074,7 +1074,7 @@ export const setupWebRTC = (io) => {
               startTime: callStartTime,
               endTime,
               duration,
-              status: 'disconnected',
+              status: 'failed',
             });
           } catch (error) {
             logger.error(`Failed to log call for disconnected user ${disconnectedUserId}: ${error.message}`);
