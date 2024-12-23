@@ -100,8 +100,9 @@ const sendMessage = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Message content or attachment is required");
   }
 
-  const selectedChat = await Chat.findById(chatId);
+  // const selectedChat = await Chat.findById(chatId);
   // const selectedChat = await Chat.findOne(chatId);
+  const selectedChat = await Chat.findOne({ _id: chatId });
 
   if (!selectedChat) {
     throw new ApiError(404, "Chat does not exist");
