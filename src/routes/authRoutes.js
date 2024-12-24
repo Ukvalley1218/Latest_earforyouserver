@@ -67,6 +67,8 @@ router.get('/user/:userId', getUserById);
 // router.get('/users', protect, getAllUsers);
 router.get('/users', protect, getAllUsers1);
 
+router.get('/getAllUsers2', protect, getAllUsers2);
+
 router.get('/listener', protect, listener);
 
 router.post('/Category', protect, UserCategoryData);

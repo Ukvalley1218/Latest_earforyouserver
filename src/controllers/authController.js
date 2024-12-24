@@ -1305,7 +1305,6 @@ export const getAllUsers1 = async (req, res) => {
       return res.status(404).json({ message: "No users found" });
     }
 
-
     // Send response
     res.status(200).json({
       message: "Users fetched successfully",
@@ -1327,6 +1326,122 @@ export const getAllUsers1 = async (req, res) => {
 
 
 
+export const getAllUsers2 = async (req, res) => {
+  try {
+    const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
+    const loggedInUserGender = req.user.gender;
+    const page = parseInt(req.query.page) || 1;
+    const limit = 21;
+    const skip = (page - 1) * limit;
+
+    // Parallel queries for better performance
+    const [users, totalCount] = await Promise.all([
+      User.aggregate([
+        // Initial match to reduce documents early
+        {
+          $match: {
+            _id: { $ne: loggedInUserId },
+            UserStatus: { $nin: ["inActive", "Blocked", "InActive"] }
+          }
+        },
+        // Optimize lookup by only getting necessary fields
+        {
+          $lookup: {
+            from: "reviews",
+            let: { userId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ["$user", "$$userId"] }
+                }
+              },
+              {
+                $project: {
+                  rating: 1
+                }
+              }
+            ],
+            as: "ratings"
+          }
+        },
+        // Compute fields efficiently
+        {
+          $addFields: {
+            avgRating: {
+              $cond: {
+                if: { $eq: [{ $size: "$ratings" }, 0] },
+                then: 0,
+                else: { $avg: "$ratings.rating" }
+              }
+            },
+            reviewCount: { $size: "$ratings" },
+            sortScore: {
+              $add: [
+                { $cond: [{ $eq: ["$status", "Online"] }, 100000, 0] },
+                { $cond: [{ $ne: ["$gender", loggedInUserGender] }, 10000, 0] },
+                { $multiply: [{ $avg: "$ratings.rating" }, 100] }
+              ]
+            }
+          }
+        },
+        // Sort using computed sortScore
+        {
+          $sort: {
+            sortScore: -1
+          }
+        },
+        // Skip and limit for pagination
+        {
+          $skip: skip
+        },
+        {
+          $limit: limit
+        },
+        // Project only needed fields
+        {
+          $project: {
+            name: 1,
+            email: 1,
+            gender: 1,
+            status: 1,
+            UserStatus: 1,
+            profilePicture: 1,
+            avgRating: 1,
+            reviewCount: 1,
+            // Add other required fields here
+            sortScore: 0,
+            ratings: 0
+          }
+        }
+      ]),
+      
+      // Separate count query for better performance
+      User.countDocuments({
+        _id: { $ne: loggedInUserId },
+        UserStatus: { $nin: ["inActive", "Blocked", "InActive"] }
+      })
+    ]);
+
+    if (!users.length) {
+      return res.status(404).json({ message: "No users found" });
+    }
+
+    res.status(200).json({
+      message: "Users fetched successfully",
+      users,
+      pagination: {
+        totalUsers: totalCount,
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        limit
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
 
 
 
