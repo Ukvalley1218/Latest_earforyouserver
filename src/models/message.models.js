@@ -44,6 +44,13 @@ const chatMessageSchema = new Schema(
   { timestamps: true }
 );
 
+chatMessageSchema.index({ sender: 1, chat: 1 });
+
+// Index to optimize queries for unread messages in a chat
+chatMessageSchema.index({ chat: 1, isRead: 1 });
+
+// Index timestamps for sorting queries
+chatMessageSchema.index({ createdAt: -1 });
 export const ChatMessage = mongoose.model("ChatMessage", chatMessageSchema);
 
 

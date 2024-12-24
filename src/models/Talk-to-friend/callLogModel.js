@@ -34,6 +34,7 @@ const callLogSchema = new mongoose.Schema({
 });
 
 
+callLogSchema.index({ caller: 1, receiver: 1, startTime: -1 });
 
 const CallLog = mongoose.model('CallLog', callLogSchema);
 

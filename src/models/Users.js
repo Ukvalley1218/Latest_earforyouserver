@@ -59,6 +59,7 @@ const userSchema = new mongoose.Schema(
     gender: {
       type: String,
       enum: ['male', 'female', 'other'], // Enum for gender values
+      index:true,
 
     },
     Language: {
@@ -68,7 +69,8 @@ const userSchema = new mongoose.Schema(
     userCategory: {
       type: String,
       enum: ["Therapist", "Psychologist", "Profisnal_listner", 'User'],
-      default: 'User'
+      default: 'User',
+      index:true,
     },
     email: {
       type: String,
@@ -78,6 +80,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ['CALLER', 'RECEIVER'], // Define the enum values
       default: 'CALLER', // Set default value
+      index:true,
     },
     Bio: {
       type: [String],
@@ -110,13 +113,15 @@ const userSchema = new mongoose.Schema(
     UserStatus: {
       type: String,
       enum: ['Active', 'inActive', 'InActive', 'Blocked'],
-      default: 'inActive'
+      default: 'inActive',
+      index:true,
     },
 
     status: {
       type: String,
       enum: ["Online", "offline", "Busy"], // Allow only specific status values
       default: "offline", // Default t
+      index:true
     },
     bankDetails: {
       type: [bankDetailsSchema], // Array of bank details
@@ -128,6 +133,15 @@ const userSchema = new mongoose.Schema(
 );
 
 // Create a compound index for the phone field
+
+
+userSchema.index({ userType: 1, status: 1 }); // For finding online receivers
+userSchema.index({ userCategory: 1, UserStatus: 1 }); // For finding active professionals
+userSchema.index({ email: 1, phone: 1 }, { sparse: true }); // For user lookup by email or phone
+userSchema.index({ isValidUser: 1, UserStatus: 1 }); // For finding valid active users
+userSchema.index({ createdAt: -1 }); // For timestamp-based queries
+userSchema.index({ userType: 1, userCategory: 1, status: 1 }); // For complex filtering
+
 
 
 // Hash the password before saving

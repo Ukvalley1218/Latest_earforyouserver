@@ -37,4 +37,6 @@ const reviewSchema = new mongoose.Schema(
 );
 
 
+reviewSchema.index({ rating: 1 });
+
 export default mongoose.model("Review", reviewSchema);
