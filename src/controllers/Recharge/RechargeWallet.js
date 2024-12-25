@@ -334,13 +334,15 @@ export const validatePayment = async (req, res) => {
         rechargeMethod: "PhonePe",
         rechargeDate: new Date(),
         transactionId: merchantTransactionId,
-        ExpiryDate: new Date(Date.now() + validity * 24 * 60 * 60 * 1000),
-        validityDays:validityDays,
+        
+        // validityDays:validityDays,
       };
 
       const newBalance = wallet.balance + talkTime;
+      // const days=wallet.isvalidityDays+validityDays;
       console.log("newBalance",newBalance)
       wallet.balance = newBalance;
+      // wallet.isvalidityDays=days
       wallet.recharges.push(newRecharge);
 
       // Update the wallet balance and talk time

@@ -16,7 +16,13 @@ const walletSchema = new mongoose.Schema({
     required: true,
     default: 'inr',
   },
-
+  // isExpiryDate: {
+  //   type: Date,
+  //   required: false,
+  // },
+  // isvalidityDays:{
+  //   type:Date
+  // },
   recharges: [
     {
       amount: {
@@ -44,12 +50,11 @@ const walletSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
       },
-      ExpiryDate: {
-        type: Date
-      },
-      validityDays: {
-        type: Number
-      },
+     
+      // validityDays: {
+      //   type: Number
+      // },
+     
       transactionId: {
         type: String, // Unique transaction ID for tracking
         required: true,
@@ -71,6 +76,9 @@ const walletSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
       },
+      // isExpiredDate:{
+      //   type:Date,
+      // },
       callId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Call', // Reference to the call or session where the deduction happened
@@ -95,14 +103,14 @@ const walletSchema = new mongoose.Schema({
 });
 
 // Middleware to automatically calculate expirationDate and deduct minutes
-walletSchema.pre('save', function (next) {
-  this.recharges.forEach(recharge => {
-    if (recharge.validityDays && !recharge.ExpiryDate) {
-      recharge.ExpiryDate = new Date(Date.now() + recharge.validityDays * 24 * 60 * 60 * 1000);
-    }
-  });
-  next();
-});
+// walletSchema.pre('save', function (next) {
+//   this.recharges.forEach(recharge => {
+//     if (recharge.validityDays && !ExpiryDate) {
+//       recharge.ExpiryDate = new Date(Date.now() + recharge.validityDays * 24 * 60 * 60 * 1000);
+//     }
+//   });
+//   next();
+// });
 
 // Method to deduct from wallet balance and plan minutes
 walletSchema.methods.deductBalanceAndMinutes = async function (amount, minutes, planId) {
