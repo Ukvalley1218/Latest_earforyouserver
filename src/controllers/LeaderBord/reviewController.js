@@ -70,6 +70,7 @@ export const createReview = async (req, res) => {
 
     // Validate request body
     if (!userId || !reviewerId) {
+      console.log("User ID and Reviewer ID are required.");
       return res.status(400).json({ message: "User ID and Reviewer ID are required." });
     }
 
