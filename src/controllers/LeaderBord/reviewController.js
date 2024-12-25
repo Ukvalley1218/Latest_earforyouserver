@@ -70,7 +70,7 @@ export const createReview = async (req, res) => {
 
     // Validate request body
     if (!userId || !reviewerId) {
-      console.log("User ID and Reviewer ID are required.");
+      
       return res.status(400).json({ message: "User ID and Reviewer ID are required." });
     }
 
@@ -100,9 +100,7 @@ export const createReview = async (req, res) => {
           message: "Comment added.",
           review: existingReview,
         });
-      } else {
-        return res.status(400).json({ message: "Comment is required when no rating is provided." });
-      }
+      } 
     }
 
     // Create a new review if no existing review with a rating is found
