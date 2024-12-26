@@ -10,6 +10,7 @@ import { asyncHandler } from "../../../src/utils/asyncHandler.js";
 import { removeLocalFile } from "../../../src/utils/helpers.js";
 
 
+
 /**
  * @description Marks a message as read and updates the seen status
  * @route POST /api/v1/messages/:messageId/read
@@ -130,6 +131,7 @@ const chatCommonAggregation = () => {
  * @param {string} chatId
  * @description utility function responsible for removing all the messages and file attachments attached to the deleted chat
  */
+
 const deleteCascadeChatMessages = async (chatId) => {
   // fetch the messages associated with the chat to remove
   const messages = await ChatMessage.find({
@@ -274,6 +276,7 @@ const createOrGetAOneOnOneChat = asyncHandler(async (req, res) => {
 
 
 
+
 const deleteOneOnOneChat = asyncHandler(async (req, res) => {
   const { chatId } = req.params;
 
@@ -316,27 +319,7 @@ const deleteOneOnOneChat = asyncHandler(async (req, res) => {
 
 
 
-// const getAllChats = asyncHandler(async (req, res) => {
-//   const chats = await Chat.aggregate([
-//     {
-//       $match: {
-//         participants: { $elemMatch: { $eq: req.user._id } }, // get all chats that have logged in user as a participant
-//       },
-//     },
-//     {
-//       $sort: {
-//         updatedAt: -1,
-//       },
-//     },
-//     ...chatCommonAggregation(),
-//   ]);
 
-//   return res
-//     .status(200)
-//     .json(
-//       new ApiResponse(200, chats || [], "User chats fetched successfully!")
-//     );
-// });
 const getAllChats = asyncHandler(async (req, res) => {
   const chats = await Chat.aggregate([
     {
@@ -382,10 +365,18 @@ const getAllChats = asyncHandler(async (req, res) => {
 });
 
 
+
+
+
+
+
+
+
+
 export {
   createOrGetAOneOnOneChat,
   deleteOneOnOneChat,
-  getAllChats,
   searchAvailableUsers,
-  markMessageAsRead
+  markMessageAsRead,
+  getAllChats,
 };

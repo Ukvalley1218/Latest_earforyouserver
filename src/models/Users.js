@@ -2,6 +2,28 @@ import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
+const bankDetailsSchema = new mongoose.Schema({
+  bankName: {
+    type: String,
+    required: true,
+  },
+  accountNumber: {
+    type: String,
+    required: true,
+    unique: true, // Ensures account numbers are unique across all entries
+  },
+  ifscCode: {
+    type: String,
+    required: true,
+  },
+
+  accountHolderName: {
+    type: String,
+    required: true,
+  },
+
+});
+
 const userSchema = new mongoose.Schema(
   {
     avatarUrl: {
@@ -37,6 +59,7 @@ const userSchema = new mongoose.Schema(
     gender: {
       type: String,
       enum: ['male', 'female', 'other'], // Enum for gender values
+      index:true,
 
     },
     Language: {
@@ -46,7 +69,8 @@ const userSchema = new mongoose.Schema(
     userCategory: {
       type: String,
       enum: ["Therapist", "Psychologist", "Profisnal_listner", 'User'],
-      default: 'User'
+      default: 'User',
+      index:true,
     },
     email: {
       type: String,
@@ -56,15 +80,16 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ['CALLER', 'RECEIVER'], // Define the enum values
       default: 'CALLER', // Set default value
+      index:true,
     },
     Bio: {
       type: [String],
-      
+
     },
-    report:{
-      type:[String],
+    report: {
+      type: [String],
     },
-    
+
     password: {
       type: String,
       required: false,
@@ -87,20 +112,36 @@ const userSchema = new mongoose.Schema(
     },
     UserStatus: {
       type: String,
-      enum: ['Active', 'inActive','InActive', 'Blocked'],
-      default: 'inActive'
+      enum: ['Active', 'inActive', 'InActive', 'Blocked'],
+      default: 'inActive',
+      index:true,
     },
-   
+
     status: {
       type: String,
       enum: ["Online", "offline", "Busy"], // Allow only specific status values
       default: "offline", // Default t
-    }
+      index:true
+    },
+    bankDetails: {
+      type: [bankDetailsSchema], // Array of bank details
+      default: [], // Default to an empty array
+    },
+  
   },
   { timestamps: true }
 );
 
 // Create a compound index for the phone field
+
+
+userSchema.index({ userType: 1, status: 1 }); // For finding online receivers
+userSchema.index({ userCategory: 1, UserStatus: 1 }); // For finding active professionals
+userSchema.index({ email: 1, phone: 1 }, { sparse: true }); // For user lookup by email or phone
+userSchema.index({ isValidUser: 1, UserStatus: 1 }); // For finding valid active users
+userSchema.index({ createdAt: -1 }); // For timestamp-based queries
+userSchema.index({ userType: 1, userCategory: 1, status: 1 }); // For complex filtering
+
 
 
 // Hash the password before saving
@@ -155,6 +196,8 @@ userSchema.methods.generateRefreshToken = function () {
 
   );
 };
+
+
 
 // Exporting the User model
 const User = mongoose.models.User || mongoose.model('User', userSchema);

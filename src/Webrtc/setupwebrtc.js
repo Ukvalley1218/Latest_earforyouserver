@@ -4,7 +4,7 @@ import logger from '../logger/winston.logger.js';
 import User from '../models/Users.js';
 import Wallet from '../models/Wallet/Wallet.js'
 import admin from 'firebase-admin';
-
+// import { ChatMessage } from '../models/message.models.js';
 
 export const setupWebRTC = (io) => {
   // Store active users and their socket connections
@@ -497,9 +497,10 @@ export const setupWebRTC = (io) => {
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
-            await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
+            await sendNotification_call(receiverId, title, message, type, callerId, senderName, senderAvatar);
             logger.info(`Push notification sent to User ${receiverId}`);
           }
+
         } else {
           // Handle case where receiver is offline or unavailable
           if (receiver.deviceToken) {
@@ -514,19 +515,8 @@ export const setupWebRTC = (io) => {
               await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
               logger.info(`Push notification sent to User ${receiverId}`);
 
-              // Retry notification after 30 seconds if no response
-              const callTimeout = setTimeout(async () => {
-                try {
-                  await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
-                  logger.info(`Retry push notification sent to User ${receiverId}`);
-                } catch (retryError) {
-                  logger.error(`Retry push notification failed for User ${receiverId}: ${retryError.message}`);
-                }
-              }, 30000); // 30 seconds
-
               // Cleanup timeout if the call is accepted, rejected, or ended
               const cleanupTimeout = () => {
-                clearTimeout(callTimeout);
                 logger.info(`Call timeout cleared for User ${receiverId}`);
               };
 
@@ -588,18 +578,89 @@ export const setupWebRTC = (io) => {
       }
     });
 
-    // Handle ICE candidates
+    // Handle ICE candidates offer
+    // socket.on('iceCandidate', ({ candidate, callerId, receiverId }) => {
+    //   try {
+    //     if (users[receiverId]) {
+    //       users[receiverId].forEach((socketId) => {
+    //         socket.to(socketId).emit('iceCandidate', { candidate, callerId });
+    //       });
+    //     }
+    //     else{
+    //       socket.emit('error', { 
+    //         type: 'ICE_CANDIDATE_ERROR',
+    //         message: 'Receiver not found'
+    //       });
+    //     }
+    //   } catch (error) {
+    //     logger.error(`Error in iceCandidate handler: ${error.message}`);
+    //   }
+    // });
+
+
     socket.on('iceCandidate', ({ candidate, callerId, receiverId }) => {
       try {
-        if (users[receiverId]) {
-          users[receiverId].forEach((socketId) => {
-            socket.to(socketId).emit('iceCandidate', { candidate, callerId });
+        // Log incoming ICE candidate
+        logger.info('ICE candidate received', { callerId, receiverId });
+    
+        // Check if candidate exists
+        if (!candidate) {
+          logger.warn('Invalid ICE candidate received');
+          socket.emit('error', {
+            type: 'ICE_CANDIDATE_ERROR',
+            message: 'Invalid ICE candidate'
           });
+          return;
         }
+    
+        // Check if receiver exists in users
+        if (!users[receiverId]) {
+          logger.warn(`Receiver ${receiverId} not found in users`);
+          socket.emit('error', {
+            type: 'ICE_CANDIDATE_ERROR',
+            message: 'Receiver not found'
+          });
+          return;
+        }
+    
+        // Check if receiver has any socket connections
+        if (!Array.isArray(users[receiverId]) || users[receiverId].length === 0) {
+          logger.warn(`No active sockets for receiver ${receiverId}`);
+          socket.emit('error', {
+            type: 'ICE_CANDIDATE_ERROR',
+            message: 'Receiver not connected'
+          });
+          return;
+        }
+    
+        // Forward ICE candidate to all receiver's sockets
+        users[receiverId].forEach((socketId) => {
+          socket.to(socketId).emit('iceCandidate', { 
+            candidate, 
+            callerId,
+            timestamp: Date.now() 
+          });
+          logger.info(`ICE candidate forwarded`, { 
+            from: callerId, 
+            to: receiverId, 
+            socketId 
+          });
+        });
+    
       } catch (error) {
-        logger.error(`Error in iceCandidate handler: ${error.message}`);
+        logger.error('Error in iceCandidate handler:', {
+          error: error.message,
+          callerId,
+          receiverId
+        });
+        
+        socket.emit('error', {
+          type: 'ICE_CANDIDATE_ERROR',
+          message: 'Failed to process ICE candidate'
+        });
       }
     });
+    
 
 
     // socket.on('acceptCall', async ({ receiverId, callerId }) => {
@@ -693,218 +754,81 @@ export const setupWebRTC = (io) => {
       }
     });
 
-
-    // const cleanUpCallData = (callerId, receiverId, callKey) => {
-    //   delete activeCalls[callerId];
-    //   delete activeCalls[receiverId];
-
-    //   logger.info(`Cleaned up in-memory data for call: ${callKey}`);
-    // };
-
-    // // Socket.IO event for handling missed calls
-    // socket.on('missedcall', async ({ receiverId, callerId }) => {
-    //   try {
-    //     // Validate call parameters
-    //     validateCallParams(receiverId, callerId);
-    //     logger.info('callmissed From backend')
-    //     const [receiver, caller] = await Promise.all([
-    //       User.findById(receiverId),
-    //       User.findById(callerId),
-    //     ]);
-    //     // Mark the call as missed
-    //     await markCallAsMissed(callerId, receiverId);
-
-    //     // Clean up call-related data
-    //     cleanUpCallData(callerId, receiverId);
-
-    //                // Send push notification if the receiver has a device token
-    //       if (receiver.deviceToken) {
-    //         const title = 'MissCall';
-    //         const message = `${caller.username || 'Unknown Caller'}  you missed the call`;
-    //         const type = 'Miss_call';
-    //         const senderName = caller.username || 'Unknown Caller';
-    //         const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
-
-    //         await sendMNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
-    //         logger.info(`Push notification sent to User ${receiverId} missed call`);
-    //       }
-
-    //     // Acknowledge the missed call
-    //     socket.emit('callmissed', { receiverId, callerId }, () => {
-    //       logger.info('Missed call acknowledged', {
-    //         receiverId,
-    //         callerId
-    //       });
-    //     });
-    //   } catch (error) {
-    //     // Log and emit error
-    //     logger.error('Error handling missed call', {
-    //       error: error.message,
-    //       receiverId,
-    //       callerId
-    //     });
-
-    //     socket.emit('callError', {
-    //       message: error.message,
-    //       receiverId,
-    //       callerId
-    //     });
-    //   }
-    // });
-
-
-
-
-
-
-
     // Handle call rejection
 
+
+
     socket.on('missedcall', async ({ receiverId, callerId }) => {
-      // Input validation
-      if (!receiverId || !callerId) {
-        logger.error('Missing required parameters: receiverId or callerId');
-        return socket.emit('callError', {
-          message: 'Invalid call parameters'
-        });
-      }
-
-      const CALL_TIMEOUT = 60000; // 1 minute in milliseconds
-
-      // Set auto-cut timer
-      const autoEndCallTimeout = setTimeout(async () => {
-        try {
-          if (activeCalls[callerId] || activeCalls[receiverId]) {
-            logger.info(`Auto-cutting call after timeout: Caller ${callerId} to Receiver ${receiverId}`);
-            handleMissedCall();
-          }
-        } catch (error) {
-          logger.error('Error in auto-end call handler:', {
-            error: error.message,
-            callerId,
-            receiverId,
-            stackTrace: error.stack
-          });
-        }
-      }, CALL_TIMEOUT);
-
-      async function handleMissedCall() {
-        try {
-          // Fetch caller and receiver details
-          const [caller, receiver] = await Promise.all([
-            User.findById(callerId).select('username name profilePicture'),
-            User.findById(receiverId).select('username deviceToken notificationSettings')
-          ]);
-
-          if (!caller || !receiver) {
-            throw new Error('Caller or receiver not found');
-          }
-
-          // Clean up call status
-          if (activeCalls[callerId]) delete activeCalls[callerId];
-          if (activeCalls[receiverId]) delete activeCalls[receiverId];
-
-          // Notify receiver through socket
-          if (users[receiverId]) {
-            const receiverSockets = users[receiverId];
-            if (Array.isArray(receiverSockets) && receiverSockets.length > 0) {
-              receiverSockets.forEach((socketId) => {
-                socket.to(socketId).emit('callMissed', {
-                  callerId,
-                  callerName: caller.name || caller.username,
-                  callerPicture: caller.profilePicture,
-                  timestamp: new Date()
-                });
-              });
-            }
-          }
-
-          // Send push notification if enabled
-          if (receiver.deviceToken &&
-            (!receiver.notificationSettings || receiver.notificationSettings.missedCalls !== false)) {
-            try {
-              const notificationData = {
-                title: 'Missed Call',
-                body: `You missed a call from ${caller.name || caller.username}`,
-
-              };
-
-              await sendNotification(receiver.deviceToken, notificationData);
-              logger.info(`Push notification sent to User ${receiverId} for missed call`);
-            } catch (notificationError) {
-              logger.error('Failed to send push notification:', {
-                error: notificationError.message,
-                receiverId,
-                deviceToken: receiver.deviceToken
-              });
-            }
-          }
-
-          // Stop caller tune
-          socket.emit('stopCallerTune', {
-            callerId,
-            status: 'missed'
-          });
-
-          // Create call log
-          const currentTime = new Date();
-          const callLog = await CallLog.create({
-            caller: new mongoose.Types.ObjectId(callerId),
-            receiver: new mongoose.Types.ObjectId(receiverId),
-            startTime: currentTime,
-            endTime: currentTime,
-            duration: 0,
-            status: 'Missed Call',
-            metadata: {
-              reason: 'User unavailable',
-              platform: socket.handshake?.headers?.platform || 'unknown',
-              notificationSent: Boolean(receiver.deviceToken),
-              callerName: caller.name || caller.username
-            }
-          });
-
-          logger.info(`Call log created with ID: ${callLog._id}`);
-
-        } catch (error) {
-          throw error;
-        }
-      }
-
       try {
-        // Validate ObjectId format
-        if (!mongoose.Types.ObjectId.isValid(receiverId) ||
-          !mongoose.Types.ObjectId.isValid(callerId)) {
-          clearTimeout(autoEndCallTimeout);
-          throw new Error('Invalid user ID format');
+        // Validate input
+        if (!receiverId || !callerId) {
+          return socket.emit('callError', { message: 'Invalid call parameters' });
         }
 
-        logger.info(`User ${receiverId} missed call from User ${callerId}`);
-        await handleMissedCall();
-        clearTimeout(autoEndCallTimeout);
+        // Fetch user details
+        const caller = await User.findById(callerId).select('username name profilePicture');
+        const receiver = await User.findById(receiverId).select('username deviceToken notificationSettings -_id');
 
+        if (!caller || !receiver) {
+          return socket.emit('callError', { message: 'Caller or receiver not found' });
+        }
+
+        const callerName = caller.name || caller.username;
+
+        // Notify receiver via socket
+        const receiverSockets = users[receiverId];
+        if (receiverSockets?.length) {
+          // Send socket notification to all connected sockets for the receiver
+          receiverSockets.forEach((socketId) => {
+            socket.to(socketId).emit('callMissed', {
+              callerId,
+              callerName,
+              callerPicture: caller.profilePicture,
+              timestamp: new Date(),
+            });
+          });
+        }
+
+        // Send push notification (only once)
+        if (receiver.deviceToken && receiver.notificationSettings?.missedCalls !== false) {
+          await sendMNotification(
+            receiverId,
+            'Missed Call',
+            `You missed a call from ${callerName}`,
+            'missed_call',
+            receiverId,
+            callerName,
+            caller.profilePicture
+          );
+        }
+
+        // Log missed call for caller
+        const logForCaller = await CallLog.create({
+          caller: new mongoose.Types.ObjectId(callerId),
+          receiver: new mongoose.Types.ObjectId(receiverId),
+          startTime: new Date(),
+          endTime: new Date(),
+          duration: 0,
+          status: 'missed',
+        });
+
+        // Log missed call for receiver
+        const logForReceiver = await CallLog.create({
+          caller: new mongoose.Types.ObjectId(receiverId),
+          receiver: new mongoose.Types.ObjectId(callerId),
+          startTime: new Date(),
+          endTime: new Date(),
+          duration: 0,
+          status: 'missed',
+        });
+
+        console.log('Missed call logs created:', { logForCaller, logForReceiver });
       } catch (error) {
-        clearTimeout(autoEndCallTimeout);
-        logger.error('Error in missedcall handler:', {
-          error: error.message,
-          callerId,
-          receiverId,
-          stackTrace: error.stack
-        });
-
-        socket.emit('callError', {
-          message: 'Failed to process missed call',
-          details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
-
-        // Cleanup remaining call states
-        try {
-          if (activeCalls[callerId]) delete activeCalls[callerId];
-          if (activeCalls[receiverId]) delete activeCalls[receiverId];
-        } catch (cleanupError) {
-          logger.error('Error during cleanup:', cleanupError);
-        }
+        console.error('Error processing missed call:', error);
+        socket.emit('callError', { message: 'Failed to process missed call' });
       }
     });
+
 
 
     socket.on('rejectCall', async ({ receiverId, callerId }) => {
@@ -934,6 +858,19 @@ export const setupWebRTC = (io) => {
           duration: 0,
           status: 'rejected'
         });
+
+        // await ChatMessage.call.push({
+
+        //   caller: new mongoose.Types.ObjectId(callerId),
+        //   receiver: new mongoose.Types.ObjectId(receiverId),
+        //   startTime: new Date(),
+        //   endTime: new Date(),
+        //   duration: 0,
+        //   status: 'rejected'
+
+
+        // })
+
       } catch (error) {
         logger.error(`Error in rejectCall handler: ${error.message}`);
         socket.emit('callError', { message: 'Failed to reject call' });
@@ -941,62 +878,61 @@ export const setupWebRTC = (io) => {
     });
 
 
+    // socket.on('endCall', async ({ receiverId, callerId }) => {
+    //   try {
+    //     logger.info(`Call ended between ${callerId} and ${receiverId}`);
 
-    socket.on('endCall', async ({ receiverId, callerId }) => {
-      try {
-        logger.info(`Call ended between ${callerId} and ${receiverId}`);
+    //     // Check if the call is active
+    //     if (activeCalls[callerId] === receiverId || activeCalls[receiverId] === callerId) {
+    //       // Notify the other party about the call ending
+    //       if (users[receiverId]) {
+    //         users[receiverId].forEach((socketId) => {
+    //           socket.to(socketId).emit('callEnded', { callerId });
+    //           socket.to(socketId).emit('inactiveCall', {
+    //             callerId,
+    //             receiverId,
+    //             socketId: socket.id, // Include the initiating socket ID
+    //           });
+    //         });
+    //       }
 
-        // Check if the call is active
-        if (activeCalls[callerId] === receiverId || activeCalls[receiverId] === callerId) {
-          // Notify the other party about the call ending
-          if (users[receiverId]) {
-            users[receiverId].forEach((socketId) => {
-              socket.to(socketId).emit('callEnded', { callerId });
-              socket.to(socketId).emit('inactiveCall', {
-                callerId,
-                receiverId,
-                socketId: socket.id, // Include the initiating socket ID
-              });
-            });
-          }
+    //       // Calculate call duration
+    //       const callerCallKey = `${callerId}_${receiverId}`;
+    //       const receiverCallKey = `${receiverId}_${callerId}`;
+    //       const startTime = callTimings[callerCallKey]?.startTime || callTimings[receiverCallKey]?.startTime;
 
-          // Calculate call duration
-          const callerCallKey = `${callerId}_${receiverId}`;
-          const receiverCallKey = `${receiverId}_${callerId}`;
-          const startTime = callTimings[callerCallKey]?.startTime || callTimings[receiverCallKey]?.startTime;
+    //       if (!startTime) {
+    //         logger.warn(`Start time not found for call between ${callerId} and ${receiverId}`);
+    //         return;
+    //       }
 
-          if (!startTime) {
-            logger.warn(`Start time not found for call between ${callerId} and ${receiverId}`);
-            return;
-          }
+    //       const endTime = new Date();
+    //       const duration = Math.round((endTime - new Date(startTime)) / 1000); // Duration in seconds
 
-          const endTime = new Date();
-          const duration = Math.round((endTime - new Date(startTime)) / 1000); // Duration in seconds
+    //       // Log the call with duration
+    //       await CallLog.create({
+    //         caller: new mongoose.Types.ObjectId(callerId),
+    //         receiver: new mongoose.Types.ObjectId(receiverId),
+    //         startTime: new Date(startTime),
+    //         endTime,
+    //         duration,
+    //         status: 'completed',
+    //       });
 
-          // Log the call with duration
-          await CallLog.create({
-            caller: new mongoose.Types.ObjectId(callerId),
-            receiver: new mongoose.Types.ObjectId(receiverId),
-            startTime: new Date(startTime),
-            endTime,
-            duration,
-            status: 'completed',
-          });
+    //       logger.info(`Call log saved for call between ${callerId} and ${receiverId}`);
 
-          logger.info(`Call log saved for call between ${callerId} and ${receiverId}`);
-
-          // Clean up call-related data
-          delete activeCalls[callerId];
-          delete activeCalls[receiverId];
-          delete callTimings[callerCallKey];
-          delete callTimings[receiverCallKey];
-        } else {
-          logger.warn(`No active call found between ${callerId} and ${receiverId}`);
-        }
-      } catch (error) {
-        logger.error(`Error in endCall handler: ${error.message}`);
-      }
-    });
+    //       // Clean up call-related data
+    //       delete activeCalls[callerId];
+    //       delete activeCalls[receiverId];
+    //       delete callTimings[callerCallKey];
+    //       delete callTimings[receiverCallKey];
+    //     } else {
+    //       logger.warn(`No active call found between ${callerId} and ${receiverId}`);
+    //     }
+    //   } catch (error) {
+    //     logger.error(`Error in endCall handler: ${error.message}`);
+    //   }
+    // });
 
 
     // Update disconnect handler to handle call timings cleanup
@@ -1153,6 +1089,142 @@ export const setupWebRTC = (io) => {
     //   }
     // });
 
+    socket.on('endCall', async ({ receiverId, callerId }) => {
+      try {
+        logger.info('Attempting to end call', { callerId, receiverId });
+    
+        // Debug log current state
+        logger.info('Current active calls:', activeCalls);
+        logger.info('Current call timings:', callTimings);
+    
+        // Validate IDs
+        if (!callerId || !receiverId) {
+          logger.warn('Missing caller or receiver ID');
+          return;
+        }
+    
+        // Check active calls with more detailed logging
+        const isCallerActive = activeCalls[callerId] === receiverId;
+        const isReceiverActive = activeCalls[receiverId] === callerId;
+        
+        logger.info('Call status check:', {
+          isCallerActive,
+          isReceiverActive,
+          callerActivePair: `${callerId} -> ${activeCalls[callerId]}`,
+          receiverActivePair: `${receiverId} -> ${activeCalls[receiverId]}`
+        });
+    
+        if (isCallerActive || isReceiverActive) {
+          // Handle active call ending
+          logger.info(`Ending active call between ${callerId} and ${receiverId}`);
+    
+          // Notify receiver of call end
+          if (users[receiverId]) {
+            const receiverSockets = users[receiverId];
+            logger.info(`Found ${receiverSockets.length} sockets for receiver`);
+    
+            receiverSockets.forEach((socketId) => {
+              socket.to(socketId).emit('callEnded', { 
+                callerId,
+                timestamp: Date.now() 
+              });
+              
+              socket.to(socketId).emit('inactiveCall', {
+                callerId,
+                receiverId,
+                socketId: socket.id,
+                timestamp: Date.now()
+              });
+              
+              logger.info(`Sent end call notifications to socket: ${socketId}`);
+            });
+          } else {
+            logger.warn(`No active sockets found for receiver: ${receiverId}`);
+          }
+    
+          // Handle call duration calculation
+          const callerCallKey = `${callerId}_${receiverId}`;
+          const receiverCallKey = `${receiverId}_${callerId}`;
+          
+          logger.info('Checking call timing keys:', {
+            callerCallKey,
+            receiverCallKey,
+            callerTiming: callTimings[callerCallKey],
+            receiverTiming: callTimings[receiverCallKey]
+          });
+    
+          const startTime = callTimings[callerCallKey]?.startTime || callTimings[receiverCallKey]?.startTime;
+    
+          if (!startTime) {
+            logger.warn('Call timing not found', {
+              callerCallKey,
+              receiverCallKey,
+              callTimings: JSON.stringify(callTimings)
+            });
+            return;
+          }
+    
+          const endTime = new Date();
+          const duration = Math.round((endTime - new Date(startTime)) / 1000);
+    
+          logger.info('Call duration calculated:', {
+            startTime,
+            endTime,
+            durationSeconds: duration
+          });
+    
+          // Save call log
+          try {
+            await CallLog.create({
+              caller: new mongoose.Types.ObjectId(callerId),
+              receiver: new mongoose.Types.ObjectId(receiverId),
+              startTime: new Date(startTime),
+              endTime,
+              duration,
+              status: 'completed',
+            });
+            
+            logger.info('Call log saved successfully');
+          } catch (dbError) {
+            logger.error('Failed to save call log:', dbError);
+          }
+    
+          // Cleanup with logging
+          logger.info('Cleaning up call data...');
+          delete activeCalls[callerId];
+          delete activeCalls[receiverId];
+          delete callTimings[callerCallKey];
+          delete callTimings[receiverCallKey];
+          
+          logger.info('Call cleanup completed');
+          
+        } else {
+          // No active call found - log detailed state
+          logger.warn('No active call found', {
+            requestedPair: `${callerId} <-> ${receiverId}`,
+            activeCallsState: JSON.stringify(activeCalls),
+            callTimingsState: JSON.stringify(callTimings)
+          });
+    
+          socket.emit('error', {
+            type: 'END_CALL_ERROR',
+            message: 'No active call found'
+          });
+        }
+      } catch (error) {
+        logger.error('Error in endCall handler:', {
+          error: error.message,
+          stack: error.stack,
+          callerId,
+          receiverId
+        });
+        
+        socket.emit('error', {
+          type: 'END_CALL_ERROR',
+          message: 'Failed to end call'
+        });
+      }
+    });
 
     socket.on('disconnect', async () => {
       logger.info(`Socket disconnected: ${socket.id}`);
@@ -1180,7 +1252,7 @@ export const setupWebRTC = (io) => {
               );
               if (updatedUser) {
                 io.emit('userStatusChanged', { userId: disconnectedUserId, status: 'offline' });
-                logger.error(`  update offline status for user ${disconnectedUserId}: ${updatedUser} Userid ${userId}`);
+                // logger.error(`  update offline status for user ${disconnectedUserId}: ${updatedUser} Userid ${userId}`);
               }
             } catch (error) {
               logger.error(`Failed to update offline status for user ${disconnectedUserId}: ${error.message}`);
@@ -1208,7 +1280,7 @@ export const setupWebRTC = (io) => {
               startTime: callStartTime,
               endTime,
               duration,
-              status: 'disconnected',
+              status: 'failed',
             });
           } catch (error) {
             logger.error(`Failed to log call for disconnected user ${disconnectedUserId}: ${error.message}`);
@@ -1234,8 +1306,73 @@ export const setupWebRTC = (io) => {
 };
 
 
+async function sendNotification_call(userId, title, message, type, callerId, senderName, senderAvatar) {
+  try {
+    const user = await User.findById(userId);
+    if (!user || !user.deviceToken) {
+      logger.error(`No device token found for user: ${userId}`);
+      return;
+    }
 
+    const payload = {
+      notification: {
+        title: title || "Incoming Voice Call",
+        body: message || `${senderName} is calling you`
+      },
+      data: {
+        screen: 'incoming_Call',
+        params: JSON.stringify({
+          user_id: userId,
+          type: 'voice',
+          agent_id: callerId,
+          username: senderName,
+          imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png',
+          timestamp: Date.now().toString(),
+          call_id: `${callerId}_${Date.now()}`,
+          channel_id: 'EarforYou123',
+          priority: 'high',
+          notification_type: 'call',
+          action_answer: 'Answer Call',
+          action_decline: 'Decline Call'
+        })
+      },
+      android: {
+        priority: 'high',
+        ttl: 60000,
+        notification: {
+          channel_id: 'EarforYou123',
+          priority: 'high',
+          default_sound: true,
+          notification_priority: 'PRIORITY_HIGH'
+        }
+      },
+      apns: {
+        payload: {
+          aps: {
+            alert: {
+              title: title || "Incoming Voice Call",
+              body: message || `${senderName} is calling you`
+            },
+            sound: 'default',
+            category: 'VOICE_CALL',
+            'content-available': 1,
+            priority: '10'
+          }
+        },
 
+      },
+      token: user.deviceToken
+    };
+
+    logger.info(`Sending voice call notification to user ${userId}`);
+    const response = await admin.messaging().send(payload);
+    logger.info(`Voice call notification sent successfully: ${response}`);
+    return response;
+  } catch (error) {
+    logger.error(`Failed to send voice call notification: ${error.message}`);
+    throw error;
+  }
+}
 
 
 async function sendNotification(userId, title, message, type, receiverId, senderName, senderAvatar) {
@@ -1266,6 +1403,8 @@ async function sendNotification(userId, title, message, type, receiverId, sender
         }),
         // Add any additional parameters if needed
       },
+
+
       token: deviceToken,
     };
     logger.info(`Push notification sent to User  in  notification  function`);
@@ -1277,7 +1416,52 @@ async function sendNotification(userId, title, message, type, receiverId, sender
     console.error("Error sending notification:", error);
   }
 }
+
+async function sendMNotification(userId, title, message, type, receiverId, senderName, senderAvatar) {
+  try {
+    // Fetch the user from the database
+    const user = await User.findById(userId);
+    if (!user || !user.deviceToken) {
+      console.error("No device token found for user:", userId);
+      return;
+    }
+
+    const deviceToken = user.deviceToken;
+
+    // Construct the payload for FCM
+    const payload = {
+      notification: {
+        title: title,
+        body: message,
+      },
+      data: {
+        screen: 'Recent_Calls', // Target screen
+        params: JSON.stringify({
+          user_id: userId, // Include Call ID
+          type: type, // Type of call
+          agent_id: receiverId, // Receiver ID
+          username: senderName, // Sender name
+          imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png', // Sender avatar with default fallback
+        }),
+        // Add any additional parameters if needed
+      },
+
+
+      token: deviceToken,
+    };
+    logger.info(`Push notification sent to User  in  notification  function`);
+
+    // Send the notification
+    const response = await admin.messaging().send(payload);
+    console.log("Notification sent successfully:", response);
+  } catch (error) {
+    console.error("Error sending notification:", error);
+  }
+}
+
+
 // async function sendMNotification(userId, title, message, type, receiverId, senderName, senderAvatar) {
+
 //   try {
 //     // Fetch the user from the database
 //     const user = await User.findById(userId);
@@ -1348,3 +1532,94 @@ async function sendNotification(userId, title, message, type, receiverId, sender
 //     throw new Error('Failed to log missed call');
 //   }
 // };
+
+
+
+const handleIceCandidate = (socket, users, logger) => {
+  socket.on('iceCandidate', async ({ candidate, callerId, receiverId }) => {
+    try {
+      // Validate inputs
+      if (!candidate || !callerId || !receiverId) {
+        logger.warn('Missing required parameters in iceCandidate event', {
+          hasCandidate: !!candidate,
+          hasCallerId: !!callerId,
+          hasReceiverId: !!receiverId
+        });
+        return;
+      }
+
+      // Validate that receiver exists
+      if (!users[receiverId]) {
+        logger.warn(`Receiver ${receiverId} not found in users list`);
+        socket.emit('error', { 
+          type: 'ICE_CANDIDATE_ERROR',
+          message: 'Receiver not found'
+        });
+        return;
+      }
+
+      // Get receiver's socket connections
+      const receiverSockets = users[receiverId];
+      if (!Array.isArray(receiverSockets) || receiverSockets.length === 0) {
+        logger.warn(`No active socket connections found for receiver ${receiverId}`);
+        socket.emit('error', {
+          type: 'ICE_CANDIDATE_ERROR',
+          message: 'Receiver not connected'
+        });
+        return;
+      }
+
+      // Track successful emissions
+      const emissionPromises = receiverSockets.map(socketId => {
+        return new Promise((resolve, reject) => {
+          try {
+            socket.to(socketId).emit('iceCandidate', {
+              candidate,
+              callerId,
+              timestamp: Date.now()
+            });
+            resolve(socketId);
+          } catch (err) {
+            reject({ socketId, error: err });
+          }
+        });
+      });
+
+      // Wait for all emissions to complete
+      const results = await Promise.allSettled(emissionPromises);
+      
+      // Log results
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+      
+      logger.info(`ICE candidate forwarding complete`, {
+        receiverId,
+        callerId,
+        totalSockets: receiverSockets.length,
+        successfulEmissions: successful,
+        failedEmissions: failed
+      });
+
+      // If no successful emissions, notify caller
+      if (successful === 0) {
+        socket.emit('error', {
+          type: 'ICE_CANDIDATE_ERROR',
+          message: 'Failed to forward ICE candidate to any receiver sockets'
+        });
+      }
+
+    } catch (error) {
+      logger.error('Error in iceCandidate handler:', {
+        error: error.message,
+        stack: error.stack,
+        callerId,
+        receiverId
+      });
+      
+      socket.emit('error', {
+        type: 'ICE_CANDIDATE_ERROR',
+        message: 'Internal server error while processing ICE candidate'
+      });
+    }
+  });
+};

@@ -1,4 +1,5 @@
 import User from "../models/Users.js";
+
 import jwt from "jsonwebtoken";
 import ROLES_LIST from "../config/Roles_list.js";
 import crypto from "crypto";
@@ -16,6 +17,13 @@ import emailValidator from 'email-validator';
 import Review from "../models/LeaderBoard/Review.js";
 import { title } from "process";
 import EarningWallet from "../models/Wallet/EarningWallet.js";
+import { ChatMessage } from "../models/message.models.js";
+import callLog from '.././models/Talk-to-friend/callLogModel.js'
+
+import { Chat } from "../models/chat.modal.js";
+
+
+
 
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
@@ -141,6 +149,7 @@ export const logoutUser = async (req, res) => {
       {
         $set: {
           refreshToken: '',
+          deviceToken:''
         },
       },
       { new: true }
@@ -387,7 +396,7 @@ export const initiateRegistration = async (req, res) => {
         deductions: [],
         lastUpdated: new Date()
       }], { session });
-      
+
       await EarningWallet.create([{
         userId: newUser._id,
         balance: 0,
@@ -493,7 +502,7 @@ export const initiateLogin = async (req, res) => {
       accessToken,
       refreshToken,
     });
-    
+
   } catch (error) {
     console.error("Error in initiateLogin:", error);
     res.status(500).json({ message: "Server error", error });
@@ -877,8 +886,123 @@ export const updateStatus = async (req, res) => {
 
 
 
-//--------------------------Update User Avatra-----------------------------------------
+//--------------------------Get  User Listener-----------------------------------------
 
+export const listener = async (req, res) => {
+  try {
+    const userId = req.user._id || req.user.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized: userId is required',
+      });
+    }
+
+    // Retrieve pagination parameters
+    const { page = 1, limit = 10 } = req.query;
+
+    // Convert to integers
+    const pageNumber = parseInt(page, 10);
+    const limitNumber = parseInt(limit, 10);
+
+    // Query the database for users with userType 'RECEIVER' and exclude logged-in user
+    const query = {
+      userType: 'RECEIVER',
+      _id: { $ne: userId }, // Exclude the logged-in user's ID
+      UserStatus: { $nin: ['inActive', 'Blocked', 'InActive'] } // Exclude unwanted statuses
+    };
+
+    const users = await User.find(query)
+      .skip((pageNumber - 1) * limitNumber)
+      .limit(limitNumber);
+
+    // Count total documents for this query
+    const totalUsers = await User.countDocuments(query);
+
+    // Calculate total pages
+    const totalPages = Math.ceil(totalUsers / limitNumber);
+
+    // Send response
+    res.status(200).json({
+      success: true,
+      data: users,
+      pagination: {
+        totalUsers,
+        totalPages,
+        currentPage: pageNumber,
+        limit: limitNumber,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch users',
+      error: error.message,
+    });
+  }
+};
+
+
+export const UserCategoryData = async (req, res) => {
+  try {
+    const userId = req.user._id || req.user.id; // Logged-in user's ID
+    const { Category } = req.body;
+
+    // Check if userId is provided
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized: userId is required',
+      });
+    }
+
+    // Retrieve pagination parameters
+    const { page = 1, limit = 20 } = req.query;
+
+    // Convert to integers for pagination
+    const pageNumber = parseInt(page, 10);
+    const limitNumber = parseInt(limit, 10);
+
+    // Query the database for users
+    const query = {
+      userCategory: Category, // Filter by category
+      _id: { $ne: userId },   // Exclude the logged-in user's ID
+      UserStatus: { $nin: ["inActive", "Blocked", "InActive"] }, // Exclude users with unwanted statuses
+    };
+
+    // Fetch users with pagination
+    const users = await User.find(query)
+      .skip((pageNumber - 1) * limitNumber)
+      .limit(limitNumber);
+
+    // Count total documents for pagination
+    const totalUsers = await User.countDocuments(query);
+
+    // Calculate total pages
+    const totalPages = Math.ceil(totalUsers / limitNumber);
+
+    // Send response
+    res.status(200).json({
+      success: true,
+      data: users,
+      pagination: {
+        totalUsers,
+        totalPages,
+        currentPage: pageNumber,
+        limit: limitNumber,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch users',
+      error: error.message,
+    });
+  }
+};
 
 
 // ------------------------userController.js---------------------------------------
@@ -1097,125 +1221,229 @@ export const getUserById = async (req, res) => {
   }
 };
 
-// // getAllUsers
-// export const getAllUsers = async (req, res) => {
-//   try {
-//     // Get the logged-in user's ID (assuming it's stored in req.user)
-//     const loggedInUserId = req.user.id;
 
-//     // Find all users except the logged-in user, excluding password and refreshToken fields
 
-//     // const users = await User.find(
-//     //   { _id: { $ne: loggedInUserId } }, // Exclude the logged-in user
-//     //   { password: 0, refreshToken: 0 }
-//     // );
 
-//     const users = await User.find(
-//       {
-//         _id: { $ne: loggedInUserId }, // Exclude the logged-in user
-//         UserStatus: { $nin: ['inActive', 'Blocked'] } // Exclude users with these statuses
-//       },
-//       { password: 0, refreshToken: 0 } // Exclude sensitive fields
-//     );
 
-//     const userRatings = await Review.aggregate([
-//       {
-//         $group: {
-//           _id: '$reviewedUserId', // Group by reviewed user's ID
-//           avgRating: { $avg: '$rating' }, // Calculate average rating
-//         },
-//       },
-//     ]);
 
-//     // Map average ratings to users
-//     const userRatingsMap = userRatings.reduce((acc, rating) => {
-//       acc[rating._id] = rating.avgRating;
-//       return acc;
-//     }, {});
 
-//     // Attach average rating to each user
-//     const usersWithRatings = users.map((user) => ({
-//       ...user.toObject(),
-//       avgRating: userRatingsMap[user._id] || 0, // Default to 0 if no rating exists
-//     }));
-
-//     // If no other users are found, return an appropriate message
-//     if (users.length === 0) {
-//       return res.status(404).json({ message: 'No other users found' });
-//     }
-
-//     // Return the list of users
-//     res.status(200).json({
-//       message: 'Users found successfully',
-//       users: usersWithRatings,
-//     });
-//   } catch (error) {
-//     // Handle any errors that occur
-//     console.error('Error fetching users:', error);
-//     res.status(500).json({ message: 'Internal server error', error: error.message });
-//   }
-// };
-
-export const getAllUsers = async (req, res) => {
+export const getAllUsers1 = async (req, res) => {
   try {
-    // Get the logged-in user's ID
-    const loggedInUserId = req.user.id;
+    // Extract logged-in user's details
+    const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
+    const loggedInUserGender = req.user.gender;
 
-    // Find users with specific conditions
-    const users = await User.find(
-      {
-        _id: { $ne: loggedInUserId }, // Exclude the logged-in user
-        UserStatus: { $nin: ['inActive', 'Blocked','InActive'] } // Exclude users with these statuses
-      },
-      { password: 0, refreshToken: 0 } // Exclude sensitive fields
-    );
+    // Pagination parameters
+    const page = parseInt(req.query.page) || 1;
+    const limit = 21;
+    const skip = (page - 1) * limit;
 
-    // Aggregate to calculate average user ratings
-    // Aggregate to calculate average ratings for all users
-    const userRatings = await Review.aggregate([
+    // Find users excluding the logged-in user and specific statuses
+    const users = await User.aggregate([
       {
         $match: {
-          user: { $in: users.map((u) => u._id) }, // Filter reviews for the found users
+          _id: { $ne: loggedInUserId },
+          UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
         },
       },
+
       {
-        $group: {
-          _id: '$user', // Group by the `user` field in the Review schema
-          avgRating: { $avg: '$rating' }, // Calculate average rating
+        $lookup: {
+          from: "reviews",
+          localField: "_id",
+          foreignField: "user",
+          as: "ratings",
         },
       },
-    ])
+      // Add computed fields for sorting and filtering
+      {
+        $addFields: {
 
-    // Create a map of user ratings
-    const userRatingsMap = userRatings.reduce((acc, rating) => {
-      acc[rating._id] = rating.avgRating;
-      return acc;
-    }, {});
+          avgRating: { $avg: "$ratings.rating" },
+          reviewCount: { $size: "$ratings" },
+          isOppositeGender: {
+            $cond: { if: { $ne: ["$gender", loggedInUserGender] }, then: 1, else: 0 },
+          },
+          isOnline: {
+            $cond: { if: { $eq: ["$status", "Online"] }, then: 1, else: 0 },
+          },
 
-    // Attach average rating to each user
-    const usersWithRatings = users.map((user) => ({
-      ...user.toObject(),
-      avgRating: userRatingsMap[user._id] || 0, // Default to 0 if no rating exists
-    }));
+        },
+      },
+      // Sort users based on criteria
+      {
+        $sort: {
+          isOnline: -1,          // Online users prioritized
+          isOppositeGender: -1,  // Opposite gender prioritized
+          avgRating: -1,         // Higher ratings prioritized
+        },
+      },
+      // Pagination using $facet
+      {
+        $facet: {
+          metadata: [{ $count: "totalUsers" }],
+          users: [
+            { $skip: skip },
+            { $limit: limit },
+            {
+              $project: {
+                password: 0,
+                refreshToken: 0,
+                ratings: 0,
+              },
+            },
+          ],
+        },
+      },
+    ]);
 
-    // Handle case when no users are found
-    if (users.length === 0) {
-      return res.status(404).json({ message: 'No other users found' });
+    // Extract results
+    const totalUsers = users[0]?.metadata[0]?.totalUsers || 0;
+    const userList = users[0]?.users || [];
+
+    // Handle no users found
+    if (userList.length === 0) {
+      return res.status(404).json({ message: "No users found" });
     }
 
-    // Return the list of users
+    // Send response
     res.status(200).json({
-      message: 'Users found successfully',
-      users: usersWithRatings,
+      message: "Users fetched successfully",
+      users: userList,
+      pagination: {
+        totalUsers,
+        currentPage: page,
+        totalPages: Math.ceil(totalUsers / limit),
+        limit,
+      },
     });
+
   } catch (error) {
-    // Error handling
-    console.error('Error fetching users:', error);
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    console.error("Error fetching users:", error);
+    res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
-// Controller to add bio
+
+
+
+export const getAllUsers2 = async (req, res) => {
+  try {
+    const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
+    const loggedInUserGender = req.user.gender;
+    const page = parseInt(req.query.page) || 1;
+    const limit = 21;
+    const skip = (page - 1) * limit;
+
+    // Parallel queries for better performance
+    const [users, totalCount] = await Promise.all([
+      User.aggregate([
+        // Initial match to reduce documents early
+        {
+          $match: {
+            _id: { $ne: loggedInUserId },
+            UserStatus: { $nin: ["inActive", "Blocked", "InActive"] }
+          }
+        },
+        // Optimize lookup by only getting necessary fields
+        {
+          $lookup: {
+            from: "reviews",
+            let: { userId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ["$user", "$$userId"] }
+                }
+              },
+              {
+                $project: {
+                  rating: 1
+                }
+              }
+            ],
+            as: "ratings"
+          }
+        },
+        // Compute fields efficiently
+        {
+          $addFields: {
+            avgRating: {
+              $cond: {
+                if: { $eq: [{ $size: "$ratings" }, 0] },
+                then: 0,
+                else: { $avg: "$ratings.rating" }
+              }
+            },
+            reviewCount: { $size: "$ratings" },
+            sortScore: {
+              $add: [
+                { $cond: [{ $eq: ["$status", "Online"] }, 100000, 0] },
+                { $cond: [{ $ne: ["$gender", loggedInUserGender] }, 10000, 0] },
+                { $multiply: [{ $avg: "$ratings.rating" }, 100] }
+              ]
+            }
+          }
+        },
+        // Sort using computed sortScore
+        {
+          $sort: {
+            sortScore: -1
+          }
+        },
+        // Skip and limit for pagination
+        {
+          $skip: skip
+        },
+        {
+          $limit: limit
+        },
+        // Project only needed fields
+        {
+          $project: {
+            username: 1,
+            email: 1,
+            gender: 1,
+            status: 1,
+            UserStatus: 1,
+            avatar: 1,
+            avgRating: 1,
+            reviewCount: 1
+          }
+        }
+        
+      ]),
+      
+      // Separate count query for better performance
+      User.countDocuments({
+        _id: { $ne: loggedInUserId },
+        UserStatus: { $nin: ["inActive", "Blocked", "InActive"] }
+      })
+    ]);
+
+    if (!users.length) {
+      return res.status(404).json({ message: "No users found" });
+    }
+
+    res.status(200).json({
+      message: "Users fetched successfully",
+      users,
+      pagination: {
+        totalUsers: totalCount,
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        limit
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
+
+
+
 export const addBio = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1309,6 +1537,7 @@ export const deleteBio = async (req, res) => {
     res.status(500).json({ message: "An error occurred while deleting the bio.", error });
   }
 };
+
 // Reporte_User
 export const Reporte_User = async (req, res) => {
   const { reporterId, reportedUserId, reportType } = req.body;
@@ -1407,7 +1636,175 @@ export const Reporte_User = async (req, res) => {
 };
 
 
-//Notification
+
+export const addBankDetails = async (req, res) => {
+  const userId = req.user._id || req.user.id;
+  const {
+    bankName,
+    accountNumber,
+    ifscCode,
+    accountHolderName,
+  } = req.body;
+  console.log("req.body", req.body)
+  try {
+    // Validate input
+    if (!bankName || !accountNumber || !ifscCode || !accountHolderName) {
+      return res.status(400).json({ message: 'All fields are required.' });
+    }
+
+    // Find the user by ID
+    const user = await User.findById(userId);
+
+    console.log("user", user)
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    // Check for duplicate account numbers
+    const isDuplicateAccount = user.bankDetails.some(
+      (detail) => detail.accountNumber === accountNumber
+    );
+
+    if (isDuplicateAccount) {
+      return res.status(400).json({ message: 'Account number already exists.' });
+    }
+
+    // Add the new bank details
+    user.bankDetails.push({
+      bankName,
+      accountNumber,
+      ifscCode,
+      accountHolderName,
+    });
+
+    // Save the updated user document
+    await user.save();
+
+    res.status(201).json({
+      message: 'Bank details added successfully.',
+      bankDetails: user.bankDetails,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
+
+export const getBankDetails = async (req, res) => {
+  const userId = req.user._id || req.user.id; // Assuming user info is in `req.user`
+
+  try {
+    // Find the user by ID
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    // Return the user's bank details
+    res.status(200).json({
+      message: 'Bank details retrieved successfully.',
+      bankDetails: user.bankDetails,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
+
+
+
+
+
+
+
+export const getChatsWithLatestMessages = async (req, res) => {
+  try {
+    const userId = req.user.id || req.user._id; // Get logged-in user ID
+    const page = parseInt(req.query.page) || 1; // Page number
+    const limit = parseInt(req.query.limit) || 20; // Results per page
+    const skip = (page - 1) * limit;
+
+    // Step 1: Fetch chats where the user is a participant with pagination
+    const chats = await Chat.find({ participants: userId })
+      .populate({
+        path: 'participants',
+        model: User,
+        select: '-password -refreshToken',
+      })
+      .sort({ updatedAt: -1 }) // Sort by the latest chat
+      .skip(skip)
+      .limit(limit);
+
+    if (!chats.length) {
+      return res.json({ chats: [], page, limit });
+    }
+
+    // Step 2: Use a Map to filter unique users
+    const uniqueUsersMap = new Map();
+
+    for (const chat of chats) {
+      chat.participants.forEach((participant) => {
+        if (participant._id.toString() !== userId.toString()) {
+          if (!uniqueUsersMap.has(participant._id.toString())) {
+            uniqueUsersMap.set(participant._id.toString(), {
+              user: participant,
+              chatId: chat._id,
+              lastMessage: chat.lastMessage || null,
+              updatedAt: chat.updatedAt,
+            });
+          }
+        }
+      });
+    }
+
+    // Step 3: Fetch reviews for unique participants
+    const participantIds = Array.from(uniqueUsersMap.keys());
+    const reviews = await Review.find({ user: { $in: participantIds } });
+
+    // Step 4: Calculate average ratings for participants
+    const userRatingsMap = {};
+    reviews.forEach((review) => {
+      const userId = review.user.toString();
+      if (!userRatingsMap[userId]) {
+        userRatingsMap[userId] = { sum: 0, count: 0 };
+      }
+      userRatingsMap[userId].sum += review.rating || 0;
+      userRatingsMap[userId].count += 1;
+    });
+
+    const avgRatings = {};
+    for (const [userId, ratingData] of Object.entries(userRatingsMap)) {
+      avgRatings[userId] = (ratingData.sum || 0) / (ratingData.count || 1);
+    }
+
+    // Step 5: Format unique user chat data with participants in array format
+    const formattedChats = Array.from(uniqueUsersMap.values()).map((item) => {
+      const avgRating = avgRatings[item.user._id.toString()] || 0;
+      const { password, refreshToken, ...userDetails } = item.user.toObject();
+
+      return {
+        participants: [{ ...userDetails, averageRating: avgRating }], // Wrap in array format
+        chatId: item.chatId,
+        lastMessage: item.lastMessage,
+        updatedAt: item.updatedAt,
+      };
+    });
+
+    res.json({ chats: formattedChats, page, limit });
+  } catch (error) {
+    console.error('Error fetching chats with latest messages:', error);
+    res.status(500).json({ error: 'Failed to fetch chats' });
+  }
+};
+
+
+
+
+
 
 async function sendNotification(userId, title, message) {
   // Assuming you have the FCM device token stored in your database

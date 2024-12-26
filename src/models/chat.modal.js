@@ -20,6 +20,12 @@ const chatSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "User",
     },
+
+    unreadMessages: {
+      type: Map,
+      of: Number, // Count of unread messages per user
+      default: {},
+    },
   },
   { timestamps: true }
 );

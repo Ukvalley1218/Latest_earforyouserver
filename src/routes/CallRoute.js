@@ -1,10 +1,11 @@
 import express from 'express';
-import { initiateCall, acceptCall, rejectCall, endCall, handleMissedCall,getRecentCalls } from '../controllers/CallController/CallController.js';
+import { initiateCall, acceptCall, rejectCall, endCall, handleMissedCall, getRecentCalls } from '../controllers/CallController/CallController.js';
+import { protect } from '../middlewares/auth/authMiddleware.js';
 
 const router = express.Router();
 
 
-router.get('/recent-calls/:userId', getRecentCalls);
+router.get('/recent-calls/', protect, getRecentCalls);
 // Route to initiate a call
 router.post('/initiate', initiateCall);
 
