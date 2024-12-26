@@ -72,7 +72,6 @@ const sendSingleNotification = async (deviceToken, title, body) => {
 
 
 
-
 export const sendBulkNotification = async (req, res) => {
   const { title, body } = req.body;
   
@@ -98,7 +97,7 @@ export const sendBulkNotification = async (req, res) => {
       });
     }
 
-    // Extract tokens and create batches (FCM limits to 500 tokens per request)
+    // Extract tokens and create batches
     const registrationTokens = users.map(user => user.deviceToken);
     const BATCH_SIZE = 500;
     const batches = [];
@@ -124,7 +123,7 @@ export const sendBulkNotification = async (req, res) => {
           return {
             successCount: 0,
             failureCount: tokenBatch.length,
-            responses: tokenBatch.map(() => ({ success: false, error }))
+            responses: tokenBatch.map(() => ({ success: false }))
           };
         }
       })
@@ -143,42 +142,13 @@ export const sendBulkNotification = async (req, res) => {
       totalResults.responses.push(...result.responses);
     });
 
-    // Handle failures and cleanup invalid tokens
-    if (totalResults.failureCount > 0) {
-      const failedTokens = [];
-      totalResults.responses.forEach((resp, idx) => {
-        if (!resp.success) {
-          failedTokens.push({
-            token: registrationTokens[idx],
-            error: resp.error?.message || 'Unknown error'
-          });
-        }
-      });
-
-      // Clean up invalid tokens
-      const invalidTokens = failedTokens
-        .filter(({ error }) => 
-          error.includes('registration-token-not-registered') ||
-          error.includes('invalid-registration-token')
-        )
-        .map(({ token }) => token);
-
-      if (invalidTokens.length > 0) {
-        await User.updateMany(
-          { deviceToken: { $in: invalidTokens } },
-          { $unset: { deviceToken: 1 } }
-        );
-      }
-    }
-
     return res.status(200).json({
       success: true,
       message: 'Notifications sent',
       summary: {
         total: registrationTokens.length,
         successful: totalResults.successCount,
-        failed: totalResults.failureCount,
-        invalidTokensRemoved: invalidTokens?.length || 0
+        failed: totalResults.failureCount
       }
     });
 
