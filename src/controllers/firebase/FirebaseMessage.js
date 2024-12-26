@@ -1,7 +1,7 @@
 // controllers/notificationController.js
 import firebaseConfig from '../../config/firebaseConfig.js';
 import User from '../../models/Users.js';
-
+import admin from 'firebase-admin';
 
 // Function to send notification to a single user
 const sendSingleNotification = async (deviceToken, title, body) => {
