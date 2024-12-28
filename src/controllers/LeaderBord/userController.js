@@ -75,36 +75,7 @@ const getUsersByProximity = async (address, radius, serviceType, currentUserId) 
   }
 };
 
-const getRatingFilter = (rating) => {
-  switch (rating) {
-    case 'high':
-      return { $gte: 4 };
-    case 'medium':
-      return { $gte: 3, $lt: 4 };
-    case 'low':
-      return { $lt: 3 };
-    default:
-      return {}; // No filter
-  }
-};
 
-// Helper function to get sort order based on rating filter
-const getSortOrder = (rating) => {
-  switch (rating) {
-    case 'low':
-      return { averageRating: 1 }; // Ascending order
-    case 'medium':
-      return {
-        mediumFirst: -1, // Custom field for sorting medium first
-        averageRating: -1
-      };
-    case 'high':
-    default:
-      return { averageRating: -1 }; // Descending order
-  }
-};
-
-// Controller function to get users based on serviceType, address, and rating
 export const getUsersByServiceType = async (req, res) => {
   try {
     const { serviceType, address, radius, page = 1, limit = 10, rating, addresses } = req.query;
@@ -236,6 +207,38 @@ export const getUsersByServiceType = async (req, res) => {
   }
 };
 
+const getRatingFilter = (rating) => {
+  switch (rating) {
+    case 'high':
+      return { $gte: 4 };
+    case 'medium':
+      return { $gte: 3, $lt: 4 };
+    case 'low':
+      return { $lt: 3 };
+    default:
+      return {}; // No filter
+  }
+};
+
+// Helper function to get sort order based on rating filter
+const getSortOrder = (rating) => {
+  switch (rating) {
+    case 'low':
+      return { averageRating: 1 }; // Ascending order
+    case 'medium':
+      return {
+        mediumFirst: -1, // Custom field for sorting medium first
+        averageRating: -1
+      };
+    case 'high':
+    default:
+      return { averageRating: -1 }; // Descending order
+  }
+};
+
+// Controller function to get users based on serviceType, address, and rating
+
+
 
 export const getUserById = async (req, res) => {
   const { id } = req.params;
@@ -276,11 +279,6 @@ export const getUserById = async (req, res) => {
 
 
 // Fillter by Reviwe
-
-
-
-
-
 
 export const filterByReview = async (req, res) => {
   try {
@@ -390,142 +388,3 @@ export const filterByReview = async (req, res) => {
     });
   }
 };
-
-// export const filterByReview = async (req, res) => {
-//   try {
-//     const { ratingCategory, Address, serviceType, userId, page = 1, limit = 10 } = req.query;
-
-//     if (!ratingCategory && !Address && !userId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Please provide at least one filter: "Address", "ratingCategory", "serviceType", or "userId".'
-//       });
-//     }
-
-//     let query = {};
-//     let sort = {};
-
-//     if (userId) {
-//       query.user = userId;
-//     }
-
-//     if (ratingCategory) {
-//       if (!['low', 'medium', 'high'].includes(ratingCategory)) {
-//         return res.status(400).json({
-//           success: false,
-//           message: 'Invalid rating category provided. Please choose "low", "medium", or "high".'
-//         });
-//       }
-
-//       if (ratingCategory === 'low') {
-//         sort = { rating: 1 }; // Low to high
-//       } else if (ratingCategory === 'high') {
-//         sort = { rating: -1 }; // High to low
-//       }
-//     }
-
-//     // Count total documents matching the query before applying pagination
-//     let totalDocuments = await Review.countDocuments(query);
-
-//     let filteredReviews = await Review.find(query)
-//       .sort(sort)
-//       .populate({
-//         path: 'user',
-//         select: '-password', // Exclude sensitive information like password if present
-//       })
-//       .lean();
-
-//     // Filter reviews based on Address if specified
-//     if (Address) {
-//       const addresses = Array.isArray(Address) ? Address : Address.split(',');
-//       filteredReviews = filteredReviews.filter(review =>
-//         addresses.includes(review.user.companyAddress)
-//       );
-//     }
-
-//     // Filter reviews based on serviceType if specified
-//     if (serviceType) {
-//       const serviceTypes = Array.isArray(serviceType) ? serviceType : serviceType.split(',');
-//       filteredReviews = filteredReviews.filter(review =>
-//         serviceTypes.includes(review.user.serviceType)
-//       );
-//     }
-
-//     // If the ratingCategory is 'medium', apply the sorting logic in-memory
-//     if (ratingCategory === 'medium') {
-//       filteredReviews.sort((a, b) => {
-//         const distanceA = Math.abs(a.rating - 3);
-//         const distanceB = Math.abs(b.rating - 3);
-//         if (distanceA === distanceB) {
-//           return b.rating - a.rating; // If equidistant, higher rating first
-//         }
-//         return distanceA - distanceB;
-//       });
-//     }
-
-//     // Calculate total documents after in-memory filtering (if Address or serviceType filtering was applied)
-//     totalDocuments = filteredReviews.length;
-
-//     // Apply pagination after filtering
-//     const startIndex = (page - 1) * limit;
-//     const paginatedReviews = filteredReviews.slice(startIndex, startIndex + parseInt(limit));
-
-//     const totalRating = filteredReviews.reduce((sum, review) => sum + review.rating, 0);
-//     const averageRating = totalDocuments > 0 ? (totalRating / totalDocuments).toFixed(2) : 0;
-
-//     // If a specific userId is provided, calculate the average rating and total reviews for that user
-//     let userReviewData = {};
-//     if (userId) {
-//       const userReviews = await Review.find({ user: userId });
-//       const userTotalRating = userReviews.reduce((sum, review) => sum + review.rating, 0);
-//       const userAverageRating = userReviews.length > 0 ? (userTotalRating / userReviews.length).toFixed(2) : 0;
-//       userReviewData = {
-//         userId: userId,
-//         userReviews,
-//         totalReviews: userReviews.length,
-//         averageRating: userAverageRating
-//       };
-//     }
-
-//     // Calculate total pages
-//     const totalPages = Math.ceil(totalDocuments / limit);
-
-//     if (!paginatedReviews.length) {
-//       return res.status(404).json({
-//         success: false,
-//         message: 'No reviews found matching the specified criteria. Please try a different category, Address, serviceType, or userId.'
-//       });
-//     }
-
-//     // Map response data to include all user details
-//     const responseData = paginatedReviews.map(review => ({
-//       id: review._id,
-//       rating: review.rating,
-//       comment: review.comment,
-//       user: review.user, // Return the entire user object
-//     }));
-
-//     const response = { 
-//       success: true, 
-//       data: responseData, 
-//       totalPages, 
-//       page, 
-//       limit, 
-//       averageRating 
-//     };
-
-//     // Include user-specific review data if userId is provided
-//     if (userId) {
-//       response.userReviewData = userReviewData;
-//     }
-
-//     res.status(200).json(response);
-//   } catch (error) {
-//     console.error('Error fetching reviews:', error);
-//     res.status(500).json({
-//       success: false,
-//       message: 'An error occurred while fetching reviews. Please try again later.',
-//       error: error.message,
-//     }); 
-//   }
-// };
