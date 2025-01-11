@@ -35,12 +35,12 @@ export const deductPerMinute = async (req, res) => {
     console.log("pre:",adminCommissionPercent, "pre:",ratePerMinute );
 
     // Validate the rate per minute
-    if (isNaN(ratePerMinute) || ratePerMinute <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Rate per minute must be a valid number greater than 0',
-      });
-    }
+    // if (isNaN(ratePerMinute) || ratePerMinute <= 0) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: 'Rate per minute must be a valid number greater than 0',
+    //   });
+    // }
 
     // Calculate total deduction and receiver's earnings
     const totalDeduction = ratePerMinute * durationInMinutes;
