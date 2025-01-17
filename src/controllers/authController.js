@@ -900,7 +900,7 @@ export const listener = async (req, res) => {
     }
 
     // Retrieve pagination parameters
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 50 } = req.query;
 
     // Convert to integers
     const pageNumber = parseInt(page, 10);
@@ -910,10 +910,11 @@ export const listener = async (req, res) => {
     const query = {
       userType: 'RECEIVER',
       _id: { $ne: userId }, // Exclude the logged-in user's ID
-      UserStatus: { $nin: ['inActive', 'Blocked', 'InActive'] } // Exclude unwanted statuses
+      UserStatus: { $nin: ['inActive', 'Blocked', 'InActive'] }, // Exclude unwanted statuses
     };
 
     const users = await User.find(query)
+      .sort({ UserStatus: -1 }) // Sort by UserStatus descending ('online' first)
       .skip((pageNumber - 1) * limitNumber)
       .limit(limitNumber);
 
@@ -943,6 +944,7 @@ export const listener = async (req, res) => {
     });
   }
 };
+
 
 
 export const UserCategoryData = async (req, res) => {
