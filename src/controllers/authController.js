@@ -899,32 +899,32 @@ export const listener = async (req, res) => {
       });
     }
 
-    // Retrieve pagination parameters
     const { page = 1, limit = 50 } = req.query;
-
-    // Convert to integers
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
 
-    // Query the database for users with userType 'RECEIVER' and exclude logged-in user
     const query = {
       userType: 'RECEIVER',
-      _id: { $ne: userId }, // Exclude the logged-in user's ID
-      UserStatus: { $nin: ['inActive', 'Blocked', 'InActive'] }, // Exclude unwanted statuses
+      _id: { $ne: userId },
+      UserStatus: { $nin: ['inActive', 'Blocked', 'InActive'] },
     };
 
-    const users = await User.find(query)
-      .sort({ UserStatus: -1 }) // Sort by UserStatus descending ('online' first)
-      .skip((pageNumber - 1) * limitNumber)
-      .limit(limitNumber);
+    const users = await User.aggregate([
+      { $match: query },
+      {
+        $addFields: {
+          isOnline: {
+            $cond: { if: { $eq: ["$status", "Online"] }, then: 1, else: 0 }
+          }
+        }
+      },
+      { $skip: (pageNumber - 1) * limitNumber },
+      { $limit: limitNumber }
+    ]);
 
-    // Count total documents for this query
     const totalUsers = await User.countDocuments(query);
-
-    // Calculate total pages
     const totalPages = Math.ceil(totalUsers / limitNumber);
 
-    // Send response
     res.status(200).json({
       success: true,
       data: users,
@@ -944,6 +944,7 @@ export const listener = async (req, res) => {
     });
   }
 };
+
 
 
 
