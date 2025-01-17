@@ -887,7 +887,6 @@ export const updateStatus = async (req, res) => {
 
 
 //--------------------------Get  User Listener-----------------------------------------
-
 export const listener = async (req, res) => {
   try {
     const userId = req.user._id || req.user.id;
@@ -903,19 +902,19 @@ export const listener = async (req, res) => {
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
 
+    // Base query with hardcoded status filter for 'Online' users only
     const query = {
       userType: 'RECEIVER',
       _id: { $ne: userId },
       UserStatus: { $nin: ['inActive', 'Blocked', 'InActive'] },
+      status: 'Online'  // Filter only users with status 'Online'
     };
 
     const users = await User.aggregate([
-      { $match: query },
+      { $match: query },  // Always filters for 'Online' users
       {
         $addFields: {
-          isOnline: {
-            $cond: { if: { $eq: ["$status", "Online"] }, then: 1, else: 0 }
-          }
+          isOnline: 1  // Since only 'Online' users are fetched, set isOnline to 1
         }
       },
       { $skip: (pageNumber - 1) * limitNumber },
@@ -944,6 +943,7 @@ export const listener = async (req, res) => {
     });
   }
 };
+
 
 
 
