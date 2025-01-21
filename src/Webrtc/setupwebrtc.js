@@ -379,7 +379,7 @@ export const setupWebRTC = (io) => {
           if (receiver.deviceToken) {
             const title = 'Incoming Call';
             const message = `${caller.username || 'Unknown Caller'} is calling you!`;
-            const type = 'incoming_Call';
+            const type = 'call';
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
@@ -392,13 +392,13 @@ export const setupWebRTC = (io) => {
           if (receiver.deviceToken) {
             const title = 'Incoming Call';
             const message = `${caller.username || 'Unknown Caller'} is calling you!`;
-            const type = 'incoming_Call';
+            const type = 'call';
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
             try {
               // Send initial notification
-              await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
+              await sendNotification_call(receiverId, title, message, type, callerId, senderName, senderAvatar);
               logger.info(`Push notification sent to User ${receiverId}`);
 
               // Cleanup timeout if the call is accepted, rejected, or ended
@@ -927,7 +927,50 @@ export const setupWebRTC = (io) => {
   });
 };
 
+async function sendNotification_call(userId, title, message, type, receiverId, senderName, senderAvatar) {
+  try {
+    // Fetch the user from the database
+    const user = await User.findById(userId);
+    if (!user || !user.deviceToken) {
+      console.error("No device token found for user:", userId);
+      return;
+    }
 
+    const deviceToken = user.deviceToken;
+
+    // Construct the payload for FCM
+    const payload = {
+      notification: {
+        title: title,
+        body: message,
+      },
+      data: {
+        screen: 'incoming_Call', // Target screen
+        type: type, // Type of call
+        caller_name: senderName,
+        caller_id: userId,
+        call_type: "audio", // or "video"
+        params: JSON.stringify({
+          user_id: userId, // Include Call ID
+          agent_id: receiverId, // Receiver ID
+          username: senderName, // Sender name
+          imageurl: senderAvatar || 'https://investogram.ukvalley.com/avatars/default.png', // Sender avatar with default fallback
+        }),
+        // Add any additional parameters if needed
+      },
+
+
+      token: deviceToken,
+    };
+    logger.info(`Push notification sent to User  in  notification  function`);
+
+    // Send the notification
+    const response = await admin.messaging().send(payload);
+    console.log("Notification sent successfully:", response);
+  } catch (error) {
+    console.error("Error sending notification:", error);
+  }
+}
 
 
 async function sendNotification(userId, title, message, type, receiverId, senderName, senderAvatar) {
