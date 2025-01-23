@@ -1,5 +1,5 @@
 import User from "../models/Users.js";
-
+import { addUserToMailingList } from "../servises/ZohoServices.js";
 import jwt from "jsonwebtoken";
 import ROLES_LIST from "../config/Roles_list.js";
 import crypto from "crypto";
@@ -1830,6 +1830,22 @@ export const getBankDetails = async (req, res) => {
 
 
 
+
+// addUserToMailingList
+
+export const subscribeUser = async (req, res) => {
+  const { firstName, lastName, email } = req.body;
+
+  try {
+    const response = await addUserToMailingList(firstName, lastName, email);
+    res.status(200).json({
+      message: 'User added to mailing list successfully.',
+      response,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to add user to mailing list.', error: error.message });
+  }
+};
 
 
 
