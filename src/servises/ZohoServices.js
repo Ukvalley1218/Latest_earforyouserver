@@ -1,28 +1,33 @@
 import axios from 'axios';
-import ZohoToken from '../models/ZohoToken';
+import ZohoToken from '../models/ZohoToken'; // Ensure this path is correct based on your folder structure
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Get the latest Zoho access token from DB
+// Get the latest Zoho access token from the DB
 export const getZohoAccessToken = async () => {
-    const token = await ZohoToken.findOne({ reason: 'access_token' }).sort({ createdAt: -1 });
-    return token ? token.token : null;
+    try {
+        const token = await ZohoToken.findOne({ reason: 'access_token' }).sort({ createdAt: -1 });
+        return token ? token.token : null;
+    } catch (error) {
+        console.error('Error retrieving Zoho access token:', error.message);
+        throw error;
+    }
 };
 
-// Refresh Zoho Access 
+// Refresh Zoho Access Token
 export const refreshZohoAccessToken = async () => {
-    const refreshToken = await ZohoToken.findOne({ reason: 'refresh_token' }).sort({ createdAt: -1 });
-    let tokenUrl = '';
-
-    if (refreshToken) {
-        tokenUrl = `https://accounts.zoho.in/oauth/v2/token?client_id=${process.env.ZOHO_CLIENT_ID}&client_secret=${process.env.ZOHO_CLIENT_SECRET}&grant_type=refresh_token&refresh_token=${refreshToken.token}`;
-    } else {
-        throw new Error('Refresh token not found in database.');
-    }
-
     try {
+        const refreshToken = await ZohoToken.findOne({ reason: 'refresh_token' }).sort({ createdAt: -1 });
+
+        if (!refreshToken) {
+            throw new Error('Refresh token not found in the database.');
+        }
+
+        const tokenUrl = `https://accounts.zoho.in/oauth/v2/token?client_id=${process.env.ZOHO_CLIENT_ID}&client_secret=${process.env.ZOHO_CLIENT_SECRET}&grant_type=refresh_token&refresh_token=${refreshToken.token}`;
+
         const response = await axios.post(tokenUrl);
+
         const { access_token } = response.data;
 
         if (access_token) {
@@ -30,6 +35,8 @@ export const refreshZohoAccessToken = async () => {
             console.log('Zoho Access Token Refreshed');
             return access_token;
         }
+
+        throw new Error('Access token not returned from Zoho');
     } catch (error) {
         console.error('Failed to refresh access token:', error.message);
         throw error;
@@ -38,20 +45,24 @@ export const refreshZohoAccessToken = async () => {
 
 // Add user to Zoho mailing list
 export const addUserToMailingList = async (name, lastname, email) => {
-    let accessToken = await getZohoAccessToken();
-
-    if (!accessToken) {
-        console.log('Access token missing, refreshing...');
-        accessToken = await refreshZohoAccessToken();
-    }
-
-    const contactInfo = encodeURIComponent(
-        JSON.stringify({ 'First Name': name, 'Last Name': lastname, 'Contact Email': email })
-    );
-
-    const url = `${process.env.ZOHO_API_URL}?resfmt=JSON&listkey=${process.env.ZOHO_LIST_KEY}&contactinfo=${contactInfo}&source=web`;
-
     try {
+        let accessToken = await getZohoAccessToken();
+
+        if (!accessToken) {
+            console.log('Access token missing, refreshing...');
+            accessToken = await refreshZohoAccessToken();
+        }
+
+        const contactInfo = encodeURIComponent(
+            JSON.stringify({
+                'First Name': name,
+                'Last Name': lastname,
+                'Contact Email': email,
+            })
+        );
+
+        const url = `${process.env.ZOHO_API_URL}?resfmt=JSON&listkey=${process.env.ZOHO_LIST_KEY}&contactinfo=${contactInfo}&source=web`;
+
         const response = await axios.get(url, {
             headers: {
                 Authorization: `Zoho-oauthtoken ${accessToken}`,
@@ -66,7 +77,7 @@ export const addUserToMailingList = async (name, lastname, email) => {
 
         return response.data;
     } catch (error) {
-        console.error('Error adding user to mailing list:', error.message);
+        console.error('Error adding user to Zoho mailing list:', error.message);
         throw error;
     }
 };

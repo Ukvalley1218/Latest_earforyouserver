@@ -23,6 +23,6 @@ const zohoTokenSchema = new mongoose.Schema(
 );
 
 // Create the ZohoToken model based on the schema
-const ZohoToken = mongoose.model('ZohoToken', zohoTokenSchema);
+const ZohoToken = mongoose.models.ZohoToken || mongoose.model('ZohoToken', zohoTokenSchema);
 
 export default ZohoToken;
