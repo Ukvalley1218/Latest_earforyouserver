@@ -1,5 +1,5 @@
 import axios from 'axios';
-import ZohoToken from '../models/ZohoToken'; // Ensure this path is correct based on your folder structure
+import ZohoToken from '../models/TokenStore'; // Ensure this path is correct based on your folder structure
 import dotenv from 'dotenv';
 
 dotenv.config();
