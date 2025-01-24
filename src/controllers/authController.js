@@ -410,9 +410,14 @@ export const initiateRegistration = async (req, res) => {
 
       await session.commitTransaction();
       try {
-        await addToMailingList(newUser.email);
+        const mailingListResult = await addToMailingList(email);
+        if (!mailingListResult.success) {
+          console.error('Failed to add to mailing list:', mailingListResult.message);
+          // Optional: Handle the failure (e.g., retry later, notify admin)
+        }
       } catch (error) {
-        console.error('Failed to add to mailing list:', error);
+        console.error('Mailing list error:', error);
+        // Continue with registration despite mailing list failure
       }
       res.status(200).json({
         message: "OTP sent to email for registration",

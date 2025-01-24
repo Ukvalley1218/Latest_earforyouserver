@@ -191,7 +191,6 @@ const addToMailingList = async (email) => {
             source: "web"
         };
 
-        console.log("data",data);
         const url = 'https://campaigns.zoho.in/api/v1.1/json/listsubscribe';
 
         try {
@@ -201,8 +200,36 @@ const addToMailingList = async (email) => {
                     'Content-Type': 'application/json'
                 }
             });
-            console.log(response.data)
-            return response.data;
+
+            // Verify successful addition
+            if (response.data.status === 'success') {
+                console.log(`Email ${email} successfully added to mailing list`);
+
+                // Query to verify subscription
+                const verifyUrl = 'https://campaigns.zoho.in/api/v1.1/json/listsubscribedetails';
+                const verifyResponse = await axios.get(verifyUrl, {
+                    params: {
+                        listkey: process.env.ZOHO_LIST_KEY,
+                        email: email
+                    },
+                    headers: {
+                        'Authorization': `Zoho-oauthtoken ${accessToken}`
+                    }
+                });
+
+                if (verifyResponse.data.list_subscribe_details?.subscribed === true) {
+                    return {
+                        success: true,
+                        message: 'Email successfully added and verified',
+                        details: verifyResponse.data.list_subscribe_details
+                    };
+                }
+
+                throw new Error('Email addition could not be verified');
+            }
+
+            throw new Error('Failed to add email to mailing list');
+
         } catch (error) {
             if (error.response?.data?.message === 'Unauthorized request.') {
                 console.warn('Token expired, refreshing...');
@@ -215,21 +242,34 @@ const addToMailingList = async (email) => {
                         'Content-Type': 'application/json'
                     }
                 });
-                return retryResponse.data;
+
+                // Verify retry success
+                if (retryResponse.data.status === 'success') {
+                    return {
+                        success: true,
+                        message: 'Email added after token refresh',
+                        details: retryResponse.data
+                    };
+                }
             }
             throw error;
         }
     } catch (error) {
         console.error('Mailing list operation failed:', error);
-        throw error;
+        return {
+            success: false,
+            message: error.message,
+            error: error
+        };
     }
 };
 
-export { 
-    generateTokens, 
-    getAccessToken, 
-    refreshAccessToken, 
-    addToMailingList, 
-    getAuthorizationCode, 
-    handleCallback 
+
+export {
+    generateTokens,
+    getAccessToken,
+    refreshAccessToken,
+    addToMailingList,
+    getAuthorizationCode,
+    handleCallback
 };
