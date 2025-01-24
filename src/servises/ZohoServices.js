@@ -4,14 +4,33 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const getAuthorizationCode = () => {
+    const authUrl = new URL('https://accounts.zoho.in/oauth/v2/auth');
+    const params = {
+        client_id: process.env.ZOHO_CLIENT_ID,
+        response_type: 'code',
+        scope: 'ZohoMail.partner.organization.UPDATE',
+        redirect_uri: process.env.ZOHO_REDIRECT_URI,
+        access_type: 'offline',
+        prompt: 'consent'
+    };
+
+    Object.entries(params).forEach(([key, value]) => {
+        authUrl.searchParams.append(key, value || '');
+    });
+
+    return authUrl.toString();
+};
+
 const getNewToken = async () => {
     try {
-        const params = new URLSearchParams();
-        params.append('client_id', process.env.ZOHO_CLIENT_ID);
-        params.append('client_secret', process.env.ZOHO_CLIENT_SECRET);
-        params.append('grant_type', 'refresh_token');
-        params.append('refresh_token', process.env.ZOHO_REFRESH_TOKEN);
-        params.append('scope', 'ZohoMail.partner.organization.UPDATE');
+        const params = new URLSearchParams({
+            client_id: process.env.ZOHO_CLIENT_ID,
+            client_secret: process.env.ZOHO_CLIENT_SECRET,
+            grant_type: 'refresh_token',
+            refresh_token: process.env.ZOHO_REFRESH_TOKEN,
+            scope: 'ZohoMail.partner.organization.UPDATE'
+        });
 
         const response = await axios.post(
             'https://accounts.zoho.in/oauth/v2/token',
@@ -72,10 +91,39 @@ const getAccessToken = async () => {
 
 const refreshAccessToken = async () => {
     try {
-        const access_token = await getNewToken();
-        return { access_token };
+        const params = new URLSearchParams({
+            client_id: process.env.ZOHO_CLIENT_ID,
+            client_secret: process.env.ZOHO_CLIENT_SECRET,
+            refresh_token: process.env.ZOHO_REFRESH_TOKEN,
+            grant_type: 'refresh_token',
+            scope: 'ZohoMail.partner.organization.UPDATE'
+        });
+
+        const response = await axios.post(
+            'https://accounts.zoho.in/oauth/v2/token',
+            params,
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            }
+        );
+
+        if (response.data.error) {
+            throw new Error(`Zoho API error: ${response.data.error}`);
+        }
+
+        const newToken = await ZohoToken.create({
+            reason: 'access_token',
+            token: response.data.access_token
+        });
+
+        return { access_token: newToken.token };
     } catch (error) {
-        console.error('Token refresh failed:', error);
+        console.error('Token refresh failed:', {
+            message: error instanceof Error ? error.message : 'Unknown error',
+            response: axios.isAxiosError(error) ? error.response?.data : undefined
+        });
         throw error;
     }
 };
@@ -90,9 +138,9 @@ const addToMailingList = async (name, email) => {
         }
 
         const data = {
-            "listkey": process.env.ZOHO_LIST_KEY,
-            "emailids": email,
-            "source": "web"
+            listkey: process.env.ZOHO_LIST_KEY,
+            emailids: email,
+            source: "web"
         };
 
         const url = 'https://campaigns.zoho.in/api/v1.1/json/listsubscribe';
@@ -126,4 +174,10 @@ const addToMailingList = async (name, email) => {
     }
 };
 
-export { generateTokens, getAccessToken, refreshAccessToken, addToMailingList };
+export { 
+    generateTokens, 
+    getAccessToken, 
+    refreshAccessToken, 
+    addToMailingList,
+    getAuthorizationCode 
+};
