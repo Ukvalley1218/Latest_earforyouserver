@@ -226,6 +226,7 @@ const addToMailingList = async (email) => {
                 }
             });
             console.log("Response sending mail",response.data);
+            console.log("Response sending mail1",response);
 
             if (response.data.status !== 'success') {
                 throw new Error('Failed to add email to mailing list');
