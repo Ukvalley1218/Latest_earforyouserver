@@ -22,6 +22,44 @@ const getAuthorizationCode = () => {
     return authUrl.toString();
 };
 
+const handleCallback = async (code) => {
+    try {
+        const params = new URLSearchParams({
+            code,
+            client_id: process.env.ZOHO_CLIENT_ID,
+            client_secret: process.env.ZOHO_CLIENT_SECRET,
+            redirect_uri: process.env.ZOHO_REDIRECT_URI,
+            grant_type: 'authorization_code'
+        });
+
+        const response = await axios.post(
+            'https://accounts.zoho.in/oauth/v2/token',
+            params,
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            }
+        );
+
+        if (response.data.error) {
+            throw new Error(`Zoho API error: ${response.data.error}`);
+        }
+
+        await ZohoToken.create({
+            reason: 'access_token',
+            token: response.data.access_token
+        });
+        
+        process.env.ZOHO_REFRESH_TOKEN = response.data.refresh_token;
+        
+        return response.data;
+    } catch (error) {
+        console.error('Callback error:', error);
+        throw error;
+    }
+};
+
 const getNewToken = async () => {
     try {
         const params = new URLSearchParams({
@@ -54,8 +92,8 @@ const getNewToken = async () => {
         return response.data.access_token;
     } catch (error) {
         console.error('Token error:', {
-            message: error.message,
-            response: error.response?.data
+            message: error instanceof Error ? error.message : 'Unknown error',
+            response: axios.isAxiosError(error) ? error.response?.data : undefined
         });
         throw error;
     }
@@ -179,5 +217,6 @@ export {
     getAccessToken, 
     refreshAccessToken, 
     addToMailingList,
-    getAuthorizationCode 
+    getAuthorizationCode,
+    handleCallback 
 };
