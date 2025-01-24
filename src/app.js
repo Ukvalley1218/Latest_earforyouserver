@@ -107,9 +107,9 @@ import RechargeRoute from './routes/Recharge/RechargeRoute.js'
 import msg91Routes from './routes/OTP/msg91Routes.js'
 import appRatingRoutes from './routes/LeaderBoard/apprateRoute.js'
 // import { watchUserChanges } from "./servises/Stream.js";
- import { checkUserStatus } from "./middlewares/auth/CheckBlock.js";
+import { checkUserStatus } from "./middlewares/auth/CheckBlock.js";
 import { protect } from "./middlewares/auth/authMiddleware.js";
-
+import * as ZohoServices  from './servises/ZohoServices.js';
 
 app.get("/", (req, res) => {
   try {
@@ -121,10 +121,29 @@ app.get("/", (req, res) => {
 });
 // watchUserChanges()
 
-// Apply global middlewares
 
 
-+app.use("/api/", apiLimiter);
+app.get('/oauth/authorize', (req, res) => {
+  const authUrl = ZohoServices.getAuthorizationCode();
+  res.redirect(authUrl);
+});
+
+app.get('/oauth/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+    if (!code) {
+      throw new Error('Authorization code not received');
+    }
+    const tokens = await ZohoServices.handleCallback(code);
+    res.redirect('/success.html');
+  } catch (error) {
+    res.redirect(`/error.html?message=${encodeURIComponent(error.message)}`);
+  }
+})
+  // Apply global middlewares
+
+
+  + app.use("/api/", apiLimiter);
 
 app.use('/api/v1/msg91', msg91Routes);
 
@@ -144,7 +163,7 @@ app.use("/api/v1/messages", messageRouter);
 app.use('/api/v1', reviewRoutes); // Prefix all review routes with /api
 app.use('/api/v1', userRoutes);
 app.use('/api/v1', RechargeRoute);
-  
+
 
 // FairBaseNotification
 
