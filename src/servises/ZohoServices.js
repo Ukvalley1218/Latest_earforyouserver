@@ -10,7 +10,7 @@ const getAuthorizationCode = () => {
     const params = {
         client_id: process.env.ZOHO_CLIENT_ID,
         response_type: 'code',
-        scope: 'ZohoMail.partner.organization.UPDATE',
+        scope: 'ZohoMail.contacts.CREATE',
         redirect_uri: process.env.ZOHO_REDIRECT_URI,
         access_type: 'offline',
         prompt: 'consent'
