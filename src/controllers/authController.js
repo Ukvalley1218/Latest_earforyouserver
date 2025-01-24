@@ -1,5 +1,5 @@
 import User from "../models/Users.js";
-import { addUserToMailingList } from "../servises/ZohoServices.js";
+import { addToMailingList } from "../servises/ZohoServices.js";
 import jwt from "jsonwebtoken";
 import ROLES_LIST from "../config/Roles_list.js";
 import crypto from "crypto";
@@ -410,7 +410,7 @@ export const initiateRegistration = async (req, res) => {
 
       await session.commitTransaction();
       try {
-        await addUserToMailingList(newUser.username, newUser.email);
+        await addToMailingList(newUser.username, newUser.email);
       } catch (error) {
         console.error('Failed to add to mailing list:', error);
       }
@@ -1835,13 +1835,13 @@ export const getBankDetails = async (req, res) => {
 
 
 
-// addUserToMailingList
+// addToMailingList
 
 export const subscribeUser = async (req, res) => {
   const { firstName, lastName, email } = req.body;
 
   try {
-    const response = await addUserToMailingList(firstName, lastName, email);
+    const response = await addToMailingList(firstName, lastName, email);
     res.status(200).json({
       message: 'User added to mailing list successfully.',
       response,
