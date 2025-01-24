@@ -1,31 +1,42 @@
 import axios from 'axios';
-import ZohoToken from '../models/TokenStore.js';
+import TokenStore from './TokenStore.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const getNewToken = async () => {
-    const tokenUrl = `https://accounts.zoho.in/oauth/v2/token?client_id=${process.env.ZOHO_CLIENT_ID}&client_secret=${process.env.ZOHO_CLIENT_SECRET}&grant_type=client_credentials&scope=ZohoMail.partner.organization.UPDATE`;
-    
-    const response = await axios.post(tokenUrl);
-    const { access_token } = response.data;
-    
-    await ZohoToken.create({ 
-        reason: 'access_token', 
-        token: access_token 
-    });
+    try {
+        const tokenUrl = `https://accounts.zoho.in/oauth/v2/token?client_id=${process.env.ZOHO_CLIENT_ID}&client_secret=${process.env.ZOHO_CLIENT_SECRET}&grant_type=client_credentials&scope=ZohoMail.partner.organization.UPDATE`;
 
-    return access_token;
+        const response = await axios.post(tokenUrl);
+
+        if (!response.data.access_token) {
+            throw new Error('No access token received from Zoho');
+        }
+
+        await TokenStore.create({
+            reason: 'access_token',
+            token: response.data.access_token
+        });
+
+        return response.data.access_token;
+    } catch (error) {
+        console.error('Error getting new token:', error);
+        throw error;
+    }
 };
 
-const generateZohoTokens = async () => {
+const generateTokens = async () => {
     try {
-        const existingToken = await ZohoToken.findOne({ reason: 'access_token' });
+        const existingToken = await TokenStore.findOne({ reason: 'access_token' });
         if (existingToken) {
             return { access_token: existingToken.token };
         }
-        
+
         const access_token = await getNewToken();
+        if (!access_token) {
+            throw new Error('Failed to generate access token');
+        }
         return { access_token };
     } catch (error) {
         console.error('Token generation failed:', error);
@@ -33,9 +44,9 @@ const generateZohoTokens = async () => {
     }
 };
 
-const getZohoAccessToken = async () => {
+const getAccessToken = async () => {
     try {
-        const token = await ZohoToken.findOne({ reason: 'access_token' })
+        const token = await TokenStore.findOne({ reason: 'access_token' })
             .sort({ createdAt: -1 });
         return token ? token.token : null;
     } catch (error) {
@@ -44,9 +55,12 @@ const getZohoAccessToken = async () => {
     }
 };
 
-const refreshZohoAccessToken = async () => {
+const refreshAccessToken = async () => {
     try {
         const access_token = await getNewToken();
+        if (!access_token) {
+            throw new Error('Failed to refresh access token');
+        }
         return { access_token };
     } catch (error) {
         console.error('Token refresh failed:', error);
@@ -54,13 +68,17 @@ const refreshZohoAccessToken = async () => {
     }
 };
 
-const addUserToMailingList = async (name, email) => {
+const addToMailingList = async (name, email) => {
     try {
-        let accessToken = await getZohoAccessToken();
+        let accessToken = await getAccessToken();
 
         if (!accessToken) {
-            const tokens = await generateZohoTokens();
+            const tokens = await generateTokens();
             accessToken = tokens.access_token;
+        }
+
+        if (!accessToken) {
+            throw new Error('Unable to obtain access token');
         }
 
         const contactInfo = encodeURIComponent(
@@ -81,9 +99,13 @@ const addUserToMailingList = async (name, email) => {
             return response.data;
         } catch (error) {
             if (error.response?.data?.message === 'Unauthorized request.') {
-                const tokens = await refreshZohoAccessToken();
+                const tokens = await refreshAccessToken();
                 accessToken = tokens.access_token;
-                
+
+                if (!accessToken) {
+                    throw new Error('Failed to refresh token');
+                }
+
                 const retryResponse = await axios.get(url, {
                     headers: {
                         Authorization: `Zoho-oauthtoken ${accessToken}`,
@@ -99,4 +121,4 @@ const addUserToMailingList = async (name, email) => {
     }
 };
 
-export { generateZohoTokens, getZohoAccessToken, refreshZohoAccessToken, addUserToMailingList };
+export { generateTokens, getAccessToken, refreshAccessToken, addToMailingList };
