@@ -68,10 +68,25 @@ const handleCallback = async (code) => {
 
 const refreshAccessToken = async () => {
     try {
-        // Validate refresh token
-        if (!process.env.ZOHO_REFRESH_TOKEN) {
-            throw new Error('Missing ZOHO_REFRESH_TOKEN in environment');
-        }
+        // Comprehensive scope definition
+        const FULL_SCOPES = [
+            'ZohoMail.contacts.CREATE',
+            'ZohoMail.partner.organization.UPDATE',
+            'ZohoCampaigns.contact.CREATE'
+        ].join(',');
+
+        // Validate critical environment variables
+        const requiredVars = [
+            'ZOHO_CLIENT_ID',
+            'ZOHO_CLIENT_SECRET',
+            'ZOHO_REFRESH_TOKEN'
+        ];
+
+        requiredVars.forEach(varName => {
+            if (!process.env[varName]) {
+                throw new Error(`Missing environment variable: ${varName}`);
+            }
+        });
 
         // Prepare request parameters
         const params = new URLSearchParams({
@@ -79,13 +94,14 @@ const refreshAccessToken = async () => {
             client_secret: process.env.ZOHO_CLIENT_SECRET,
             refresh_token: process.env.ZOHO_REFRESH_TOKEN,
             grant_type: 'refresh_token',
-            scope: ZOHO_SCOPES // Use full scope from earlier definition
+            scope: FULL_SCOPES
         });
 
-        // Detailed logging before request
-        debugLog('Token Refresh Attempt', {
-            clientId: process.env.ZOHO_CLIENT_ID?.substring(0, 5) + '...',
-            refreshTokenLength: process.env.ZOHO_REFRESH_TOKEN?.length
+        // Detailed pre-request logging
+        console.log('Token Refresh Attempt', {
+            clientIdPartial: process.env.ZOHO_CLIENT_ID?.substring(0, 5) + '...',
+            refreshTokenLength: process.env.ZOHO_REFRESH_TOKEN?.length,
+            scopes: FULL_SCOPES
         });
 
         // Make token refresh request
@@ -101,9 +117,10 @@ const refreshAccessToken = async () => {
             }
         );
 
-        // Validate response
+        // Comprehensive response validation
         if (response.data.error) {
-            throw new Error(`Zoho API Token Error: ${response.data.error}`);
+            console.error('Zoho API Token Error:', response.data);
+            throw new Error(`Zoho API Error: ${response.data.error}`);
         }
 
         // Store new access token
@@ -112,8 +129,8 @@ const refreshAccessToken = async () => {
             token: response.data.access_token
         });
 
-        // Comprehensive logging
-        debugLog('Token Refresh Success', {
+        // Success logging
+        console.log('Token Refresh Success', {
             newTokenPartial: newToken.token?.substring(0, 10) + '...',
             tokenExpiresIn: response.data.expires_in
         });
@@ -124,35 +141,31 @@ const refreshAccessToken = async () => {
         };
 
     } catch (error) {
-        // Detailed error logging
-        debugLog('Token Refresh Failed', {
+        // Extremely detailed error logging
+        console.error('Token Refresh Failure', {
             errorType: error.constructor.name,
             errorMessage: error.message,
             errorCode: error.code,
             responseStatus: error.response?.status,
-            responseData: error.response?.data
+            responseData: JSON.stringify(error.response?.data),
+            fullError: error
         });
 
-        // Differentiate error types
+        // Comprehensive error handling
         if (error.response) {
-            // The request was made and the server responded with a status code
             switch (error.response.status) {
                 case 400:
-                    throw new Error('Invalid token refresh request');
+                    throw new Error(`Invalid request: ${error.response.data.error}`);
                 case 401:
-                    throw new Error('Authentication failed - check credentials');
+                    throw new Error('Authentication failed - verify credentials');
                 case 403:
-                    throw new Error('Access forbidden - verify permissions');
+                    throw new Error('Access forbidden - check permissions');
                 default:
                     throw new Error(`Token refresh failed: ${error.message}`);
             }
-        } else if (error.request) {
-            // The request was made but no response was received
-            throw new Error('No response received from Zoho OAuth server');
-        } else {
-            // Something happened in setting up the request
-            throw new Error(`Token refresh setup error: ${error.message}`);
         }
+
+        throw error;
     }
 };
 
