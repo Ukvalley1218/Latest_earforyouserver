@@ -168,7 +168,6 @@ const addToMailingList = async (email) => {
             resfmt: 'JSON',
             source: 'web',
             contactinfo: {
-                'Contact Email': email,
                 'Email': email
             }
         };
