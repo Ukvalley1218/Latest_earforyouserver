@@ -145,77 +145,19 @@ const generateTokens = async () => {
     }
 };
 
-// const addToMailingList = async (email) => {
-//     try {
-//         // Always refresh token before making request
-//         const { access_token } = await refreshAccessToken();
-
-//         const url = 'https://campaigns.zoho.in/api/v1.1/json/listsubscribe';
-
-//         const response = await axios.get(url, {
-//             params: {
-//                 listkey: process.env.ZOHO_LIST_KEY,
-//                 contactinfo: JSON.stringify({
-//                     'Contact Email': email,
-//                     'Email': email
-//                 }),
-//                 resfmt: 'JSON',
-//                 source: 'web'
-//             },
-//             headers: {
-//                 'Authorization': `Zoho-oauthtoken ${access_token}`,
-//                 'Content-Type': 'application/json'
-//             }
-//         });
-
-//         // Detailed logging
-//         console.log('Full Zoho Response:', response.data);
-
-//         if (response.data.status === 'success') {
-//             return { success: true, message: 'Email added successfully' };
-//         } else {
-//             throw new Error(response.data.message || 'Failed to add email');
-//         }
-//     } catch (error) {
-//         console.error('Mailing List Error:', error.response?.data || error.message);
-//         return { 
-//             success: false, 
-//             message: error.response?.data?.message || error.message 
-//         };
-//     }
-// };
-
 const addToMailingList = async (email) => {
-    const debugInfo = {
-        timestamp: new Date().toISOString(),
-        email,
-        steps: []
-    };
-
     try {
-        // Detailed token retrieval logging
-        debugInfo.steps.push({
-            stage: 'Token Retrieval',
-            startTime: Date.now()
-        });
-
+        // Always refresh token before making request
         const { access_token } = await refreshAccessToken();
 
-        debugInfo.steps[debugInfo.steps.length - 1].endTime = Date.now();
-        debugInfo.steps[debugInfo.steps.length - 1].duration =
-            debugInfo.steps[debugInfo.steps.length - 1].endTime -
-            debugInfo.steps[debugInfo.steps.length - 1].startTime;
+        const url = 'https://campaigns.zoho.in/api/v1.1/json/listsubscribe';
 
-        // Comprehensive request configuration logging
-        const requestConfig = {
-            url: 'https://campaigns.zoho.in/api/v1.1/json/listsubscribe',
-            method: 'GET',
+        const response = await axios.get(url, {
             params: {
                 listkey: process.env.ZOHO_LIST_KEY,
                 contactinfo: JSON.stringify({
                     'Contact Email': email,
-                    'Email': email,
-                    'First Name': email.split('@')[0]
+                    'Email': email
                 }),
                 resfmt: 'JSON',
                 source: 'web'
@@ -224,71 +166,26 @@ const addToMailingList = async (email) => {
                 'Authorization': `Zoho-oauthtoken ${access_token}`,
                 'Content-Type': 'application/json'
             }
-        };
-
-        debugInfo.steps.push({
-            stage: 'Request Configuration',
-            requestDetails: {
-                url: requestConfig.url,
-                params: Object.keys(requestConfig.params),
-                headersSet: Object.keys(requestConfig.headers)
-            }
         });
 
-        // Performance tracking for API call
-        const startTime = Date.now();
-        const response = await axios.get(
-            requestConfig.url,
-            {
-                params: requestConfig.params,
-                headers: requestConfig.headers
-            }
-        );
-        const endTime = Date.now();
+        // Detailed logging
+        console.log('Full Zoho Response:', response.data);
 
-        debugInfo.steps.push({
-            stage: 'API Response',
-            responseTime: endTime - startTime,
-            statusCode: response.status,
-            responseData: response.data
-        });
-
-        // Comprehensive response handling
         if (response.data.status === 'success') {
-            debugInfo.result = 'Success';
-            console.log(JSON.stringify({
-                type: 'ZOHO_MAILING_LIST_SUCCESS',
-                ...debugInfo
-            }, null, 2));
-
-            return {
-                success: true,
-                message: 'Email added successfully',
-                debugInfo
-            };
+            return { success: true, message: 'Email added successfully' };
         } else {
             throw new Error(response.data.message || 'Failed to add email');
         }
     } catch (error) {
-        debugInfo.result = 'Failure';
-        debugInfo.errorDetails = {
-            message: error.message,
-            code: error.code,
-            responseData: error.response?.data
-        };
-
-        console.error(JSON.stringify({
-            type: 'ZOHO_MAILING_LIST_ERROR',
-            ...debugInfo
-        }, null, 2));
-
-        return {
-            success: false,
-            message: error.response?.data?.message || error.message,
-            debugInfo
+        console.error('Mailing List Error:', error.response?.data || error.message);
+        return { 
+            success: false, 
+            message: error.response?.data?.message || error.message 
         };
     }
 };
+
+
 export {
     generateTokens,
     getAccessToken,
