@@ -159,6 +159,7 @@ const addToMailingList = async (email) => {
         // }
 
         const access_token = tokenResponse.access_token;
+        console.log("access_token",access_token);
 
         const url = 'https://campaigns.zoho.in/api/v1.1/json/listsubscribe';
 
