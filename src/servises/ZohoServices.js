@@ -152,7 +152,7 @@ const addToMailingList = async (email) => {
 
         // Always refresh token before making request
         const tokenResponse = await refreshAccessToken();
-        console.log('Token Response:', tokenResponse.access_token);
+        console.log('Token Response mail list:', tokenResponse);
 
         // if (!tokenResponse || !tokenResponse.access_token) {
         //     throw new Error('Failed to obtain access token');
