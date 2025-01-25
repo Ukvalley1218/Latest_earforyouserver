@@ -162,20 +162,20 @@ const addToMailingList = async (email) => {
         try {
             const response = await makeRequest(accessToken);
 
-            if (response.data.status === 'error') {
-                if (response.data.message.includes('Unauthorized')) {
-                    debugLog('Token expired, refreshing');
-                    const tokens = await refreshAccessToken();
-                    const retryResponse = await makeRequest(tokens.access_token);
+            if (response.data.message === 'Unauthorized request') {
 
-                    if (retryResponse.data.status === 'success') {
-                        return {
-                            success: true,
-                            message: 'Email added after token refresh',
-                            data: retryResponse.data
-                        };
-                    }
+                debugLog('Token expired, refreshing');
+                const tokens = await refreshAccessToken();
+                const retryResponse = await makeRequest(tokens.access_token);
+
+                if (retryResponse.data.status === 'success') {
+                    return {
+                        success: true,
+                        message: 'Email added after token refresh',
+                        data: retryResponse.data
+                    };
                 }
+
                 throw new Error(response.data.message);
             }
 
