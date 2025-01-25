@@ -147,28 +147,36 @@ const generateTokens = async () => {
 
 const addToMailingList = async (email) => {
     try {
+        // Log the list key value
+        console.log('ZOHO_LIST_KEY:', process.env.ZOHO_LIST_KEY);
+
         // Always refresh token before making request
         const { access_token } = await refreshAccessToken();
 
         const url = 'https://campaigns.zoho.in/api/v1.1/json/listsubscribe';
 
-        const response = await axios.get(url, {
-            params: {
-                listkey: process.env.ZOHO_LIST_KEY,
-                contactinfo: JSON.stringify({
-                    'Contact Email': email,
-                    'Email': email
-                }),
-                resfmt: 'JSON',
-                source: 'web'
-            },
+        const requestBody = {
+            listkey: process.env.ZOHO_LIST_KEY,
+            resfmt: 'JSON',
+            source: 'web',
+            contactinfo: {
+                'Contact Email': email,
+                'Email': email
+            }
+        };
+
+        // Log the complete request details
+        console.log('Request URL:', url);
+        console.log('Request Body:', JSON.stringify(requestBody, null, 2));
+        console.log('Authorization Token:', `Bearer ${access_token.slice(0, 10)}...`);
+
+        const response = await axios.post(url, requestBody, {
             headers: {
-                'Authorization': `Zoho-oauthtoken ${access_token}`,
+                'Authorization': `Bearer ${access_token}`,
                 'Content-Type': 'application/json'
             }
         });
 
-        // Detailed logging
         console.log('Full Zoho Response:', response.data);
 
         if (response.data.status === 'success') {
@@ -178,9 +186,9 @@ const addToMailingList = async (email) => {
         }
     } catch (error) {
         console.error('Mailing List Error:', error.response?.data || error.message);
-        return { 
-            success: false, 
-            message: error.response?.data?.message || error.message 
+        return {
+            success: false,
+            message: error.response?.data?.message || error.message
         };
     }
 };
