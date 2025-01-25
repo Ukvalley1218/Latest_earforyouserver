@@ -69,11 +69,7 @@ const handleCallback = async (code) => {
 const refreshAccessToken = async () => {
     try {
         // Comprehensive scope definition
-        const FULL_SCOPES = [
-            'ZohoMail.contacts.CREATE',
-            'ZohoMail.partner.organization.UPDATE',
-            'ZohoCampaigns.contact.CREATE'
-        ].join(',');
+
 
         // Validate critical environment variables
         const requiredVars = [
@@ -106,8 +102,7 @@ const refreshAccessToken = async () => {
 
         // Make token refresh request
         const response = await axios.post(
-            'https://accounts.zoho.in/oauth/v2/token',
-            params.toString(),
+            'https://accounts.zoho.in/oauth/v2/token?refresh_token=1000.bec60de8f76f4ec9f1e3958f182f2d18.d3500c440f9d90b07f6d7eb51266d3fd&client_id=1000.M9PNU2DDSI2RFY2K2HVLTCY4153HTN&client_secret=c1217b89fccf397a715ddb7a1b56df5d068494db4c&grant_type=refresh_token',
             {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
