@@ -152,13 +152,13 @@ const addToMailingList = async (email) => {
 
         // Always refresh token before making request
         const tokenResponse = await refreshAccessToken();
-        console.log('Token Response mail list:', tokenResponse);
+        console.log('Token Response mail list:', tokenResponse.accessToken);
 
-        // if (!tokenResponse || !tokenResponse.access_token) {
-        //     throw new Error('Failed to obtain access token');
-        // }
+        if (!tokenResponse || !tokenResponse.accessToken) {
+            throw new Error('Failed to obtain access token');
+        }
 
-        const access_token = tokenResponse.access_token;
+        const access_token = tokenResponse.accessToken;
         console.log("access_token",access_token);
 
         const url = 'https://campaigns.zoho.in/api/v1.1/json/listsubscribe';
