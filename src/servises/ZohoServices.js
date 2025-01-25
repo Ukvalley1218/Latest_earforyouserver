@@ -90,11 +90,11 @@ const refreshAccessToken = async () => {
 
         // Prepare request parameters
         const params = new URLSearchParams({
+            refresh_token: process.env.ZOHO_REFRESH_TOKEN,
             client_id: process.env.ZOHO_CLIENT_ID,
             client_secret: process.env.ZOHO_CLIENT_SECRET,
-            refresh_token: process.env.ZOHO_REFRESH_TOKEN,
             grant_type: 'refresh_token',
-            scope: FULL_SCOPES
+            scope: 'ZohoMail.contacts.CREAT'
         });
 
         // Detailed pre-request logging
