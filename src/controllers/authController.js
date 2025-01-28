@@ -705,7 +705,7 @@ export const updateProfile = async (req, res) => {
       userCategory,
       avatarUrl,
       decs,
-      bio,
+      Bio,
       shortDecs
     } = req.body;
 
@@ -771,13 +771,13 @@ export const updateProfile = async (req, res) => {
     }
 
     // Add bio validation
-    if (bio !== undefined) {
-      if (!Array.isArray(bio)) {
+    if (Bio !== undefined) {
+      if (!Array.isArray(Bio)) {
         validationErrors.push('Bio must be an array of strings');
       } else {
         // Validate each element in the bio array
-        for (let i = 0; i < bio.length; i++) {
-          if (typeof bio[i] !== 'string') {
+        for (let i = 0; i < Bio.length; i++) {
+          if (typeof Bio[i] !== 'string') {
             validationErrors.push(`Bio element at index ${i} must be a string`);
           }
         }
@@ -811,7 +811,7 @@ export const updateProfile = async (req, res) => {
       ...(userCategory !== undefined && { userCategory }),
       ...(decs !== undefined && { decs }),
       ...(avatarUrl !== undefined && { avatarUrl }),
-      ...(Bio !== undefined && { bio }),
+      ...(Bio !== undefined && { Bio }),
       ...(shortDecs !== undefined && { shortDecs: shortDecs.trim() }),
       status: 'Online',
       UserStatus: 'Active',
