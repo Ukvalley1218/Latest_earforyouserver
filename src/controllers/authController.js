@@ -1463,7 +1463,7 @@ export const getUserById = async (req, res) => {
 export const getAllUsers1 = async (req, res) => {
   try {
     // Extract and normalize the gender filter from params or query
-    const genderFilter = req.params.gender?.toLowerCase();
+    const genderFilter = req.params.gender;
     const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
     const loggedInUserGender = genderFilter || req.user.gender?.toLowerCase();
 
