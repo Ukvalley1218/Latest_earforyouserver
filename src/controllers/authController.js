@@ -811,7 +811,7 @@ export const updateProfile = async (req, res) => {
       ...(userCategory !== undefined && { userCategory }),
       ...(decs !== undefined && { decs }),
       ...(avatarUrl !== undefined && { avatarUrl }),
-      ...(bio !== undefined && { bio }),
+      ...(bio !== undefined && { Bio }),
       ...(shortDecs !== undefined && { shortDecs: shortDecs.trim() }),
       status: 'Online',
       UserStatus: 'Active',
