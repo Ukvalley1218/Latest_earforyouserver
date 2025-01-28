@@ -692,10 +692,22 @@ export const updateOrCreateUserCategory = async (req, res) => {
 };
 
 // ------------------------useruserController.js---------------------------------------
+
 export const updateProfile = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { username, dateOfBirth, gender, Language, phone, userCategory, avatarUrl, decs } = req.body;
+    const {
+      username,
+      dateOfBirth,
+      gender,
+      Language,
+      phone,
+      userCategory,
+      avatarUrl,
+      decs,
+      bio,
+      shortDecs
+    } = req.body;
 
     // Input validation
     const validationErrors = [];
@@ -745,7 +757,6 @@ export const updateProfile = async (req, res) => {
       if (typeof decs !== 'string') {
         validationErrors.push('Description must be a string');
       } else {
-        // Split the string into words and check the length
         const wordCount = decs.trim().split(/\s+/).length;
         if (wordCount > 200) {
           validationErrors.push('Description must not exceed 100 words');
@@ -753,9 +764,34 @@ export const updateProfile = async (req, res) => {
       }
     }
 
-
     if (userCategory !== undefined && typeof userCategory !== 'string') {
       validationErrors.push('User category must be a string');
+    }
+
+    // Add shortDecs validation
+    if (shortDecs !== undefined) {
+      if (typeof shortDecs !== 'string') {
+        validationErrors.push('Short description must be a string');
+      } else {
+        const wordCount = shortDecs.trim().split(/\s+/).length;
+        if (wordCount > 20) {
+          validationErrors.push('Short description must not exceed 20 words');
+        }
+      }
+    }
+
+    // Add bio validation
+    if (bio !== undefined) {
+      if (!Array.isArray(bio)) {
+        validationErrors.push('Bio must be an array of strings');
+      } else {
+        // Validate each element in the bio array
+        for (let i = 0; i < bio.length; i++) {
+          if (typeof bio[i] !== 'string') {
+            validationErrors.push(`Bio element at index ${i} must be a string`);
+          }
+        }
+      }
     }
 
     if (validationErrors.length > 0) {
@@ -785,6 +821,8 @@ export const updateProfile = async (req, res) => {
       ...(userCategory !== undefined && { userCategory }),
       ...(decs !== undefined && { decs }),
       ...(avatarUrl !== undefined && { avatarUrl }),
+      ...(bio !== undefined && { bio }),
+      ...(shortDecs !== undefined && { shortDecs: shortDecs.trim() }),
       status: 'Online',
       UserStatus: 'Active',
       updatedAt: new Date(),
@@ -795,8 +833,8 @@ export const updateProfile = async (req, res) => {
       userId,
       { $set: updateData },
       {
-        new: true, // Return the updated document
-        runValidators: true, // Apply schema validation
+        new: true,
+        runValidators: true,
       }
     );
 
@@ -808,7 +846,6 @@ export const updateProfile = async (req, res) => {
   } catch (error) {
     console.error('Profile update error:', error);
 
-    // Handle mongoose validation errors
     if (error.name === 'ValidationError') {
       return res.status(400).json({
         success: false,
@@ -824,7 +861,6 @@ export const updateProfile = async (req, res) => {
     });
   }
 };
-
 
 
 // -------------------------- Update Status --------------------------
@@ -922,7 +958,12 @@ export const listener = async (req, res) => {
       });
     }
 
-    const { page = 1, limit = 50 } = req.query;
+    const {
+      page = 1,
+      limit = 50,
+      search = "" // Search parameter for username
+    } = req.query;
+
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
 
@@ -933,16 +974,32 @@ export const listener = async (req, res) => {
       UserStatus: { $nin: ['inActive', 'Blocked', 'InActive'] },
     };
 
+    // Add username search condition if search parameter exists
+    if (search.trim()) {
+      query.username = { $regex: search, $options: 'i' };
+    }
+
     const users = await User.aggregate([
-      { $match: query },  // Fetch all eligible users
+      { $match: query },
       {
         $addFields: {
-          isOnline: { $cond: [{ $eq: ['$status', 'Online'] }, 1, 0] }  // Mark online users
+          isOnline: { $cond: [{ $eq: ['$status', 'Online'] }, 1, 0] }
         }
       },
-      { $sort: { isOnline: -1, createdAt: -1 } },  // Sort online users on top, then by creation date
+      {
+        $sort: {
+          isOnline: -1,
+          createdAt: -1
+        }
+      },
       { $skip: (pageNumber - 1) * limitNumber },
-      { $limit: limitNumber }
+      { $limit: limitNumber },
+      {
+        $project: {
+          password: 0,
+          refreshToken: 0
+        }
+      }
     ]);
 
     const totalUsers = await User.countDocuments(query);
@@ -957,6 +1014,10 @@ export const listener = async (req, res) => {
         currentPage: pageNumber,
         limit: limitNumber,
       },
+      searchQuery: search ? {
+        term: search,
+        resultsCount: users.length
+      } : null
     });
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -974,10 +1035,8 @@ export const listener = async (req, res) => {
 
 export const UserCategoryData = async (req, res) => {
   try {
-    const userId = req.user._id || req.user.id; // Logged-in user's ID
-    const { Category } = req.body;
+    const userId = req.user._id || req.user.id;
 
-    // Check if userId is provided
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -985,32 +1044,72 @@ export const UserCategoryData = async (req, res) => {
       });
     }
 
-    // Retrieve pagination parameters
-    const { page = 1, limit = 20 } = req.query;
+    const { Category } = req.body;
+    const { 
+      page = 1, 
+      limit = 20,
+      search = "" // Add search parameter
+    } = req.query;
 
-    // Convert to integers for pagination
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
 
-    // Query the database for users
-    const query = {
-      userCategory: Category, // Filter by category
-      _id: { $ne: userId },   // Exclude the logged-in user's ID
-      UserStatus: { $nin: ["inActive", "Blocked", "InActive"] }, // Exclude users with unwanted statuses
-    };
+    // Use aggregation pipeline for better control over sorting and filtering
+    const users = await User.aggregate([
+      {
+        $match: {
+          userCategory: Category,
+          _id: { $ne: new mongoose.Types.ObjectId(userId) },
+          UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
+          // Add username search if provided
+          ...(search.trim() && {
+            username: { $regex: search, $options: 'i' }
+          })
+        }
+      },
+      {
+        $addFields: {
+          isOnline: { 
+            $cond: [
+              { $eq: ['$status', 'Online'] }, 
+              1, 
+              0
+            ] 
+          }
+        }
+      },
+      {
+        $sort: {
+          isOnline: -1, // Sort online users first
+          createdAt: -1 // Then by creation date
+        }
+      },
+      {
+        $skip: (pageNumber - 1) * limitNumber
+      },
+      {
+        $limit: limitNumber
+      },
+      {
+        $project: {
+          password: 0,
+          refreshToken: 0
+        }
+      }
+    ]);
 
-    // Fetch users with pagination
-    const users = await User.find(query)
-      .skip((pageNumber - 1) * limitNumber)
-      .limit(limitNumber);
+    // Count total documents matching the criteria
+    const totalUsers = await User.countDocuments({
+      userCategory: Category,
+      _id: { $ne: userId },
+      UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
+      ...(search.trim() && {
+        username: { $regex: search, $options: 'i' }
+      })
+    });
 
-    // Count total documents for pagination
-    const totalUsers = await User.countDocuments(query);
-
-    // Calculate total pages
     const totalPages = Math.ceil(totalUsers / limitNumber);
 
-    // Send response
     res.status(200).json({
       success: true,
       data: users,
@@ -1020,6 +1119,10 @@ export const UserCategoryData = async (req, res) => {
         currentPage: pageNumber,
         limit: limitNumber,
       },
+      searchQuery: search ? {
+        term: search,
+        resultsCount: users.length
+      } : null
     });
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -1257,6 +1360,16 @@ export const getAllUsers1 = async (req, res) => {
     const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
     const loggedInUserGender = req.user.gender;
 
+    // Get gender filter from params
+    const genderFilter = req.params.gender?.toLowerCase();
+
+    // Validate gender parameter
+    if (genderFilter && !['male', 'female'].includes(genderFilter)) {
+      return res.status(400).json({
+        message: "Invalid gender parameter. Must be 'male' or 'female'"
+      });
+    }
+
     // Pagination parameters
     const page = parseInt(req.query.page) || 1;
     const limit = 21;
@@ -1271,6 +1384,8 @@ export const getAllUsers1 = async (req, res) => {
         $match: {
           _id: { $ne: loggedInUserId },
           UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
+          // Add gender filter if provided
+          ...(genderFilter && { gender: genderFilter }),
           ...(searchQuery && {
             $or: [
               { username: { $regex: searchQuery, $options: "i" } },
@@ -1329,11 +1444,17 @@ export const getAllUsers1 = async (req, res) => {
     const userList = users[0]?.users || [];
 
     if (userList.length === 0) {
-      return res.status(404).json({ message: "No users found" });
+      return res.status(404).json({
+        message: genderFilter
+          ? `No ${genderFilter} users found`
+          : "No users found"
+      });
     }
 
     res.status(200).json({
-      message: "Users fetched successfully",
+      message: genderFilter
+        ? `${genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)} users fetched successfully`
+        : "Users fetched successfully",
       users: userList,
       pagination: {
         totalUsers,
@@ -1342,7 +1463,6 @@ export const getAllUsers1 = async (req, res) => {
         limit,
       },
     });
-
   } catch (error) {
     console.error("Error fetching users:", error);
     res.status(500).json({ message: "Internal server error", error: error.message });
@@ -1862,49 +1982,76 @@ export const subscribeUser = async (req, res) => {
 
 export const getChatsWithLatestMessages = async (req, res) => {
   try {
-    const userId = req.user.id || req.user._id; // Get logged-in user ID
-    const page = parseInt(req.query.page) || 1; // Page number
-    const limit = parseInt(req.query.limit) || 20; // Results per page
+    const userId = req.user.id || req.user._id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const search = req.query.search || ""; // Add search parameter
     const skip = (page - 1) * limit;
 
-    // Step 1: Fetch chats where the user is a participant with pagination
-    const chats = await Chat.find({ participants: userId })
+    // Step 1: Find all chat IDs where the user is a participant
+    const userChats = await Chat.find({ participants: userId });
+    const chatIds = userChats.map(chat => chat._id);
+
+    // Step 2: Get all participant IDs from these chats (excluding the current user)
+    const participantIds = userChats.reduce((acc, chat) => {
+      chat.participants.forEach(participantId => {
+        if (participantId.toString() !== userId.toString()) {
+          acc.add(participantId.toString());
+        }
+      });
+      return acc;
+    }, new Set());
+
+    // Step 3: Fetch participants with search and online status
+    const participants = await User.aggregate([
+      {
+        $match: {
+          _id: { $in: Array.from(participantIds).map(id => new mongoose.Types.ObjectId(id)) },
+          ...(search && {
+            username: { $regex: search, $options: 'i' }
+          })
+        }
+      },
+      {
+        $addFields: {
+          isOnline: { $cond: [{ $eq: ['$status', 'Online'] }, 1, 0] }
+        }
+      },
+      {
+        $sort: {
+          isOnline: -1,
+          updatedAt: -1
+        }
+      }
+    ]);
+
+    if (!participants.length) {
+      return res.json({ chats: [], page, limit });
+    }
+
+    // Step 4: Fetch chats with filtered participants
+    const filteredChatIds = userChats.filter(chat => 
+      chat.participants.some(participantId => 
+        participants.some(p => p._id.toString() === participantId.toString())
+      )
+    ).map(chat => chat._id);
+
+    const chats = await Chat.find({ _id: { $in: filteredChatIds } })
       .populate({
         path: 'participants',
         model: User,
         select: '-password -refreshToken',
       })
-      .sort({ updatedAt: -1 }) // Sort by the latest chat
+      .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(limit);
 
-    if (!chats.length) {
-      return res.json({ chats: [], page, limit });
-    }
+    // Step 5: Fetch reviews for participants
+    const reviews = await Review.find({
+      user: { $in: participants.map(p => p._id) }
+    });
 
-    // Step 2: Use a Map to filter unique users
-    const uniqueUsersMap = new Map();
-
-    for (const chat of chats) {
-      chat.participants.forEach((participant) => {
-        if (participant._id.toString() !== userId.toString()) {
-          if (!uniqueUsersMap.has(participant._id.toString())) {
-            uniqueUsersMap.set(participant._id.toString(), {
-              user: participant,
-              chatId: chat._id,
-              lastMessage: chat.lastMessage || null,
-              updatedAt: chat.updatedAt,
-            });
-          }
-        }
-      });
-    }
-
-    // Step 3: Fetch reviews for unique participants
-    const participantIds = Array.from(uniqueUsersMap.keys());
-    const reviews = await Review.find({ user: { $in: participantIds } });
-
-    // Step 4: Calculate average ratings for participants
+    // Step 6: Calculate average ratings
     const userRatingsMap = {};
     reviews.forEach((review) => {
       const userId = review.user.toString();
@@ -1920,20 +2067,64 @@ export const getChatsWithLatestMessages = async (req, res) => {
       avgRatings[userId] = (ratingData.sum || 0) / (ratingData.count || 1);
     }
 
-    // Step 5: Format unique user chat data with participants in array format
+    // Step 7: Format chat data with online status and search results
+    const uniqueUsersMap = new Map();
+    
+    for (const chat of chats) {
+      chat.participants.forEach((participant) => {
+        if (participant._id.toString() !== userId.toString()) {
+          const matchingParticipant = participants.find(p => 
+            p._id.toString() === participant._id.toString()
+          );
+          
+          if (matchingParticipant && !uniqueUsersMap.has(participant._id.toString())) {
+            uniqueUsersMap.set(participant._id.toString(), {
+              user: {
+                ...participant.toObject(),
+                isOnline: matchingParticipant.isOnline === 1
+              },
+              chatId: chat._id,
+              lastMessage: chat.lastMessage || null,
+              updatedAt: chat.updatedAt,
+            });
+          }
+        }
+      });
+    }
+
     const formattedChats = Array.from(uniqueUsersMap.values()).map((item) => {
       const avgRating = avgRatings[item.user._id.toString()] || 0;
-      const { password, refreshToken, ...userDetails } = item.user.toObject();
+      const { password, refreshToken, ...userDetails } = item.user;
 
       return {
-        participants: [{ ...userDetails, averageRating: avgRating }], // Wrap in array format
+        participants: [{
+          ...userDetails,
+          averageRating: avgRating
+        }],
         chatId: item.chatId,
         lastMessage: item.lastMessage,
         updatedAt: item.updatedAt,
       };
     });
 
-    res.json({ chats: formattedChats, page, limit });
+    // Sort formatted chats by online status and then by updatedAt
+    formattedChats.sort((a, b) => {
+      if (a.participants[0].isOnline !== b.participants[0].isOnline) {
+        return b.participants[0].isOnline ? 1 : -1;
+      }
+      return new Date(b.updatedAt) - new Date(a.updatedAt);
+    });
+
+    res.json({
+      chats: formattedChats,
+      page,
+      limit,
+      searchQuery: search ? {
+        term: search,
+        resultsCount: formattedChats.length
+      } : null
+    });
+
   } catch (error) {
     console.error('Error fetching chats with latest messages:', error);
     res.status(500).json({ error: 'Failed to fetch chats' });
