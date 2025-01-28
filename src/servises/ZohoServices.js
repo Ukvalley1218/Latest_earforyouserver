@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const ZOHO_SCOPES = 'ZohoCampaigns.contact.CREATE,ZohoCampaigns.lists.ALL';
+
 
 const debugLog = (message, data) => {
     console.log(`[DEBUG] ${message}:`, JSON.stringify(data, null, 2));
@@ -73,7 +73,7 @@ const refreshAccessToken = async () => {
             client_id: '1000.M9PNU2DDSI2RFY2K2HVLTCY4153HTN',
             client_secret: 'c1217b89fccf397a715ddb7a1b56df5d068494db4c',
             grant_type: 'refresh_token',
-            scope:'ZohoCampaigns.contact.CREATE,ZohoCampaigns.lists.ALL'
+            // scope:'ZohoCampaigns.contact.CREATE,ZohoCampaigns.lists.ALL'
         };
 
         const response = await axios.post(
