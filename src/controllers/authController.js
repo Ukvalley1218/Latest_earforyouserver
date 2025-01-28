@@ -1349,7 +1349,7 @@ export const getUserById = async (req, res) => {
 //     console.log(genderFilter);
 //     const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
 //     const loggedInUserGender = genderFilter || req.user.gender;
-    
+
 //     console.log(genderFilter);
 //     // Get gender filter from params
 
