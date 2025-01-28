@@ -725,16 +725,6 @@ export const updateProfile = async (req, res) => {
       }
     }
 
-    if (dateOfBirth !== undefined) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
-        validationErrors.push('Date of birth must be in YYYY-MM-DD format');
-      } else {
-        const date = new Date(dateOfBirth);
-        if (isNaN(date.getTime())) {
-          validationErrors.push('Invalid date of birth');
-        }
-      }
-    }
 
     if (gender !== undefined) {
       if (!['male', 'female', 'other'].includes(gender.toLowerCase())) {
@@ -1353,18 +1343,137 @@ export const getUserById = async (req, res) => {
 
 
 
+// export const getAllUsers1 = async (req, res) => {
+//   try {
+//     const genderFilter = req.params.gender?.toLowerCase();
+//     console.log(genderFilter);
+//     const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
+//     const loggedInUserGender = genderFilter || req.user.gender;
+    
+//     console.log(genderFilter);
+//     // Get gender filter from params
+
+//     // Validate gender parameter
+//     if (genderFilter && !['male', 'female'].includes(genderFilter)) {
+//       return res.status(400).json({
+//         message: "Invalid gender parameter. Must be 'male' or 'female'"
+//       });
+//     }
+
+//     // Pagination parameters
+//     const page = parseInt(req.query.page) || 1;
+//     const limit = 21;
+//     const skip = (page - 1) * limit;
+
+//     // Search query from request
+//     const searchQuery = req.query.search || "";
+
+//     // MongoDB aggregation pipeline
+//     const users = await User.aggregate([
+//       {
+//         $match: {
+//           _id: { $ne: loggedInUserId },
+//           UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
+//           // Add gender filter if provided
+//           ...(genderFilter && { gender: genderFilter }),
+//           ...(searchQuery && {
+//             $or: [
+//               { username: { $regex: searchQuery, $options: "i" } },
+//               { name: { $regex: searchQuery, $options: "i" } },
+//               { email: { $regex: searchQuery, $options: "i" } },
+//             ],
+//           }),
+//         },
+//       },
+//       {
+//         $lookup: {
+//           from: "reviews",
+//           localField: "_id",
+//           foreignField: "user",
+//           as: "ratings",
+//         },
+//       },
+//       {
+//         $addFields: {
+//           avgRating: { $avg: "$ratings.rating" },
+//           reviewCount: { $size: "$ratings" },
+//           isOppositeGender: {
+//             $cond: { if: { $ne: ["$gender", loggedInUserGender] }, then: 1, else: 0 },
+//           },
+//           isOnline: {
+//             $cond: { if: { $eq: ["$status", "Online"] }, then: 1, else: 0 },
+//           },
+//         },
+//       },
+//       {
+//         $sort: {
+//           isOnline: -1,
+//           isOppositeGender: -1,
+//           avgRating: -1,
+//         },
+//       },
+//       {
+//         $facet: {
+//           metadata: [{ $count: "totalUsers" }],
+//           users: [
+//             { $skip: skip },
+//             { $limit: limit },
+//             {
+//               $project: {
+//                 password: 0,
+//                 refreshToken: 0,
+//                 ratings: 0,
+//               },
+//             },
+//           ],
+//         },
+//       },
+//     ]);
+
+//     const totalUsers = users[0]?.metadata[0]?.totalUsers || 0;
+//     const userList = users[0]?.users || [];
+
+//     if (userList.length === 0) {
+//       return res.status(404).json({
+//         message: genderFilter
+//           ? `No ${genderFilter} users found`
+//           : "No users found"
+//       });
+//     }
+
+//     res.status(200).json({
+//       message: genderFilter
+//         ? `${genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)} users fetched successfully`
+//         : "Users fetched successfully",
+//       users: userList,
+//       pagination: {
+//         totalUsers,
+//         currentPage: page,
+//         totalPages: Math.ceil(totalUsers / limit),
+//         limit,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error fetching users:", error);
+//     res.status(500).json({ message: "Internal server error", error: error.message });
+//   }
+// };
+
+
 export const getAllUsers1 = async (req, res) => {
   try {
-    const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
-    const loggedInUserGender = req.params.gender?.toLowerCase() || req.user.gender;
-
-    // Get gender filter from params
+    // Extract and normalize the gender filter from params or query
     const genderFilter = req.params.gender?.toLowerCase();
+    const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
+    const loggedInUserGender = genderFilter || req.user.gender?.toLowerCase();
 
-    // Validate gender parameter
-    if (genderFilter && !['male', 'female'].includes(genderFilter)) {
+    console.log("Gender Filter (from params):", genderFilter);
+    console.log("Logged-in User Gender:", loggedInUserGender);
+
+    // Validate the gender parameter
+    if (genderFilter && !["male", "female"].includes(genderFilter)) {
       return res.status(400).json({
-        message: "Invalid gender parameter. Must be 'male' or 'female'"
+        message: "Invalid gender parameter. Must be 'male' or 'female'",
       });
     }
 
@@ -1375,6 +1484,7 @@ export const getAllUsers1 = async (req, res) => {
 
     // Search query from request
     const searchQuery = req.query.search || "";
+    console.log("Search Query:", searchQuery);
 
     // MongoDB aggregation pipeline
     const users = await User.aggregate([
@@ -1382,7 +1492,6 @@ export const getAllUsers1 = async (req, res) => {
         $match: {
           _id: { $ne: loggedInUserId },
           UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
-          // Add gender filter if provided
           ...(genderFilter && { gender: genderFilter }),
           ...(searchQuery && {
             $or: [
@@ -1438,6 +1547,7 @@ export const getAllUsers1 = async (req, res) => {
       },
     ]);
 
+    // Extract metadata and user list from the aggregation results
     const totalUsers = users[0]?.metadata[0]?.totalUsers || 0;
     const userList = users[0]?.users || [];
 
@@ -1445,10 +1555,11 @@ export const getAllUsers1 = async (req, res) => {
       return res.status(404).json({
         message: genderFilter
           ? `No ${genderFilter} users found`
-          : "No users found"
+          : "No users found",
       });
     }
 
+    // Send the response with users and pagination details
     res.status(200).json({
       message: genderFilter
         ? `${genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)} users fetched successfully`
@@ -1463,107 +1574,12 @@ export const getAllUsers1 = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching users:", error);
-    res.status(500).json({ message: "Internal server error", error: error.message });
+    res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
+    });
   }
 };
-
-
-// export const getAllUsers1 = async (req, res) => {
-//   try {
-//     // Extract logged-in user's details
-//     const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
-//     const loggedInUserGender = req.user.gender;
-
-//     // Pagination parameters
-//     const page = parseInt(req.query.page) || 1;
-//     const limit = 21;
-//     const skip = (page - 1) * limit;
-
-//     // Find users excluding the logged-in user and specific statuses
-//     const users = await User.aggregate([
-//       {
-//         $match: {
-//           _id: { $ne: loggedInUserId },
-//           UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
-//         },
-//       },
-
-//       {
-//         $lookup: {
-//           from: "reviews",
-//           localField: "_id",
-//           foreignField: "user",
-//           as: "ratings",
-//         },
-//       },
-//       // Add computed fields for sorting and filtering
-//       {
-//         $addFields: {
-
-//           avgRating: { $avg: "$ratings.rating" },
-//           reviewCount: { $size: "$ratings" },
-//           isOppositeGender: {
-//             $cond: { if: { $ne: ["$gender", loggedInUserGender] }, then: 1, else: 0 },
-//           },
-//           isOnline: {
-//             $cond: { if: { $eq: ["$status", "Online"] }, then: 1, else: 0 },
-//           },
-
-//         },
-//       },
-//       // Sort users based on criteria
-//       {
-//         $sort: {
-//           isOnline: -1,          // Online users prioritized
-//           isOppositeGender: -1,  // Opposite gender prioritized
-//           avgRating: -1,         // Higher ratings prioritized
-//         },
-//       },
-//       // Pagination using $facet
-//       {
-//         $facet: {
-//           metadata: [{ $count: "totalUsers" }],
-//           users: [
-//             { $skip: skip },
-//             { $limit: limit },
-//             {
-//               $project: {
-//                 password: 0,
-//                 refreshToken: 0,
-//                 ratings: 0,
-//               },
-//             },
-//           ],
-//         },
-//       },
-//     ]);
-
-//     // Extract results
-//     const totalUsers = users[0]?.metadata[0]?.totalUsers || 0;
-//     const userList = users[0]?.users || [];
-
-//     // Handle no users found
-//     if (userList.length === 0) {
-//       return res.status(404).json({ message: "No users found" });
-//     }
-
-//     // Send response
-//     res.status(200).json({
-//       message: "Users fetched successfully",
-//       users: userList,
-//       pagination: {
-//         totalUsers,
-//         currentPage: page,
-//         totalPages: Math.ceil(totalUsers / limit),
-//         limit,
-//       },
-//     });
-
-//   } catch (error) {
-//     console.error("Error fetching users:", error);
-//     res.status(500).json({ message: "Internal server error", error: error.message });
-//   }
-// };
 
 
 
