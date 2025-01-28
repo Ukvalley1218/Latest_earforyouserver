@@ -31,7 +31,7 @@ import User from '../../models/Users.js';
 
 export const getRecentCalls = async (req, res) => {
   try {
-    const userId = req.user._id || req.user.id;
+    const userId =  req.user.id;
     const { page = 1 } = req.query; // Default page number is 1
     const PAGE_SIZE = 20; // 20 calls per page
 
