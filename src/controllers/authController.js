@@ -1353,12 +1353,10 @@ export const getUserById = async (req, res) => {
 
 
 
-
-
 export const getAllUsers1 = async (req, res) => {
   try {
     const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
-    const loggedInUserGender = req.user.gender;
+    const loggedInUserGender = req.params.gender?.toLowerCase() || req.user.gender;
 
     // Get gender filter from params
     const genderFilter = req.params.gender?.toLowerCase();
