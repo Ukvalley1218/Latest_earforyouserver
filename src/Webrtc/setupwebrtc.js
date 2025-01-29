@@ -379,7 +379,7 @@ export const setupWebRTC = (io) => {
           if (receiver.deviceToken) {
             const title = 'Incoming Call';
             const message = `${caller.username || 'Unknown Caller'} is calling you!`;
-            const type = 'call';
+            const type = 'incoming_call';
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
@@ -392,7 +392,7 @@ export const setupWebRTC = (io) => {
           if (receiver.deviceToken) {
             const title = 'Incoming Call';
             const message = `${caller.username || 'Unknown Caller'} is calling you!`;
-            const type = 'call';
+            const type = 'incoming_call';
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
