@@ -945,7 +945,7 @@ async function sendNotification_call(userId, title, message, type, receiverId, s
           notification: {
             channelId: 'calls',
             title: 'Incoming Call',
-            body: `${callerName} is calling...`,
+            body: `${senderName} is calling...`,
           }
       },
       data: {
