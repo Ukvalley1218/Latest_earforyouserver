@@ -441,7 +441,7 @@ export const setupWebRTC = (io) => {
         // Check for simultaneous calls between the same users
         const pendingCallKey = `${Math.min(callerId, receiverId)}_${Math.max(callerId, receiverId)}`;
 
-        // Check if there's already a pending call
+        // Check if there's already a pending calltest
         if (pendingCalls[pendingCallKey]) {
           const existingCall = pendingCalls[pendingCallKey];
 
