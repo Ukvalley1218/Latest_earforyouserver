@@ -314,7 +314,7 @@ export const setupWebRTC = (io) => {
     });
 
     // Cancel random call request
-    
+
     socket.on('cancelRandomCall', ({ userId }) => {
       if (randomCallQueue.has(userId)) {
         randomCallQueue.delete(userId);
@@ -324,6 +324,108 @@ export const setupWebRTC = (io) => {
         logger.info(`User ${userId} cancelled random call request`);
       }
     });
+
+    // socket.on('call', async ({ callerId, receiverId }) => {
+    //   try {
+    //     logger.info(`User ${callerId} is calling User ${receiverId}`);
+
+    //     // Check if either user is already in a call
+    //     if (activeCalls[receiverId] || activeCalls[callerId]) {
+    //       socket.emit('userBusy', { receiverId });
+    //       logger.warn(`User ${receiverId} or ${callerId} is already in a call`);
+    //       return;
+    //     }
+
+    //     // Fetch user details
+    //     const [receiver, caller] = await Promise.all([
+    //       User.findById(receiverId),
+    //       User.findById(callerId),
+    //     ]);
+
+    //     if (!receiver) {
+    //       socket.emit('receiverUnavailable', { receiverId });
+    //       logger.warn(`Receiver user ${receiverId} not found`);
+    //       return;
+    //     }
+
+    //     if (!caller) {
+    //       socket.emit('callerUnavailable', { callerId });
+    //       logger.warn(`Caller user ${callerId} not found`);
+    //       return;
+    //     }
+
+    //     // Initialize socket arrays if needed
+    //     users[callerId] = users[callerId] || [];
+    //     users[receiverId] = users[receiverId] || [];
+
+    //     // Add current socket to caller's list if not already present
+    //     if (!users[callerId].includes(socket.id)) {
+    //       users[callerId].push(socket.id);
+    //     }
+
+    //     if (users[receiverId].length > 0) {
+    //       // Notify all receiver's sockets about the incoming call
+    //       users[receiverId].forEach((socketId) => {
+    //         socket.to(socketId).emit('incomingCall', {
+    //           callerId,
+    //           callerSocketId: socket.id, // Provide caller's socket ID
+    //         });
+    //       });
+
+    //       // Notify the caller to play caller tune
+    //       socket.emit('playCallerTune', { callerId });
+
+    //       // Send push notification if the receiver has a device token
+    //       if (receiver.deviceToken) {
+    //         const title = 'Incoming Call';
+    //         const message = `${caller.username || 'Unknown Caller'} is calling you!`;
+    //         const type = 'incoming_call';
+    //         const senderName = caller.username || 'Unknown Caller';
+    //         const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
+
+    //         await sendNotification_call(receiverId, title, message, type, callerId, senderName, senderAvatar);
+    //         logger.info(`Push notification sent to User ${receiverId}`);
+    //       }
+
+    //     } else {
+    //       // Handle case where receiver is offline or unavailable
+    //       if (receiver.deviceToken) {
+    //         const title = 'Incoming Call';
+    //         const message = `${caller.username || 'Unknown Caller'} is calling you!`;
+    //         const type = 'incoming_call';
+    //         const senderName = caller.username || 'Unknown Caller';
+    //         const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
+
+    //         try {
+    //           // Send initial notification
+    //           await sendNotification_call(receiverId, title, message, type, callerId, senderName, senderAvatar);
+    //           logger.info(`Push notification sent to User ${receiverId}`);
+
+    //           // Cleanup timeout if the call is accepted, rejected, or ended
+    //           const cleanupTimeout = () => {
+    //             logger.info(`Call timeout cleared for User ${receiverId}`);
+    //           };
+
+    //           socket.on('acceptCall', cleanupTimeout);
+    //           socket.on('rejectCall', cleanupTimeout);
+    //           socket.on('endCall', cleanupTimeout);
+    //         } catch (error) {
+    //           logger.error(`Failed to send push notification to User ${receiverId}: ${error.message}`);
+    //         }
+    //       } else {
+    //         logger.warn(`No device token available for User ${receiverId}, skipping notification`);
+    //       }
+    //     }
+    //   } catch (error) {
+    //     logger.error(`Error in call handler: ${error.message}`);
+    //     socket.emit('callError', { message: 'Failed to initiate call' });
+    //   }
+    // });
+
+
+
+    // Handle WebRTC offer
+
 
     socket.on('call', async ({ callerId, receiverId }) => {
       try {
@@ -335,6 +437,49 @@ export const setupWebRTC = (io) => {
           logger.warn(`User ${receiverId} or ${callerId} is already in a call`);
           return;
         }
+
+        // Check for simultaneous calls between the same users
+        const pendingCallKey = `${Math.min(callerId, receiverId)}_${Math.max(callerId, receiverId)}`;
+        if (pendingCalls[pendingCallKey]) {
+          const existingCall = pendingCalls[pendingCallKey];
+
+          // If the existing caller is the current receiver, handle the cross-call
+          if (existingCall.callerId === receiverId) {
+            // Clear the pending call
+            delete pendingCalls[pendingCallKey];
+
+            // Notify both users about the conflict
+            socket.emit('callConflict', {
+              message: 'Simultaneous call detected',
+              otherUserId: receiverId
+            });
+
+            users[receiverId]?.forEach(socketId => {
+              socket.to(socketId).emit('callConflict', {
+                message: 'Simultaneous call detected',
+                otherUserId: callerId
+              });
+            });
+
+            logger.warn(`Simultaneous call detected between users ${callerId} and ${receiverId}`);
+            return;
+          }
+        }
+
+        // Store the current call attempt
+        pendingCalls[pendingCallKey] = {
+          callerId,
+          receiverId,
+          timestamp: Date.now(),
+          socketId: socket.id
+        };
+
+        // Clear pending call after timeout (e.g., 30 seconds)
+        setTimeout(() => {
+          if (pendingCalls[pendingCallKey]) {
+            delete pendingCalls[pendingCallKey];
+          }
+        }, 30000);
 
         // Fetch user details
         const [receiver, caller] = await Promise.all([
@@ -368,53 +513,25 @@ export const setupWebRTC = (io) => {
           users[receiverId].forEach((socketId) => {
             socket.to(socketId).emit('incomingCall', {
               callerId,
-              callerSocketId: socket.id, // Provide caller's socket ID
+              callerSocketId: socket.id,
             });
           });
 
-          // Notify the caller to play caller tune
           socket.emit('playCallerTune', { callerId });
 
-          // Send push notification if the receiver has a device token
           if (receiver.deviceToken) {
             const title = 'Incoming Call';
             const message = `${caller.username || 'Unknown Caller'} is calling you!`;
-            const type = 'incoming_call';
+            const type = 'incoming_Call';
             const senderName = caller.username || 'Unknown Caller';
             const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
 
             await sendNotification_call(receiverId, title, message, type, callerId, senderName, senderAvatar);
             logger.info(`Push notification sent to User ${receiverId}`);
           }
-
         } else {
-          // Handle case where receiver is offline or unavailable
-          if (receiver.deviceToken) {
-            const title = 'Incoming Call';
-            const message = `${caller.username || 'Unknown Caller'} is calling you!`;
-            const type = 'incoming_call';
-            const senderName = caller.username || 'Unknown Caller';
-            const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
-
-            try {
-              // Send initial notification
-              await sendNotification_call(receiverId, title, message, type, callerId, senderName, senderAvatar);
-              logger.info(`Push notification sent to User ${receiverId}`);
-
-              // Cleanup timeout if the call is accepted, rejected, or ended
-              const cleanupTimeout = () => {
-                logger.info(`Call timeout cleared for User ${receiverId}`);
-              };
-
-              socket.on('acceptCall', cleanupTimeout);
-              socket.on('rejectCall', cleanupTimeout);
-              socket.on('endCall', cleanupTimeout);
-            } catch (error) {
-              logger.error(`Failed to send push notification to User ${receiverId}: ${error.message}`);
-            }
-          } else {
-            logger.warn(`No device token available for User ${receiverId}, skipping notification`);
-          }
+          socket.emit('userBusy', { receiverId });
+          logger.warn(`Receiver ${receiverId} is offline or unavailable`);
         }
       } catch (error) {
         logger.error(`Error in call handler: ${error.message}`);
@@ -422,9 +539,6 @@ export const setupWebRTC = (io) => {
       }
     });
 
-
-
-    // Handle WebRTC offer
     socket.on('offer', async ({ offer, callerId, receiverId }) => {
       try {
         logger.info(`User ${callerId} sending offer to User ${receiverId}`);
@@ -471,7 +585,7 @@ export const setupWebRTC = (io) => {
       try {
         // Log incoming ICE candidate
         logger.info('ICE candidate received', { callerId, receiverId });
-    
+
         // Check if candidate exists
         if (!candidate) {
           logger.warn('Invalid ICE candidate received');
@@ -481,7 +595,7 @@ export const setupWebRTC = (io) => {
           });
           return;
         }
-    
+
         // Check if receiver exists in users
         if (!users[receiverId]) {
           logger.warn(`Receiver ${receiverId} not found in users`);
@@ -491,7 +605,7 @@ export const setupWebRTC = (io) => {
           });
           return;
         }
-    
+
         // Check if receiver has any socket connections
         if (!Array.isArray(users[receiverId]) || users[receiverId].length === 0) {
           logger.warn(`No active sockets for receiver ${receiverId}`);
@@ -501,35 +615,35 @@ export const setupWebRTC = (io) => {
           });
           return;
         }
-    
+
         // Forward ICE candidate to all receiver's sockets
         users[receiverId].forEach((socketId) => {
-          socket.to(socketId).emit('iceCandidate', { 
-            candidate, 
+          socket.to(socketId).emit('iceCandidate', {
+            candidate,
             callerId,
-            timestamp: Date.now() 
+            timestamp: Date.now()
           });
-          logger.info(`ICE candidate forwarded`, { 
-            from: callerId, 
-            to: receiverId, 
-            socketId 
+          logger.info(`ICE candidate forwarded`, {
+            from: callerId,
+            to: receiverId,
+            socketId
           });
         });
-    
+
       } catch (error) {
         logger.error('Error in iceCandidate handler:', {
           error: error.message,
           callerId,
           receiverId
         });
-        
+
         socket.emit('error', {
           type: 'ICE_CANDIDATE_ERROR',
           message: 'Failed to process ICE candidate'
         });
       }
     });
-    
+
 
     socket.on('acceptCall', async ({ receiverId, callerId }) => {
       try {
@@ -714,69 +828,69 @@ export const setupWebRTC = (io) => {
     socket.on('endCall', async ({ receiverId, callerId }) => {
       try {
         logger.info('Attempting to end call', { callerId, receiverId });
-    
+
         // Debug log current state
         logger.info('Current active calls:', activeCalls);
         logger.info('Current call timings:', callTimings);
-    
+
         // Validate IDs
         if (!callerId || !receiverId) {
           logger.warn('Missing caller or receiver ID');
           return;
         }
-    
+
         // Check active calls with more detailed logging
         const isCallerActive = activeCalls[callerId] === receiverId;
         const isReceiverActive = activeCalls[receiverId] === callerId;
-        
+
         logger.info('Call status check:', {
           isCallerActive,
           isReceiverActive,
           callerActivePair: `${callerId} -> ${activeCalls[callerId]}`,
           receiverActivePair: `${receiverId} -> ${activeCalls[receiverId]}`
         });
-    
+
         if (isCallerActive || isReceiverActive) {
           // Handle active call ending
           logger.info(`Ending active call between ${callerId} and ${receiverId}`);
-    
+
           // Notify receiver of call end
           if (users[receiverId]) {
             const receiverSockets = users[receiverId];
             logger.info(`Found ${receiverSockets.length} sockets for receiver`);
-    
+
             receiverSockets.forEach((socketId) => {
-              socket.to(socketId).emit('callEnded', { 
+              socket.to(socketId).emit('callEnded', {
                 callerId,
-                timestamp: Date.now() 
+                timestamp: Date.now()
               });
-              
+
               socket.to(socketId).emit('inactiveCall', {
                 callerId,
                 receiverId,
                 socketId: socket.id,
                 timestamp: Date.now()
               });
-              
+
               logger.info(`Sent end call notifications to socket: ${socketId}`);
             });
           } else {
             logger.warn(`No active sockets found for receiver: ${receiverId}`);
           }
-    
+
           // Handle call duration calculation
           const callerCallKey = `${callerId}_${receiverId}`;
           const receiverCallKey = `${receiverId}_${callerId}`;
-          
+
           logger.info('Checking call timing keys:', {
             callerCallKey,
             receiverCallKey,
             callerTiming: callTimings[callerCallKey],
             receiverTiming: callTimings[receiverCallKey]
           });
-    
+
           const startTime = callTimings[callerCallKey]?.startTime || callTimings[receiverCallKey]?.startTime;
-    
+
           if (!startTime) {
             logger.warn('Call timing not found', {
               callerCallKey,
@@ -785,16 +899,16 @@ export const setupWebRTC = (io) => {
             });
             return;
           }
-    
+
           const endTime = new Date();
           const duration = Math.round((endTime - new Date(startTime)) / 1000);
-    
+
           logger.info('Call duration calculated:', {
             startTime,
             endTime,
             durationSeconds: duration
           });
-    
+
           // Save call log
           try {
             await CallLog.create({
@@ -805,21 +919,21 @@ export const setupWebRTC = (io) => {
               duration,
               status: 'completed',
             });
-            
+
             logger.info('Call log saved successfully');
           } catch (dbError) {
             logger.error('Failed to save call log:', dbError);
           }
-    
+
           // Cleanup with logging
           logger.info('Cleaning up call data...');
           delete activeCalls[callerId];
           delete activeCalls[receiverId];
           delete callTimings[callerCallKey];
           delete callTimings[receiverCallKey];
-          
+
           logger.info('Call cleanup completed');
-          
+
         } else {
           // No active call found - log detailed state
           logger.warn('No active call found', {
@@ -827,7 +941,7 @@ export const setupWebRTC = (io) => {
             activeCallsState: JSON.stringify(activeCalls),
             callTimingsState: JSON.stringify(callTimings)
           });
-    
+
           socket.emit('error', {
             type: 'END_CALL_ERROR',
             message: 'No active call found'
@@ -840,7 +954,7 @@ export const setupWebRTC = (io) => {
           callerId,
           receiverId
         });
-        
+
         socket.emit('error', {
           type: 'END_CALL_ERROR',
           message: 'Failed to end call'
@@ -941,12 +1055,12 @@ async function sendNotification_call(userId, title, message, type, receiverId, s
     // Construct the payload for FCM
     const payload = {
       android: {
-          priority: 'high',
-          notification: {
-            channelId: 'calls',
-            title: 'Incoming Call',
-            body: `${senderName} is calling...`,
-          }
+        priority: 'high',
+        notification: {
+          channelId: 'calls',
+          title: 'Incoming Call',
+          body: `${senderName} is calling...`,
+        }
       },
       data: {
         screen: 'incoming_Call', // Target screen
