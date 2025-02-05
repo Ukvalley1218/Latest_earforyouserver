@@ -130,6 +130,8 @@ const userSchema = new mongoose.Schema(
       default: "offline", // Default t
       index: true
     },
+
+    
     lastSeen: {
       type: Date, // Store the timestamp of the last seen activity
     },
