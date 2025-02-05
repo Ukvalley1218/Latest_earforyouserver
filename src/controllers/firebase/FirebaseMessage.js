@@ -74,7 +74,7 @@ const sendSingleNotification = async (deviceToken, title, body) => {
 
 export const sendBulkNotification = async (req, res) => {
   const { title, body } = req.body;
-  
+
   try {
     // Input validation
     if (!title || !body) {
@@ -101,7 +101,7 @@ export const sendBulkNotification = async (req, res) => {
     const registrationTokens = users.map(user => user.deviceToken);
     const BATCH_SIZE = 500;
     const batches = [];
-    
+
     for (let i = 0; i < registrationTokens.length; i += BATCH_SIZE) {
       batches.push(registrationTokens.slice(i, i + BATCH_SIZE));
     }
@@ -167,10 +167,9 @@ export const sendBulkNotification = async (req, res) => {
 
 // Original single user notification function (kept for backward compatibility)
 export const sendPushNotification = async (req, res) => {
-  const { 
+  const {
     userId,
-    title = "Are you free now, Yash If Yes, Let's Connect Over A Call",
-    body = "Your True Listener"
+    title = "Are you free now, Yash If Yes, Let's Connect Over A Call"
   } = req.body;
 
   try {
@@ -183,6 +182,9 @@ export const sendPushNotification = async (req, res) => {
       });
     }
 
+    // Create body text with user's name
+    const body = `Your True Listener ${user.username || user.name || ''}`;
+
     const response = await sendSingleNotification(user.deviceToken, title, body);
 
     if (!response) {
@@ -194,7 +196,6 @@ export const sendPushNotification = async (req, res) => {
       message: 'Notification sent!',
       response
     });
-
   } catch (error) {
     console.error('Error sending notification:', error);
     return res.status(500).json({
