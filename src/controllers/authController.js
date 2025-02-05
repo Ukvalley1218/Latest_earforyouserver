@@ -1466,7 +1466,7 @@ export const getAllUsers1 = async (req, res) => {
     const genderFilter = req.query.gender;
     // Extract and normalize the gender filter from params or query
     const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
-    const loggedInUserGender = genderFilter;
+    const loggedInUserGender = genderFilter || req.user.gender?.toLowerCase();
 
     console.log("Gender Filter (from params):", genderFilter);
     console.log("Logged-in User Gender:", loggedInUserGender);
