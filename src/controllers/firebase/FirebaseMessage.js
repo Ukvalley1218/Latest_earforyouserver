@@ -1,4 +1,5 @@
 // controllers/notificationController.js
+import { Console } from 'winston/lib/winston/transports/index.js';
 import firebaseConfig from '../../config/firebaseConfig.js';
 import User from '../../models/Users.js';
 import admin from 'firebase-admin';
@@ -169,12 +170,17 @@ export const sendBulkNotification = async (req, res) => {
 
 
 export const sendPushNotification = async (req, res) => {
+  
   const { userId } = req.body
 
   try {
     const user = await User.findById(userId);
-
-    if (!user || !user.deviceToken) {
+    console.log("user",user);
+    console.log("user",user.deviceToken);
+    
+    if (!user || !user.deviceToken)
+       {
+      console.log()
       return res.status(404).json({
         success: false,
         message: 'User or device token not found'
