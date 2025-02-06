@@ -548,8 +548,16 @@ export const setupWebRTC = (io) => {
             logger.info(`Push notification sent to User ${receiverId}`);
           }
         } else {
-          socket.emit('userBusy', { receiverId });
-          logger.warn(`Receiver ${receiverId} is offline or unavailable`);
+          if (receiver.deviceToken) {
+            const title = 'Incoming Call';
+            const message = `${caller.username || 'Unknown Caller'} is calling you!`;
+            const type = 'incoming_Call';
+            const senderName = caller.username || 'Unknown Caller';
+            const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
+
+            await sendNotification_call(receiverId, title, message, type, callerId, senderName, senderAvatar);
+            logger.info(`Push notification sent to User ${receiverId}`);
+          }
         }
       } catch (error) {
         logger.error(`Error in call handler: ${error.message}`);

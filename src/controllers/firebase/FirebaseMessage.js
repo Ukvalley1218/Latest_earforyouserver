@@ -175,6 +175,7 @@ export const sendPushNotification = async (req, res) => {
 
   try {
     const user = await User.findById(userId);
+    
     console.log("user",user);
     console.log("user",user.deviceToken);
     
