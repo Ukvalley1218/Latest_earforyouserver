@@ -429,22 +429,26 @@ export const setupWebRTC = (io) => {
 
     socket.on('call', async ({ callerId, receiverId }) => {
       try {
-        logger.info(`[CALL_START] User ${callerId} is initiating call to User ${receiverId}`);
-        logger.debug(`[CALL_STATE] Current active calls:`, activeCalls);
-        logger.debug(`[CALL_STATE] Current pending calls:`, pendingCalls);
+        // Input validation
+        if (!callerId || !receiverId) {
+          logger.error('[CALL_VALIDATION] Invalid caller or receiver ID', { callerId, receiverId });
+          socket.emit('callError', { message: 'Invalid user IDs provided' });
+          return;
+        }
+
+        logger.info(`[CALL_START] User ${callerId} is calling User ${receiverId}`);
+        logger.debug(`[CALL_STATE] Current active calls:`, JSON.stringify(activeCalls));
+        logger.debug(`[CALL_STATE] Current pending calls:`, JSON.stringify(pendingCalls));
 
         // Check if either user is already in a call
         if (activeCalls[receiverId] || activeCalls[callerId]) {
           logger.warn(`[CALL_BUSY] User ${activeCalls[receiverId] ? receiverId : callerId} is already in a call`);
-          socket.emit('userBusy', {
-            receiverId,
-            message: `User is already in an active call`
-          });
+          socket.emit('userBusy', { receiverId });
           return;
         }
 
-        // Create unique key for call pair
-        const pendingCallKey = `${Math.min(callerId, receiverId)}_${Math.max(callerId, receiverId)}`;
+        // Generate pending call key with string conversion to prevent NaN
+        const pendingCallKey = `${callerId}_${receiverId}`;
         logger.debug(`[CALL_KEY] Generated pending call key: ${pendingCallKey}`);
 
         // Check for existing pending calls
@@ -453,7 +457,7 @@ export const setupWebRTC = (io) => {
           const timeSinceCall = Date.now() - existingCall.timestamp;
 
           logger.debug(`[CALL_CONFLICT_CHECK] Found existing call:`, {
-            existingCall,
+            existingCall: JSON.stringify(existingCall),
             timeSinceCall,
             isStale: timeSinceCall >= 5000
           });
@@ -470,7 +474,7 @@ export const setupWebRTC = (io) => {
               originalCall: existingCall
             };
 
-            // Notify users about conflict
+            // Notify about conflict
             const conflictMessage = {
               message: 'Simultaneous call detected',
               timestamp: Date.now()
@@ -500,6 +504,7 @@ export const setupWebRTC = (io) => {
               }
             }, 5000);
 
+            // Return early to prevent incoming call emission
             return;
           } else {
             // Clear stale pending call
@@ -545,19 +550,13 @@ export const setupWebRTC = (io) => {
         // Validate users exist
         if (!receiver) {
           logger.warn(`[CALL_ERROR] Receiver ${receiverId} not found in database`);
-          socket.emit('receiverUnavailable', {
-            receiverId,
-            message: 'User not found'
-          });
+          socket.emit('receiverUnavailable', { receiverId });
           return;
         }
 
         if (!caller) {
           logger.warn(`[CALL_ERROR] Caller ${callerId} not found in database`);
-          socket.emit('callerUnavailable', {
-            callerId,
-            message: 'User not found'
-          });
+          socket.emit('callerUnavailable', { callerId });
           return;
         }
 
@@ -571,23 +570,19 @@ export const setupWebRTC = (io) => {
           logger.debug(`[SOCKET_REGISTER] Registered socket ${socket.id} for caller ${callerId}`);
         }
 
-        // Only proceed with call notification if:
-        // 1. There's no conflict
-        // 2. The call hasn't been cleaned up
-        // 3. The receiver has active sockets
-        const canProceedWithCall = (
-          !pendingCalls[pendingCallKey]?.conflict &&
-          pendingCalls[pendingCallKey] &&
-          users[receiverId].length > 0
-        );
+        // Check if we can proceed with the call
+        // Important: We check again for conflicts here
+        const currentCallState = pendingCalls[pendingCallKey];
+        if (!currentCallState || currentCallState.conflict) {
+          logger.info(`[CALL_BLOCKED] Call blocked due to state change:`, {
+            exists: !!currentCallState,
+            hasConflict: currentCallState?.conflict
+          });
+          return;
+        }
 
-        logger.debug(`[CALL_CHECK] Can proceed with call: ${canProceedWithCall}`, {
-          hasConflict: pendingCalls[pendingCallKey]?.conflict,
-          callExists: !!pendingCalls[pendingCallKey],
-          receiverSocketCount: users[receiverId].length
-        });
-
-        if (canProceedWithCall) {
+        // Only emit incoming call if receiver has active sockets
+        if (users[receiverId].length > 0) {
           // Notify receiver's sockets
           users[receiverId].forEach((socketId) => {
             socket.to(socketId).emit('incomingCall', {
@@ -606,17 +601,17 @@ export const setupWebRTC = (io) => {
           });
         }
 
-        // Send push notification if device token exists
+        // Handle push notification
         if (receiver.deviceToken) {
-          const notificationData = {
-            title: 'Incoming Call',
-            message: `${caller.username || 'Unknown Caller'} is calling you!`,
-            type: 'incoming_Call',
-            senderName: caller.username || 'Unknown Caller',
-            senderAvatar: caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png'
-          };
-
           try {
+            const notificationData = {
+              title: 'Incoming Call',
+              message: `${caller.username || 'Unknown Caller'} is calling you!`,
+              type: 'incoming_Call',
+              senderName: caller.username || 'Unknown Caller',
+              senderAvatar: caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png'
+            };
+
             await sendNotification_call(
               receiverId,
               notificationData.title,
@@ -628,12 +623,9 @@ export const setupWebRTC = (io) => {
             );
             logger.info(`[PUSH_NOTIFY] Successfully sent push notification to User ${receiverId}`);
           } catch (notifyError) {
-            logger.error(`[PUSH_ERROR] Failed to send push notification to User ${receiverId}:`, notifyError);
-            // Continue with call flow even if push notification fails
+            logger.error(`[PUSH_ERROR] Failed to send push notification:`, notifyError);
           }
         }
-
-        logger.info(`[CALL_COMPLETE] Successfully initiated call from ${callerId} to ${receiverId}`);
 
       } catch (error) {
         logger.error(`[CALL_ERROR] Error in call handler:`, {
@@ -645,14 +637,12 @@ export const setupWebRTC = (io) => {
 
         socket.emit('callError', {
           message: 'Failed to initiate call',
-          details: error.message,
-          timestamp: Date.now()
+          details: error.message
         });
 
         // Cleanup any partial call state
-        const pendingCallKey = `${Math.min(callerId, receiverId)}_${Math.max(callerId, receiverId)}`;
+        const pendingCallKey = `${callerId}_${receiverId}`;
         if (pendingCalls[pendingCallKey]) {
-          logger.info(`[CALL_ERROR_CLEANUP] Cleaning up failed call attempt for ${pendingCallKey}`);
           if (pendingCalls[pendingCallKey].cleanupTimeout) {
             clearTimeout(pendingCalls[pendingCallKey].cleanupTimeout);
           }
