@@ -16,6 +16,7 @@ export const setupWebRTC = (io) => {
   const CALL_TIMEOUT = 60000; // 1 minute in milliseconds
   const pendingCalls = {}; // Track pending calls between users
   // Queue to store connected users
+  const userBusy={}
   const userQueue = [];
 
   // Function to add user to the queue
