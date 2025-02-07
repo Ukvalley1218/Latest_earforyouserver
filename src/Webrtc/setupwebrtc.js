@@ -336,7 +336,7 @@ export const setupWebRTC = (io) => {
           socket.emit('callError', { message: 'Invalid user IDs' });
           return;
         }
-
+        
         // Check for active calls
         if (activeCalls[receiverId] || activeCalls[callerId]) {
           const busyUser = activeCalls[receiverId] ? receiverId : callerId;
@@ -348,8 +348,6 @@ export const setupWebRTC = (io) => {
           return;
         }
 
-        activeCalls[callerId] = callerId;
-        activeCalls[receiverId] = receiverId;
 
         if (activeCalls[receiverId]) {
           logger.warn(`[CALL_BUSY] Receiver ${receiverId} is in active call`);
@@ -454,8 +452,6 @@ export const setupWebRTC = (io) => {
           if (pendingCalls[pendingCallKey] && !pendingCalls[pendingCallKey].conflict) {
             logger.info(`[CALL_TIMEOUT] Cleaning up ${pendingCallKey}`);
             delete pendingCalls[pendingCallKey];
-            delete activeCalls[callerId];
-            delete activeCalls[receiverId];
             socket.emit('callTimeout', {
               receiverId,
               message: 'Call request timed out'
@@ -481,8 +477,6 @@ export const setupWebRTC = (io) => {
             userId: !receiver ? receiverId : callerId
           });
           delete pendingCalls[pendingCallKey];
-          delete activeCalls[callerId];
-          delete activeCalls[receiverId];
           return;
         }
 
@@ -501,12 +495,8 @@ export const setupWebRTC = (io) => {
           return;
         }
 
-
         // Handle socket notifications
         if (users[receiverId].length > 0) {
-
-
-
           users[receiverId].forEach((socketId) => {
             socket.to(socketId).emit('incomingCall', {
               callerId,
@@ -514,10 +504,6 @@ export const setupWebRTC = (io) => {
               callerName: caller.username || 'Unknown Caller',
               timestamp: Date.now()
             });
-
-
-            activeCalls[callerId] = callerId;
-            activeCalls[receiverId] = receiverId;
             logger.info(`[SOCKET_NOTIFY] Sent to ${receiverId} via socket ${socketId}`);
           });
 
