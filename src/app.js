@@ -151,7 +151,7 @@ app.use('/api/v1', RechargeRoute);
 app.use('/api/zoho',ZohoRoute);
 // FairBaseNotification
 
-app.use('/api/notify', SendNotificationRoute)
+app.use('/api/v1/notify', SendNotificationRoute)
 //common error handling middleware
 
 app.use(protect); // First protect middleware to authenticate users
