@@ -336,8 +336,7 @@ export const setupWebRTC = (io) => {
           socket.emit('callError', { message: 'Invalid user IDs' });
           return;
         }
-        activeCalls[callerId] = receiverId;
-        activeCalls[receiverId] = callerId;
+        
         // Check for active calls
         if (activeCalls[receiverId] || activeCalls[callerId]) {
           const busyUser = activeCalls[receiverId] ? receiverId : callerId;
@@ -345,6 +344,25 @@ export const setupWebRTC = (io) => {
           socket.emit('userBusy', {
             receiverId,
             message: 'User is in another call'
+          });
+          return;
+        }
+
+
+        if (activeCalls[receiverId]) {
+          logger.warn(`[CALL_BUSY] Receiver ${receiverId} is in active call`);
+          socket.emit('userBusy', {
+            receiverId,
+            message: 'User is in another call'
+          });
+          return;
+        }
+
+        if (activeCalls[callerId]) {
+          logger.warn(`[CALL_BUSY] Caller ${callerId} is in active call`);
+          socket.emit('userBusy', {
+            receiverId: callerId,
+            message: 'You are in another call'
           });
           return;
         }
