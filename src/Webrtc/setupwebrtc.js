@@ -348,20 +348,20 @@ export const setupWebRTC = (io) => {
           return;
         }
 
-        // Generate call key
-        const pendingCallKey = `${Math.min(callerId, receiverId)}_${Math.max(callerId, receiverId)}`;
+        // Generate call key using string comparison instead of Math.min/max
+        const pendingCallKey = [callerId, receiverId].sort().join('_');
         logger.debug(`[CALL_KEY] Generated key: ${pendingCallKey}`);
 
-        // STRICT CONFLICT CHECK
+        // Check for existing calls
         if (pendingCalls[pendingCallKey]) {
           const existingCall = pendingCalls[pendingCallKey];
           const timeSinceCall = Date.now() - existingCall.timestamp;
 
-          // Check for recent call attempts
+          // Handle recent call attempts (within 5 seconds)
           if (timeSinceCall < 5000) {
             logger.warn(`[CALL_CONFLICT] Detected between ${callerId} and ${receiverId}`);
 
-            // Clear any existing timeouts
+            // Clear existing timeouts
             if (existingCall.cleanupTimeout) {
               clearTimeout(existingCall.cleanupTimeout);
             }
@@ -378,15 +378,15 @@ export const setupWebRTC = (io) => {
               }
             };
 
-            // Notify both users about conflict
+            // Notify caller about conflict
             socket.emit('callConflict', {
               message: 'Simultaneous call detected',
               otherUserId: receiverId,
               timestamp: Date.now(),
-              retryAfter: 5 // Suggest retry after 5 seconds
+              retryAfter: 5
             });
 
-            // Notify receiver
+            // Notify receiver about conflict
             if (users[receiverId]) {
               users[receiverId].forEach(socketId => {
                 socket.to(socketId).emit('callConflict', {
@@ -398,7 +398,7 @@ export const setupWebRTC = (io) => {
               });
             }
 
-            // Set cleanup timeout
+            // Set conflict cleanup
             const cleanupTimeout = setTimeout(() => {
               if (pendingCalls[pendingCallKey]?.conflict) {
                 logger.info(`[CONFLICT_CLEANUP] Clearing state for ${pendingCallKey}`);
@@ -407,12 +407,10 @@ export const setupWebRTC = (io) => {
             }, 5000);
 
             pendingCalls[pendingCallKey].cleanupTimeout = cleanupTimeout;
-
-            // Immediately return to prevent any call initialization
             return;
           }
 
-          // Clear stale call if found
+          // Clear stale call
           logger.info(`[STALE_CLEANUP] Clearing stale call ${pendingCallKey}`);
           if (existingCall.cleanupTimeout) {
             clearTimeout(existingCall.cleanupTimeout);
@@ -420,24 +418,7 @@ export const setupWebRTC = (io) => {
           delete pendingCalls[pendingCallKey];
         }
 
-        // Secondary conflict check
-        const hasActiveConflict = Object.values(pendingCalls).some(call =>
-          (call.callerId === callerId || call.receiverId === callerId ||
-            call.callerId === receiverId || call.receiverId === receiverId) &&
-          Date.now() - call.timestamp < 5000
-        );
-
-        if (hasActiveConflict) {
-          logger.warn(`[CALL_BLOCKED] Active conflict detected for users`);
-          socket.emit('callBlocked', {
-            message: 'Cannot initiate call due to active conflict',
-            retryAfter: 5
-          });
-          return;
-        }
-
-        // Only proceed with call initialization if no conflicts were detected
-        // Create new call record
+        // Store new call attempt
         pendingCalls[pendingCallKey] = {
           callerId,
           receiverId,
@@ -480,15 +461,6 @@ export const setupWebRTC = (io) => {
           return;
         }
 
-        // Final conflict check before proceeding
-        if (pendingCalls[pendingCallKey]?.conflict) {
-          logger.warn(`[LATE_CONFLICT] Detected after user fetch`);
-          return;
-        }
-
-        // Update call status
-        pendingCalls[pendingCallKey].status = 'notifying';
-
         // Initialize socket arrays
         users[callerId] = users[callerId] || [];
         users[receiverId] = users[receiverId] || [];
@@ -498,7 +470,13 @@ export const setupWebRTC = (io) => {
           users[callerId].push(socket.id);
         }
 
-        // Only proceed if no conflicts exist
+        // Final conflict check before proceeding
+        if (pendingCalls[pendingCallKey]?.conflict) {
+          logger.warn(`[LATE_CONFLICT] Detected after user fetch`);
+          return;
+        }
+
+        // Handle socket notifications
         if (users[receiverId].length > 0) {
           users[receiverId].forEach((socketId) => {
             socket.to(socketId).emit('incomingCall', {
@@ -507,6 +485,7 @@ export const setupWebRTC = (io) => {
               callerName: caller.username || 'Unknown Caller',
               timestamp: Date.now()
             });
+            logger.info(`[SOCKET_NOTIFY] Sent to ${receiverId} via socket ${socketId}`);
           });
 
           socket.emit('playCallerTune', { callerId });
@@ -538,14 +517,6 @@ export const setupWebRTC = (io) => {
           message: 'Failed to initiate call',
           details: error.message
         });
-
-        // Cleanup on error
-        if (pendingCallKey && pendingCalls[pendingCallKey]) {
-          if (pendingCalls[pendingCallKey].cleanupTimeout) {
-            clearTimeout(pendingCalls[pendingCallKey].cleanupTimeout);
-          }
-          delete pendingCalls[pendingCallKey];
-        }
       }
     });
 
