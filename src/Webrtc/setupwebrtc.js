@@ -440,10 +440,47 @@ export const setupWebRTC = (io) => {
         logger.debug(`[CALL_STATE] Current active calls: ${JSON.stringify(activeCalls)}`);
         logger.debug(`[CALL_STATE] Current pending calls: ${JSON.stringify(pendingCalls)}`);
 
-        // Check if either user is already in a call
-        if (activeCalls[receiverId] || activeCalls[callerId]) {
-          logger.warn(`[CALL_BUSY] User ${activeCalls[receiverId] ? receiverId : callerId} is already in a call`);
-          socket.emit('userBusy', { receiverId });
+        // Modified: Enhanced busy check
+        if (activeCalls[receiverId]) {
+          const busyWithUser = await User.findById(activeCalls[receiverId]);
+          logger.warn(`[CALL_BUSY] Receiver ${receiverId} is busy in call with ${activeCalls[receiverId]}`);
+          socket.emit('userBusy', {
+            receiverId,
+            busyWith: activeCalls[receiverId],
+            busyWithName: busyWithUser?.username || 'Unknown User',
+            message: 'User is currently in another call'
+          });
+          return;
+        }
+
+        if (activeCalls[callerId]) {
+          const busyWithUser = await User.findById(activeCalls[callerId]);
+          logger.warn(`[CALL_BUSY] Caller ${callerId} is already in a call with ${activeCalls[callerId]}`);
+          socket.emit('userBusy', {
+            callerId,
+            busyWith: activeCalls[callerId],
+            busyWithName: busyWithUser?.username || 'Unknown User',
+            message: 'You are already in another call'
+          });
+          return;
+        }
+
+        // Added: Check for pending calls to receiver
+        const receiverPendingCall = Object.entries(pendingCalls).find(([_, call]) =>
+          call.receiverId === receiverId && !call.conflict &&
+          (Date.now() - call.timestamp) < 30000
+        );
+
+        if (receiverPendingCall) {
+          const [_, pendingCall] = receiverPendingCall;
+          const pendingCaller = await User.findById(pendingCall.callerId);
+          logger.warn(`[CALL_BUSY] Receiver ${receiverId} has a pending call from ${pendingCall.callerId}`);
+          socket.emit('userBusy', {
+            receiverId,
+            pendingCallFrom: pendingCall.callerId,
+            pendingCallerName: pendingCaller?.username || 'Unknown User',
+            message: 'User is receiving another call'
+          });
           return;
         }
 
@@ -451,7 +488,7 @@ export const setupWebRTC = (io) => {
         const pendingCallKey = `${callerId}_${receiverId}`;
         logger.debug(`[CALL_KEY] Generated pending call key: ${pendingCallKey}`);
 
-        // Check for existing pending calls
+        // Modified: Enhanced conflict check
         if (pendingCalls[pendingCallKey]) {
           const existingCall = pendingCalls[pendingCallKey];
           const timeSinceCall = Date.now() - existingCall.timestamp;
@@ -465,33 +502,51 @@ export const setupWebRTC = (io) => {
               conflict: true,
               timestamp: Date.now(),
               users: [callerId, receiverId],
-              originalCall: existingCall
+              originalCall: existingCall,
+              socketId: socket.id
             };
 
-            // Notify about conflict
+            // Modified: Enhanced conflict notification
             const conflictMessage = {
               message: 'Simultaneous call detected',
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              retryAfter: 5000
             };
 
             socket.emit('callConflict', {
               ...conflictMessage,
-              otherUserId: receiverId
+              otherUserId: receiverId,
+              role: 'caller'
             });
 
             if (users[receiverId]) {
               users[receiverId].forEach(socketId => {
                 socket.to(socketId).emit('callConflict', {
                   ...conflictMessage,
-                  otherUserId: callerId
+                  otherUserId: callerId,
+                  role: 'receiver'
                 });
               });
             }
 
+            // Modified: Enhanced conflict cleanup
             setTimeout(() => {
               if (pendingCalls[pendingCallKey]?.conflict) {
                 logger.info(`[CALL_CONFLICT_CLEANUP] Clearing conflict state for ${pendingCallKey}`);
                 delete pendingCalls[pendingCallKey];
+
+                socket.emit('conflictResolved', {
+                  receiverId,
+                  message: 'You can try calling again'
+                });
+                if (users[receiverId]) {
+                  users[receiverId].forEach(socketId => {
+                    socket.to(socketId).emit('conflictResolved', {
+                      callerId,
+                      message: 'Call conflict resolved'
+                    });
+                  });
+                }
               }
             }, 5000);
 
@@ -501,6 +556,7 @@ export const setupWebRTC = (io) => {
             delete pendingCalls[pendingCallKey];
           }
         }
+
 
         // Store new call attempt
         pendingCalls[pendingCallKey] = {
@@ -654,7 +710,9 @@ export const setupWebRTC = (io) => {
         }
       }
     });
-    
+
+   
+
     socket.on('offer', async ({ offer, callerId, receiverId }) => {
       try {
         logger.info(`User ${callerId} sending offer to User ${receiverId}`);
