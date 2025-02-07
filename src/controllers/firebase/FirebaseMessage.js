@@ -170,7 +170,7 @@ export const sendBulkNotification = async (req, res) => {
 
 
 export const sendPushNotification = async (req, res) => {
-  const loginuserid=req.user.id;
+  const loginuserid=req.user.id || req.user._id;
   const { userId } = req.body
 
   try {
