@@ -1192,7 +1192,7 @@ async function sendNotification_call(userId, title, message, type, receiverId, s
         type: type, // Type of call
         caller_name: senderName,
         caller_id: userId,
-        time:Date.now(),
+        time:Math.floor(Date.now() / 1000).toString(),      
         call_type: "audio", // or "video"
         params: JSON.stringify({
           user_id: userId, // Include Call ID

@@ -440,40 +440,6 @@ export const initiateRegistration = async (req, res) => {
 
 
 
-//----------------initiateLogin---------------
-
-
-// export const initiateLogin = async (req, res) => {
-//    const { email } = req.body;
-
-//   try {
-//     // Check if the user exists
-//     const user = await User.findOne({ email });
-
-//     if (!user) {
-//       return res.status(404).json({ message: "User not found" });
-//     }
-
-//     // Generate OTP and set expiry
-//     const otp = generateOtp();
-//     user.otp = otp;
-//     user.otpExpires = Date.now() + 3600000; // OTP valid for 1 hour
-
-
-//     console.log("Login,", otp);
-//     // Save OTP details to user
-//     await user.save();
-
-//     // Send OTP to the user's email
-//     await sendOtpEmail(email, otp);
-
-//     res.status(200).json({ message: "OTP sent to email" });
-//   } catch (error) {
-//     res.status(500).json({ message: "Server error", error });
-//   }
-// };
-
-
 export const initiateLogin = async (req, res) => {
   const { email } = req.body;
 
@@ -628,6 +594,7 @@ export const deleteUser = async (req, res) => {
 
 
 // ------------------------Update User CategoryController.js---------------------------------------
+
 export const updateOrCreateUserCategory = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -1020,9 +987,6 @@ export const listener = async (req, res) => {
 };
 
 
-
-
-
 export const UserCategoryData = async (req, res) => {
   try {
     const userId = req.user._id || req.user.id;
@@ -1342,122 +1306,6 @@ export const getUserById = async (req, res) => {
 };
 
 
-
-// export const getAllUsers1 = async (req, res) => {
-//   try {
-//     const genderFilter = req.params.gender?.toLowerCase();
-//     console.log(genderFilter);
-//     const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
-//     const loggedInUserGender = genderFilter || req.user.gender;
-
-//     console.log(genderFilter);
-//     // Get gender filter from params
-
-//     // Validate gender parameter
-//     if (genderFilter && !['male', 'female'].includes(genderFilter)) {
-//       return res.status(400).json({
-//         message: "Invalid gender parameter. Must be 'male' or 'female'"
-//       });
-//     }
-
-//     // Pagination parameters
-//     const page = parseInt(req.query.page) || 1;
-//     const limit = 21;
-//     const skip = (page - 1) * limit;
-
-//     // Search query from request
-//     const searchQuery = req.query.search || "";
-
-//     // MongoDB aggregation pipeline
-//     const users = await User.aggregate([
-//       {
-//         $match: {
-//           _id: { $ne: loggedInUserId },
-//           UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
-//           // Add gender filter if provided
-//           ...(genderFilter && { gender: genderFilter }),
-//           ...(searchQuery && {
-//             $or: [
-//               { username: { $regex: searchQuery, $options: "i" } },
-//               { name: { $regex: searchQuery, $options: "i" } },
-//               { email: { $regex: searchQuery, $options: "i" } },
-//             ],
-//           }),
-//         },
-//       },
-//       {
-//         $lookup: {
-//           from: "reviews",
-//           localField: "_id",
-//           foreignField: "user",
-//           as: "ratings",
-//         },
-//       },
-//       {
-//         $addFields: {
-//           avgRating: { $avg: "$ratings.rating" },
-//           reviewCount: { $size: "$ratings" },
-//           isOppositeGender: {
-//             $cond: { if: { $ne: ["$gender", loggedInUserGender] }, then: 1, else: 0 },
-//           },
-//           isOnline: {
-//             $cond: { if: { $eq: ["$status", "Online"] }, then: 1, else: 0 },
-//           },
-//         },
-//       },
-//       {
-//         $sort: {
-//           isOnline: -1,
-//           isOppositeGender: -1,
-//           avgRating: -1,
-//         },
-//       },
-//       {
-//         $facet: {
-//           metadata: [{ $count: "totalUsers" }],
-//           users: [
-//             { $skip: skip },
-//             { $limit: limit },
-//             {
-//               $project: {
-//                 password: 0,
-//                 refreshToken: 0,
-//                 ratings: 0,
-//               },
-//             },
-//           ],
-//         },
-//       },
-//     ]);
-
-//     const totalUsers = users[0]?.metadata[0]?.totalUsers || 0;
-//     const userList = users[0]?.users || [];
-
-//     if (userList.length === 0) {
-//       return res.status(404).json({
-//         message: genderFilter
-//           ? `No ${genderFilter} users found`
-//           : "No users found"
-//       });
-//     }
-
-//     res.status(200).json({
-//       message: genderFilter
-//         ? `${genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)} users fetched successfully`
-//         : "Users fetched successfully",
-//       users: userList,
-//       pagination: {
-//         totalUsers,
-//         currentPage: page,
-//         totalPages: Math.ceil(totalUsers / limit),
-//         limit,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Error fetching users:", error);
-//     res.status(500).json({ message: "Internal server error", error: error.message });
-//   }
-// };
 
 
 export const getAllUsers1 = async (req, res) => {
