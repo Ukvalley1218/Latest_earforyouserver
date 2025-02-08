@@ -125,15 +125,16 @@ export const sendPushNotification = async (req, res) => {
 };
 
 
-
 const DEFAULT_BATCH_SIZE = 500;
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
 const createBatches = (tokens, batchSize) => {
+  // Filter out any null, undefined or empty tokens
+  const validTokens = tokens.filter(token => token && token.trim());
   const batches = [];
-  for (let i = 0; i < tokens.length; i += batchSize) {
-    batches.push(tokens.slice(i, i + batchSize));
+  for (let i = 0; i < validTokens.length; i += batchSize) {
+    batches.push(validTokens.slice(i, i + batchSize));
   }
   return batches;
 };
@@ -141,34 +142,53 @@ const createBatches = (tokens, batchSize) => {
 const processBatches = async (batches, title, body) => {
   return Promise.all(
     batches.map(async (tokenBatch) => {
-      const messages = tokenBatch.map(token => ({
-        token,
-        notification: {
-          title,
-          body,
-        },
-        android: {
-          priority: 'high',
+      // Create messages with proper validation
+      const messages = tokenBatch
+        .filter(token => token && typeof token === 'string' && token.trim())
+        .map(token => ({
+          token: token.trim(),
           notification: {
-            sound: 'default',
+            title,
+            body
+          },
+          android: {
             priority: 'high',
-            channelId: 'default'
-          }
-        },
-        apns: {
-          payload: {
-            aps: {
+            notification: {
               sound: 'default',
-              badge: 1
+              priority: 'high',
+              channelId: 'default'
+            }
+          },
+          apns: {
+            headers: {
+              'apns-priority': '10'
+            },
+            payload: {
+              aps: {
+                sound: 'default',
+                badge: 1,
+                contentAvailable: true
+              }
             }
           }
-        }
-      }));
+        }));
+
+      if (messages.length === 0) {
+        return {
+          successCount: 0,
+          failureCount: tokenBatch.length,
+          responses: tokenBatch.map(() => ({
+            success: false,
+            error: { message: 'Invalid token format' }
+          })),
+          tokens: tokenBatch
+        };
+      }
 
       let attempt = 0;
       while (attempt < MAX_RETRIES) {
         try {
-          const response = await admin.messaging().sendAll(messages);
+          const response = await admin.messaging().sendEach(messages);
           return {
             successCount: response.successCount,
             failureCount: response.failureCount,
@@ -177,16 +197,21 @@ const processBatches = async (batches, title, body) => {
           };
         } catch (error) {
           attempt++;
+          console.error(`Attempt ${attempt} failed:`, error);
+
           if (attempt === MAX_RETRIES) {
             console.error(`Failed to send batch after ${MAX_RETRIES} attempts:`, error);
             return {
               successCount: 0,
               failureCount: tokenBatch.length,
-              responses: tokenBatch.map(() => ({ success: false })),
+              responses: tokenBatch.map(() => ({
+                success: false,
+                error: { message: error.message }
+              })),
               tokens: tokenBatch
             };
           }
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt)); // Exponential backoff
         }
       }
     })
@@ -198,30 +223,41 @@ const aggregateResults = (results) => {
     successCount: 0,
     failureCount: 0,
     responses: [],
-    invalidTokens: []
+    invalidTokens: new Set() // Using Set to avoid duplicates
   };
 
   results.forEach(result => {
+    if (!result) return; // Skip if batch result is undefined
+
     summary.successCount += result.successCount;
     summary.failureCount += result.failureCount;
 
     result.responses.forEach((response, index) => {
-      if (!response.success && response.error?.code === 'messaging/invalid-registration-token') {
-        summary.invalidTokens.push(result.tokens[index]);
+      if (!response.success) {
+        const errorCode = response.error?.code;
+        if (errorCode === 'messaging/invalid-registration-token' ||
+          errorCode === 'messaging/registration-token-not-registered') {
+          summary.invalidTokens.add(result.tokens[index]);
+        }
       }
     });
   });
 
-  return summary;
+  return {
+    ...summary,
+    invalidTokens: Array.from(summary.invalidTokens)
+  };
 };
 
 const handleInvalidTokens = async (invalidTokens) => {
+  if (!invalidTokens.length) return;
+
   try {
-    await User.updateMany(
+    const result = await User.updateMany(
       { deviceToken: { $in: invalidTokens } },
       { $unset: { deviceToken: 1 } }
     );
-    console.log(`Cleaned up ${invalidTokens.length} invalid tokens`);
+    console.log(`Cleaned up ${result.modifiedCount} invalid tokens`);
   } catch (error) {
     console.error('Error cleaning up invalid tokens:', error);
   }
@@ -231,6 +267,7 @@ export const sendBulkNotification = async (req, res) => {
   const { title, body, batchSize = DEFAULT_BATCH_SIZE } = req.body;
 
   try {
+    // Input validation
     if (!title?.trim() || !body?.trim()) {
       return res.status(400).json({
         success: false,
@@ -238,6 +275,7 @@ export const sendBulkNotification = async (req, res) => {
       });
     }
 
+    // Fetch users with valid device tokens
     const users = await User.find(
       { deviceToken: { $exists: true, $ne: null } },
       { deviceToken: 1 }
@@ -250,9 +288,18 @@ export const sendBulkNotification = async (req, res) => {
       });
     }
 
-    const registrationTokens = users.map(user => user.deviceToken);
-    const batches = createBatches(registrationTokens, batchSize);
+    const registrationTokens = users
+      .map(user => user.deviceToken)
+      .filter(token => token && token.trim()); // Filter out invalid tokens
 
+    if (!registrationTokens.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'No valid device tokens found'
+      });
+    }
+
+    const batches = createBatches(registrationTokens, batchSize);
     const results = await processBatches(batches, title, body);
     const summary = aggregateResults(results);
 
@@ -267,7 +314,7 @@ export const sendBulkNotification = async (req, res) => {
         total: registrationTokens.length,
         successful: summary.successCount,
         failed: summary.failureCount,
-        invalidTokens: summary.invalidTokens.length
+        invalidTokensRemoved: summary.invalidTokens.length
       }
     });
 
