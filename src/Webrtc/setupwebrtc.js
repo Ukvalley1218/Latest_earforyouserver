@@ -891,7 +891,7 @@ export const setupWebRTC = (io) => {
           logger.info(`[CONFLICT_CLEANUP] Clearing state for ${pendingCallKey}`);
           delete pendingCalls[pendingCallKey];
         }
-      }, 5000);
+      }, 3000);
 
       pendingCalls[pendingCallKey].cleanupTimeout = cleanupTimeout;
     }
@@ -1539,7 +1539,7 @@ async function sendNotification_call(userId, title, message, type, receiverId, s
       android: {
         priority: 'high',
         notification: {
-          channelId: 'calls',
+          channelId: 'Earforyou123',
           title: 'Incoming Call',
           body: `${senderName} is calling...`,
         }
