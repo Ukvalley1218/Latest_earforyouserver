@@ -3,6 +3,8 @@
 import firebaseConfig from '../../config/firebaseConfig.js';
 import User from '../../models/Users.js';
 import admin from 'firebase-admin';
+import { getMessaging } from 'firebase-admin/messaging';
+
 
 // Function to send notification to a single user
 const sendSingleNotification = async (deviceToken, title, body) => {
@@ -74,11 +76,14 @@ const sendSingleNotification = async (deviceToken, title, body) => {
 
 
 
+
+
+const BATCH_SIZE = 450;
+
 export const sendBulkNotification = async (req, res) => {
   const { title, body } = req.body;
 
   try {
-    // Input validation
     if (!title || !body) {
       return res.status(400).json({
         success: false,
@@ -86,7 +91,6 @@ export const sendBulkNotification = async (req, res) => {
       });
     }
 
-    // Fetch valid device tokens
     const users = await User.find(
       { deviceToken: { $exists: true, $ne: null } },
       { deviceToken: 1 }
@@ -99,43 +103,55 @@ export const sendBulkNotification = async (req, res) => {
       });
     }
 
-    const tokens = users.map(user => user.deviceToken);
+    const tokens = users.map(({ deviceToken }) => deviceToken);
+    const batches = Array.from(
+      { length: Math.ceil(tokens.length / BATCH_SIZE) },
+      (_, i) => tokens.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
+    );
 
-    // Send notifications to all tokens at once
-    const result = await admin.messaging().sendMulticast({
-      notification: {
-        title,
-        body
-      },
-      tokens
-    });
+    let totalSuccessful = 0;
+    let totalFailed = 0;
+    const allInvalidTokens = [];
 
-    // Handle invalid tokens
-    if (result.failureCount > 0) {
-      const invalidTokens = [];
-      result.responses.forEach((resp, idx) => {
-        if (!resp.success &&
-          (resp.error.code === 'messaging/invalid-registration-token' ||
-            resp.error.code === 'messaging/registration-token-not-registered')) {
-          invalidTokens.push(tokens[idx]);
-        }
+    for (const batchTokens of batches) {
+      const result = await getMessaging().sendMulticast({
+        notification: {
+          title,
+          body
+        },
+        tokens: batchTokens
       });
 
-      // Remove invalid tokens from database
-      if (invalidTokens.length > 0) {
-        await User.updateMany(
-          { deviceToken: { $in: invalidTokens } },
-          { $unset: { deviceToken: "" } }
-        );
+      totalSuccessful += result.successCount;
+      totalFailed += result.failureCount;
+
+      if (result.failureCount > 0) {
+        const invalidTokens = result.responses.reduce((acc, resp, idx) => {
+          if (!resp.success &&
+            (resp.error.code === 'messaging/invalid-registration-token' ||
+              resp.error.code === 'messaging/registration-token-not-registered')) {
+            acc.push(batchTokens[idx]);
+          }
+          return acc;
+        }, []);
+
+        allInvalidTokens.push(...invalidTokens);
       }
+    }
+
+    if (allInvalidTokens.length > 0) {
+      await User.updateMany(
+        { deviceToken: { $in: allInvalidTokens } },
+        { $unset: { deviceToken: "" } }
+      );
     }
 
     return res.status(200).json({
       success: true,
       message: 'Notifications sent',
       summary: {
-        successful: result.successCount,
-        failed: result.failureCount,
+        successful: totalSuccessful,
+        failed: totalFailed,
         total: tokens.length
       }
     });
@@ -148,7 +164,9 @@ export const sendBulkNotification = async (req, res) => {
       error: error.message
     });
   }
-}
+};
+
+
 
 
 
