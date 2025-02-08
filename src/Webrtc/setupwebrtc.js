@@ -551,8 +551,12 @@ export const setupWebRTC = (io) => {
           return;
         }
 
+
+      
+
         // Check if either user is in an active call
         const busyUsers = new Set();
+        logger.error("busyUsers",busyUsers);
         Object.entries(activeCalls).forEach(([userId, callData]) => {
           if (callData.participants) {
             callData.participants.forEach(participant => busyUsers.add(participant));
@@ -576,6 +580,10 @@ export const setupWebRTC = (io) => {
           });
           return;
         }
+
+
+        activeCalls[callerId] = callerId;
+        activeCalls[receiverId] = receiverId;
 
         // Generate call key using string comparison
         const pendingCallKey = [callerId, receiverId].sort().join('_');
@@ -819,7 +827,61 @@ export const setupWebRTC = (io) => {
     });
 
 
+    socket.on('acceptCall', async ({ receiverId, callerId }) => {
+      try {
+        logger.info(`User ${receiverId} accepted the call from User ${callerId}`);
 
+        // Generate a unique key for the call session
+        const callKey = `${receiverId}_${callerId}`;
+        logger.info(`Call session key: ${callKey}`);
+
+        // Record the start time of the call
+        callTimings[callKey] = {
+          startTime: new Date(), // Start time as a Date object
+        };
+
+        // Notify the caller that the call has been accepted
+        if (users[callerId] && users[callerId].length > 0) {
+          users[callerId].forEach((socketId) => {
+            // Emit 'callAccepted' to all the caller's connected sockets
+            socket.to(socketId).emit('callAccepted', {
+              receiverId,
+              receiverSocketId: socket.id, // Provide the receiver's socket ID
+            });
+
+            // Notify about the active call
+            socket.to(socketId).emit('activeCall', {
+              callerId,
+              receiverId,
+              receiverSocketId: socket.id,
+            });
+          });
+
+          logger.info(`Call accepted notification sent to User ${callerId}`);
+
+          // Stop the caller's tune after call acceptance
+          socket.emit('stopCallerTune', { callerId });
+        } else {
+          // Handle the case where the caller's socket information is missing
+          logger.warn(`Caller sockets not found for User ${callerId}`);
+          socket.emit('callError', {
+            message: `Unable to notify User ${callerId} about call acceptance.`,
+          });
+        }
+
+        // Log successful acceptance
+        logger.info(
+          `Call between User ${callerId} and User ${receiverId} is now active.`
+        );
+
+      } catch (error) {
+        // Handle errors gracefully
+        logger.error(`Error in acceptCall handler: ${error.message}`);
+        socket.emit('callError', {
+          message: 'An error occurred while accepting the call. Please try again.',
+        });
+      }
+    });
 
     socket.on('iceCandidate', ({ candidate, callerId, receiverId }) => {
       try {
@@ -885,61 +947,7 @@ export const setupWebRTC = (io) => {
     });
 
 
-    socket.on('acceptCall', async ({ receiverId, callerId }) => {
-      try {
-        logger.info(`User ${receiverId} accepted the call from User ${callerId}`);
-
-        // Generate a unique key for the call session
-        const callKey = `${receiverId}_${callerId}`;
-        logger.info(`Call session key: ${callKey}`);
-
-        // Record the start time of the call
-        callTimings[callKey] = {
-          startTime: new Date(), // Start time as a Date object
-        };
-
-        // Notify the caller that the call has been accepted
-        if (users[callerId] && users[callerId].length > 0) {
-          users[callerId].forEach((socketId) => {
-            // Emit 'callAccepted' to all the caller's connected sockets
-            socket.to(socketId).emit('callAccepted', {
-              receiverId,
-              receiverSocketId: socket.id, // Provide the receiver's socket ID
-            });
-
-            // Notify about the active call
-            socket.to(socketId).emit('activeCall', {
-              callerId,
-              receiverId,
-              receiverSocketId: socket.id,
-            });
-          });
-
-          logger.info(`Call accepted notification sent to User ${callerId}`);
-
-          // Stop the caller's tune after call acceptance
-          socket.emit('stopCallerTune', { callerId });
-        } else {
-          // Handle the case where the caller's socket information is missing
-          logger.warn(`Caller sockets not found for User ${callerId}`);
-          socket.emit('callError', {
-            message: `Unable to notify User ${callerId} about call acceptance.`,
-          });
-        }
-
-        // Log successful acceptance
-        logger.info(
-          `Call between User ${callerId} and User ${receiverId} is now active.`
-        );
-
-      } catch (error) {
-        // Handle errors gracefully
-        logger.error(`Error in acceptCall handler: ${error.message}`);
-        socket.emit('callError', {
-          message: 'An error occurred while accepting the call. Please try again.',
-        });
-      }
-    });
+   
 
 
 
