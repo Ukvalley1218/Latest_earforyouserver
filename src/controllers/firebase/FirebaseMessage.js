@@ -180,3 +180,31 @@ export const sendPushNotification = async (req, res) => {
     });
   }
 };
+
+
+export const getValidTokenCount = async (req, res) => {
+  try {
+    const count = await User.countDocuments({
+      deviceToken: { $exists: true, $ne: null }
+    });
+
+    const usersWithTokens = await User.find(
+      { deviceToken: { $exists: true, $ne: null } },
+      { username: 1, deviceToken: 1, _id: 0 }
+    ).lean();
+
+    return res.status(200).json({
+      success: true,
+      totalCount: count,
+      users: usersWithTokens,
+      message: `Found ${count} users with valid device tokens`
+    });
+
+  } catch (error) {
+    console.error('Error counting valid tokens:', error);
+    return res.status(500).json({
+      success: false, 
+      message: 'Failed to count valid device tokens'
+    });
+  }
+};
