@@ -99,7 +99,7 @@ export const sendBulkNotification = async (req, res) => {
 
     const tokens = users.map(user => user.deviceToken);
     const batches = [];
-
+    
     for (let i = 0; i < tokens.length; i += 500) {
       batches.push(tokens.slice(i, i + 500));
     }
@@ -130,7 +130,6 @@ export const sendBulkNotification = async (req, res) => {
     });
   }
 };
-
 
 
 
