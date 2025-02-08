@@ -126,7 +126,7 @@ export const sendPushNotification = async (req, res) => {
 
 
 
-const DEFAULT_BATCH_SIZE = 300;
+const DEFAULT_BATCH_SIZE = 500;
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
@@ -141,12 +141,12 @@ const createBatches = (tokens, batchSize) => {
 const processBatches = async (batches, title, body) => {
   return Promise.all(
     batches.map(async (tokenBatch) => {
-      const message = {
+      const messages = tokenBatch.map(token => ({
+        token,
         notification: {
           title,
           body,
         },
-        tokens: tokenBatch,
         android: {
           priority: 'high',
           notification: {
@@ -163,12 +163,18 @@ const processBatches = async (batches, title, body) => {
             }
           }
         }
-      };
+      }));
 
       let attempt = 0;
       while (attempt < MAX_RETRIES) {
         try {
-          return await admin.messaging().sendMulticast(message);
+          const response = await admin.messaging().sendAll(messages);
+          return {
+            successCount: response.successCount,
+            failureCount: response.failureCount,
+            responses: response.responses,
+            tokens: tokenBatch
+          };
         } catch (error) {
           attempt++;
           if (attempt === MAX_RETRIES) {
@@ -176,7 +182,8 @@ const processBatches = async (batches, title, body) => {
             return {
               successCount: 0,
               failureCount: tokenBatch.length,
-              responses: tokenBatch.map(() => ({ success: false }))
+              responses: tokenBatch.map(() => ({ success: false })),
+              tokens: tokenBatch
             };
           }
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
@@ -186,7 +193,7 @@ const processBatches = async (batches, title, body) => {
   );
 };
 
-const aggregateResults = (results, totalTokens) => {
+const aggregateResults = (results) => {
   const summary = {
     successCount: 0,
     failureCount: 0,
@@ -247,7 +254,7 @@ export const sendBulkNotification = async (req, res) => {
     const batches = createBatches(registrationTokens, batchSize);
 
     const results = await processBatches(batches, title, body);
-    const summary = aggregateResults(results, registrationTokens.length);
+    const summary = aggregateResults(results);
 
     if (summary.invalidTokens.length) {
       await handleInvalidTokens(summary.invalidTokens);

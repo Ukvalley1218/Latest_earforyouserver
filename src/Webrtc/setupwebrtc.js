@@ -1185,7 +1185,7 @@ async function sendNotification_call(userId, title, message, type, receiverId, s
     // Construct the payload for FCM
     const payload = {
       android: {
-        priority: 'high',
+        priority: 'min',
         notification: {
           channelId: 'calls',
           title: 'Incoming Call',
