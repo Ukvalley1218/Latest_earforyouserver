@@ -1539,7 +1539,7 @@ async function sendNotification_call(userId, title, message, type, receiverId, s
       android: {
         priority: 'high',
         notification: {
-          channelId: 'Earforyou123',
+          channelId: 'calls',
           title: 'Incoming Call',
           body: `${senderName} is calling...`,
         }
