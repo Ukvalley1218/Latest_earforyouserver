@@ -331,21 +331,21 @@ export const setupWebRTC = (io) => {
       let cleanupTimeout;
       try {
         logger.info(`[CALL_START] User ${callerId} is calling User ${receiverId}`);
-
+    
         // Input validation
         if (!callerId || !receiverId) {
           logger.error('[VALIDATION_ERROR] Invalid caller or receiver ID');
           socket.emit('callError', { message: 'Invalid user IDs' });
           return;
         }
-
+    
         // Important: Check if either user is in an active call
         const isUserBusy = (userId) => {
           return Object.entries(activeCalls).some(([key, value]) => {
             return key === userId || value === userId;
           });
         };
-
+    
         // Check if receiver is busy
         if (isUserBusy(receiverId)) {
           logger.warn(`[CALL_BUSY] Receiver ${receiverId} is in active call`);
@@ -355,7 +355,7 @@ export const setupWebRTC = (io) => {
           });
           return;
         }
-
+    
         // Check if caller is busy
         if (isUserBusy(callerId)) {
           logger.warn(`[CALL_BUSY] Caller ${callerId} is in active call`);
@@ -365,36 +365,36 @@ export const setupWebRTC = (io) => {
           });
           return;
         }
-
+    
         // Generate call key using string comparison
         const pendingCallKey = [callerId, receiverId].sort().join('_');
         logger.debug(`[CALL_KEY] Generated key: ${pendingCallKey}`);
-
+    
         // Check for existing pending calls
         if (pendingCalls[pendingCallKey]) {
           const existingCall = pendingCalls[pendingCallKey];
           const timeSinceCall = Date.now() - existingCall.timestamp;
-
+    
           if (timeSinceCall < 5000) {
             // Clear existing timeout before handling conflict
             if (existingCall.cleanupTimeout) {
               clearTimeout(existingCall.cleanupTimeout);
             }
-
+            
             logger.warn(`[CALL_CONFLICT] Call conflict detected for ${pendingCallKey}`);
             socket.emit('callConflict', {
               message: 'Call already in progress',
               existingCallerId: existingCall.callerId
             });
-
+            
             // Don't proceed with call initialization
             return;
           }
-
+    
           // Clear stale call and its timeout
           cleanupStaleCall(pendingCallKey, existingCall);
         }
-
+    
         // Fetch user details before proceeding with call initialization
         const [receiver, caller] = await Promise.all([
           User.findById(receiverId),
@@ -403,12 +403,12 @@ export const setupWebRTC = (io) => {
           logger.error(`[DB_ERROR] Failed to fetch users: ${error.message}`);
           throw new Error('Failed to fetch user details');
         });
-
+    
         if (!receiver || !caller) {
           handleMissingUser(socket, pendingCallKey, receiver, caller, receiverId, callerId);
           return;
         }
-
+    
         // Store new call attempt ONLY if no conflict exists
         if (!pendingCalls[pendingCallKey]) {
           pendingCalls[pendingCallKey] = {
@@ -419,7 +419,7 @@ export const setupWebRTC = (io) => {
             conflict: false,
             status: 'initializing'
           };
-
+    
           // Set cleanup timeout
           cleanupTimeout = setTimeout(() => {
             if (pendingCalls[pendingCallKey] && !pendingCalls[pendingCallKey].conflict) {
@@ -431,21 +431,21 @@ export const setupWebRTC = (io) => {
               });
             }
           }, 30000);
-
+    
           pendingCalls[pendingCallKey].cleanupTimeout = cleanupTimeout;
-
+    
           // Initialize socket arrays and register caller ONLY if no conflict
           users[callerId] = users[callerId] || [];
           users[receiverId] = users[receiverId] || [];
-
+    
           if (!users[callerId].includes(socket.id)) {
             users[callerId].push(socket.id);
           }
-
+    
           // Set active call status ONLY if no conflict
           activeCalls[callerId] = receiverId;
           activeCalls[receiverId] = callerId;
-
+    
           // Handle socket notifications ONLY if no conflict
           if (users[receiverId].length > 0) {
             users[receiverId].forEach((socketId) => {
@@ -457,15 +457,15 @@ export const setupWebRTC = (io) => {
               });
               logger.info(`[SOCKET_NOTIFY] Sent to ${receiverId} via socket ${socketId}`);
             });
-
+    
             socket.emit('playCallerTune', { callerId });
           }
-
+    
           // Handle push notification ONLY if no conflict
           if (receiver.deviceToken) {
             await sendPushNotification(receiver, caller, receiverId, callerId);
           }
-
+    
           // Update call status ONLY if no conflict
           pendingCalls[pendingCallKey].status = 'active';
         } else {
@@ -475,7 +475,7 @@ export const setupWebRTC = (io) => {
           });
           return;
         }
-
+    
       } catch (error) {
         // Clean up resources in case of error
         if (cleanupTimeout) {
@@ -486,7 +486,7 @@ export const setupWebRTC = (io) => {
         handleError(socket, error);
       }
     });
-
+    
     function cleanupCallResources(pendingCallKey, callerId, receiverId, socket) {
       // Clean up pending calls
       if (pendingCalls[pendingCallKey]) {
@@ -495,12 +495,12 @@ export const setupWebRTC = (io) => {
         }
         delete pendingCalls[pendingCallKey];
       }
-
+    
       // Clean up socket registrations
       if (users[callerId]) {
         users[callerId] = users[callerId].filter(id => id !== socket.id);
       }
-
+    
       // Clean up active calls
       if (activeCalls[callerId] === receiverId) {
         delete activeCalls[callerId];
@@ -508,7 +508,7 @@ export const setupWebRTC = (io) => {
       if (activeCalls[receiverId] === callerId) {
         delete activeCalls[receiverId];
       }
-
+    
       logger.info(`[CLEANUP] Completed for call ${pendingCallKey}`);
     }
 
@@ -1185,7 +1185,7 @@ async function sendNotification_call(userId, title, message, type, receiverId, s
     // Construct the payload for FCM
     const payload = {
       android: {
-        priority: -2,
+        priority: 'high',
         notification: {
           channelId: 'calls',
           title: 'Incoming Call',
