@@ -77,8 +77,31 @@ const sendSingleNotification = async (deviceToken, title, body) => {
 
 
 
-
 const BATCH_SIZE = 450;
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const sendNotificationWithRetry = async (message, maxRetries = MAX_RETRIES) => {
+  let lastError;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const result = await getMessaging().sendEachForMulticast(message);
+      return result;
+    } catch (error) {
+      lastError = error;
+      console.log(`Retry attempt ${attempt + 1} failed:`, error.message);
+      
+      if (attempt < maxRetries - 1) {
+        await sleep(RETRY_DELAY * (attempt + 1)); // Exponential backoff
+      }
+    }
+  }
+  
+  throw lastError;
+};
 
 export const sendBulkNotification = async (req, res) => {
   const { title, body } = req.body;
@@ -112,58 +135,78 @@ export const sendBulkNotification = async (req, res) => {
     let totalSuccessful = 0;
     let totalFailed = 0;
     const allInvalidTokens = [];
+    const failedTokens = [];
 
     for (const batchTokens of batches) {
       const message = {
         tokens: batchTokens,
-        android: {
-          notification: {
-            title,
-            body
-          }
-        },
-        apns: {
-          payload: {
-            aps: {
-              alert: {
-                title,
-                body
-              }
-            }
-          }
-        },
-        webpush: {
-          notification: {
-            title,
-            body
-          }
+        notification: {
+          title,
+          body
         }
       };
 
-      const result = await getMessaging().sendEachForMulticast(message);
-
-      totalSuccessful += result.successCount;
-      totalFailed += result.failureCount;
-
-      if (result.failureCount > 0) {
-        const invalidTokens = result.responses.reduce((acc, resp, idx) => {
-          if (!resp.success && 
-              (resp.error?.code === 'messaging/invalid-registration-token' ||
-               resp.error?.code === 'messaging/registration-token-not-registered')) {
-            acc.push(batchTokens[idx]);
-          }
-          return acc;
-        }, []);
+      try {
+        const result = await sendNotificationWithRetry(message);
         
-        allInvalidTokens.push(...invalidTokens);
+        totalSuccessful += result.successCount;
+        totalFailed += result.failureCount;
+
+        // Process failures and collect invalid tokens
+        if (result.failureCount > 0) {
+          result.responses.forEach((resp, idx) => {
+            if (!resp.success) {
+              const token = batchTokens[idx];
+              
+              if (resp.error?.code === 'messaging/invalid-registration-token' ||
+                  resp.error?.code === 'messaging/registration-token-not-registered') {
+                allInvalidTokens.push(token);
+              } else {
+                // Store tokens that failed for other reasons
+                failedTokens.push({
+                  token,
+                  error: resp.error?.message || 'Unknown error'
+                });
+              }
+            }
+          });
+        }
+      } catch (error) {
+        console.error(`Batch failed after all retries:`, error);
+        totalFailed += batchTokens.length;
+        failedTokens.push(...batchTokens.map(token => ({
+          token,
+          error: error.message
+        })));
       }
     }
 
+    // Clean up invalid tokens
     if (allInvalidTokens.length > 0) {
       await User.updateMany(
         { deviceToken: { $in: allInvalidTokens } },
         { $unset: { deviceToken: "" } }
       );
+    }
+
+    // Try to resend to failed tokens one last time
+    if (failedTokens.length > 0) {
+      const retryTokens = failedTokens.map(ft => ft.token);
+      try {
+        const retryMessage = {
+          tokens: retryTokens,
+          notification: {
+            title,
+            body
+          }
+        };
+        
+        const retryResult = await sendNotificationWithRetry(retryMessage, 1);
+        totalSuccessful += retryResult.successCount;
+        totalFailed -= retryResult.successCount;
+      } catch (error) {
+        console.error('Final retry batch failed:', error);
+      }
     }
 
     return res.status(200).json({
@@ -172,7 +215,9 @@ export const sendBulkNotification = async (req, res) => {
       summary: {
         successful: totalSuccessful,
         failed: totalFailed,
-        total: tokens.length
+        total: tokens.length,
+        invalidTokensRemoved: allInvalidTokens.length,
+        failedTokens: failedTokens.length
       }
     });
 
