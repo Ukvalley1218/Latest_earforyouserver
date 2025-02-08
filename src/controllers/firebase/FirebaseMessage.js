@@ -78,6 +78,7 @@ export const sendBulkNotification = async (req, res) => {
   const { title, body } = req.body;
 
   try {
+    // Input validation
     if (!title || !body) {
       return res.status(400).json({
         success: false,
@@ -85,6 +86,7 @@ export const sendBulkNotification = async (req, res) => {
       });
     }
 
+    // Fetch valid device tokens
     const users = await User.find(
       { deviceToken: { $exists: true, $ne: null } },
       { deviceToken: 1 }
@@ -98,38 +100,55 @@ export const sendBulkNotification = async (req, res) => {
     }
 
     const tokens = users.map(user => user.deviceToken);
-    const batches = [];
-    
-    for (let i = 0; i < tokens.length; i += 500) {
-      batches.push(tokens.slice(i, i + 500));
+
+    // Send notifications to all tokens at once
+    const result = await admin.messaging().sendMulticast({
+      notification: {
+        title,
+        body
+      },
+      tokens
+    });
+
+    // Handle invalid tokens
+    if (result.failureCount > 0) {
+      const invalidTokens = [];
+      result.responses.forEach((resp, idx) => {
+        if (!resp.success &&
+          (resp.error.code === 'messaging/invalid-registration-token' ||
+            resp.error.code === 'messaging/registration-token-not-registered')) {
+          invalidTokens.push(tokens[idx]);
+        }
+      });
+
+      // Remove invalid tokens from database
+      if (invalidTokens.length > 0) {
+        await User.updateMany(
+          { deviceToken: { $in: invalidTokens } },
+          { $unset: { deviceToken: "" } }
+        );
+      }
     }
-
-    const results = await Promise.all(
-      batches.map(batch => admin.messaging().sendEachForMulticast({
-        data: { title, body },
-        tokens: batch
-      }))
-    );
-
-    const summary = results.reduce((acc, result) => ({
-      successful: acc.successful + result.successCount,
-      failed: acc.failed + result.failureCount
-    }), { successful: 0, failed: 0 });
 
     return res.status(200).json({
       success: true,
       message: 'Notifications sent',
-      summary: { ...summary, total: tokens.length }
+      summary: {
+        successful: result.successCount,
+        failed: result.failureCount,
+        total: tokens.length
+      }
     });
 
   } catch (error) {
     console.error('Error sending multicast:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to send notifications'
+      message: 'Failed to send notifications',
+      error: error.message
     });
   }
-};
+}
 
 
 
@@ -202,7 +221,7 @@ export const getValidTokenCount = async (req, res) => {
   } catch (error) {
     console.error('Error counting valid tokens:', error);
     return res.status(500).json({
-      success: false, 
+      success: false,
       message: 'Failed to count valid device tokens'
     });
   }
