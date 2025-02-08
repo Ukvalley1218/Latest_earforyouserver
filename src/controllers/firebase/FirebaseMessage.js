@@ -78,7 +78,6 @@ export const sendBulkNotification = async (req, res) => {
   const { title, body } = req.body;
 
   try {
-    // Input validation
     if (!title || !body) {
       return res.status(400).json({
         success: false,
@@ -86,80 +85,48 @@ export const sendBulkNotification = async (req, res) => {
       });
     }
 
-    // Get all device tokens
     const users = await User.find(
       { deviceToken: { $exists: true, $ne: null } },
       { deviceToken: 1 }
     ).lean();
 
-    if (!users || users.length === 0) {
+    if (!users.length) {
       return res.status(404).json({
         success: false,
         message: 'No device tokens found'
       });
     }
 
-    // Extract tokens and create batches
-    const registrationTokens = users.map(user => user.deviceToken);
-    const BATCH_SIZE = 500;
+    const tokens = users.map(user => user.deviceToken);
     const batches = [];
 
-    for (let i = 0; i < registrationTokens.length; i += BATCH_SIZE) {
-      batches.push(registrationTokens.slice(i, i + BATCH_SIZE));
+    for (let i = 0; i < tokens.length; i += 500) {
+      batches.push(tokens.slice(i, i + 500));
     }
 
     const results = await Promise.all(
-      batches.map(async (tokenBatch) => {
-        const message = {
-          data: {
-            title,
-            body,
-          },
-          tokens: tokenBatch
-        };
-
-        try {
-          return await admin.messaging().sendEachForMulticast(message);
-        } catch (error) {
-          console.error('Batch error:', error);
-          return {
-            successCount: 0,
-            failureCount: tokenBatch.length,
-            responses: tokenBatch.map(() => ({ success: false }))
-          };
-        }
-      })
+      batches.map(batch => admin.messaging().sendEachForMulticast({
+        data: { title, body },
+        tokens: batch
+      }))
     );
 
-    // Aggregate results
-    const totalResults = {
-      successCount: 0,
-      failureCount: 0,
-      responses: []
-    };
-
-    results.forEach(result => {
-      totalResults.successCount += result.successCount;
-      totalResults.failureCount += result.failureCount;
-      totalResults.responses.push(...result.responses);
-    });
+    const summary = results.reduce((acc, result) => ({
+      successful: acc.successful + result.successCount,
+      failed: acc.failed + result.failureCount
+    }), { successful: 0, failed: 0 });
 
     return res.status(200).json({
       success: true,
       message: 'Notifications sent',
-      summary: {
-        total: registrationTokens.length,
-        successful: totalResults.successCount,
-        failed: totalResults.failureCount
-      }
+      summary: { ...summary, total: tokens.length }
     });
 
   } catch (error) {
     console.error('Error sending multicast:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to send notifications',
-      error: error.message
+      message: 'Failed to send notifications'
     });
   }
 };
