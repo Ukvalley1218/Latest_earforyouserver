@@ -914,6 +914,9 @@ export const setupWebRTC = (io) => {
         delete activeCalls[callerId];
         delete activeCalls[receiverId];
 
+
+
+
         // Notify caller about rejection
         if (users[callerId]) {
           users[callerId].forEach((socketId) => {
@@ -921,6 +924,11 @@ export const setupWebRTC = (io) => {
           });
         }
 
+        logger.info('Cleaning up call data...');
+        delete activeCalls[callerId];
+        delete activeCalls[receiverId];
+        delete callTimings[callerCallKey];
+        delete callTimings[receiverCallKey];
         // Stop caller tune
         socket.emit('stopCallerTune', { callerId });
 
@@ -1064,7 +1072,6 @@ export const setupWebRTC = (io) => {
           delete callTimings[callerCallKey];
           delete callTimings[receiverCallKey];
 
-          logger.info('Call cleanup completed');
 
         } else {
           // No active call found - log detailed state
@@ -1073,6 +1080,7 @@ export const setupWebRTC = (io) => {
             activeCallsState: JSON.stringify(activeCalls),
             callTimingsState: JSON.stringify(callTimings)
           });
+
 
           socket.emit('error', {
             type: 'END_CALL_ERROR',
