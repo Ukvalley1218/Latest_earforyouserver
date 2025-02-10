@@ -884,6 +884,14 @@ export const setupWebRTC = (io) => {
         });
 
         logger.info('Cleaning up call data...');
+
+        for (const key in pendingCalls) {
+          if (pendingCalls[key].socketId === socket.id) {
+            logger.info(`Cleaning up pending call: ${key}`);
+            delete pendingCalls[key];
+          }
+        }
+
         delete activeCalls[callerId];
         delete activeCalls[receiverId];
         delete callTimings[callerCallKey];
@@ -926,6 +934,12 @@ export const setupWebRTC = (io) => {
           status: 'rejected'
         });
 
+        for (const key in pendingCalls) {
+          if (pendingCalls[key].socketId === socket.id) {
+            logger.info(`Cleaning up pending call: ${key}`);
+            delete pendingCalls[key];
+          }
+        }
 
 
       } catch (error) {
@@ -1029,6 +1043,14 @@ export const setupWebRTC = (io) => {
               duration,
               status: 'completed',
             });
+
+
+            for (const key in pendingCalls) {
+              if (pendingCalls[key].socketId === socket.id) {
+                logger.info(`Cleaning up pending call: ${key}`);
+                delete pendingCalls[key];
+              }
+            }
 
             logger.info('Call log saved successfully');
           } catch (dbError) {
