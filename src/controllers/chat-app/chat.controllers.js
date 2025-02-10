@@ -370,9 +370,11 @@ const getAllChats = asyncHandler(async (req, res) => {
 
 
 export const getUnreadMessagesCount = asyncHandler(async (req, res) => {
+  const loggedInUserId = req.user._id;
+
   // Get all chats that the user is part of
   const userChats = await Chat.find({
-    participants: { $elemMatch: { $eq: req.user._id } }
+    participants: { $elemMatch: { $eq: loggedInUserId } }
   });
 
   // Get the chat IDs
@@ -384,14 +386,14 @@ export const getUnreadMessagesCount = asyncHandler(async (req, res) => {
     seenBy: {
       $not: {
         $elemMatch: {
-          $eq: req.user._id
+          $eq: loggedInUserId
         }
       }
     },
-    sender: { $ne: req.user._id } // Don't count user's own messages
+    sender: { $ne: loggedInUserId }
   });
 
-  // Optional: Get unread count per chat
+  // Get unread count per chat with other participant info
   const unreadCountByChat = await ChatMessage.aggregate([
     {
       $match: {
@@ -399,17 +401,43 @@ export const getUnreadMessagesCount = asyncHandler(async (req, res) => {
         seenBy: {
           $not: {
             $elemMatch: {
-              $eq: req.user._id
+              $eq: loggedInUserId
             }
           }
         },
-        sender: { $ne: req.user._id }
+        sender: { $ne: loggedInUserId }
       }
+    },
+    {
+      $lookup: {
+        from: "chats",
+        localField: "chat",
+        foreignField: "_id",
+        as: "chatInfo"
+      }
+    },
+    {
+      $unwind: "$chatInfo"
+    },
+    {
+      $addFields: {
+        otherParticipant: {
+          $filter: {
+            input: "$chatInfo.participants",
+            as: "participant",
+            cond: { $ne: ["$$participant", loggedInUserId] }
+          }
+        }
+      }
+    },
+    {
+      $unwind: "$otherParticipant"
     },
     {
       $group: {
         _id: "$chat",
-        count: { $sum: 1 }
+        count: { $sum: 1 },
+        otherParticipantId: { $first: "$otherParticipant" }
       }
     }
   ]);
