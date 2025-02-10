@@ -327,267 +327,38 @@ export const setupWebRTC = (io) => {
 
 
 
-    // socket.on('call', async ({ callerId, receiverId }) => {
-    //   let cleanupTimeout;
-    //   try {
-    //     logger.info(`[CALL_START] User ${callerId} is calling User ${receiverId}`);
-
-    //     // Input validation
-    //     if (!callerId || !receiverId) {
-    //       logger.error('[VALIDATION_ERROR] Invalid caller or receiver ID');
-    //       socket.emit('callError', { message: 'Invalid user IDs' });
-    //       return;
-    //     }
-
-    //     // Important: Check if either user is in an active call
-    //     const isUserBusy = (userId) => {
-    //       // Check active calls
-    //       const isInActiveCall = Object.entries(activeCalls).some(([key, value]) =>
-    //         key === userId || value === userId
-    //       );
-
-    //       // Check pending calls
-    //       const isInPendingCall = Object.values(pendingCalls).some(call =>
-    //         !call.conflict && // Ignore conflicted calls
-    //         (call.callerId === userId || call.receiverId === userId) &&
-    //         call.status === 'active'
-    //       );
-
-    //       return isInActiveCall || isInPendingCall;
-    //     };
-
-    //     // Check if receiver is busy
-    //     if (isUserBusy(receiverId)) {
-    //       logger.warn(`[CALL_BUSY] Receiver ${receiverId} is in active call`);
-    //       socket.emit('userBusy', {
-    //         receiverId,
-    //         message: 'User is in another call'
-    //       });
-    //       return;
-    //     }
-
-    //     // Check if caller is busy
-    //     if (isUserBusy(callerId)) {
-    //       logger.warn(`[CALL_BUSY] Caller ${callerId} is in active call`);
-    //       socket.emit('userBusy', {
-    //         receiverId: callerId,
-    //         message: 'You are in another call'
-    //       });
-    //       return;
-    //     }
-
-    //     // Generate call key using string comparison
-    //     const pendingCallKey = [callerId, receiverId].sort().join('_');
-    //     logger.debug(`[CALL_KEY] Generated key: ${pendingCallKey}`);
-
-    //     // Check for existing pending calls
-    //     if (pendingCalls[pendingCallKey]) {
-    //       const existingCall = pendingCalls[pendingCallKey];
-    //       const timeSinceCall = Date.now() - existingCall.timestamp;
-
-    //       if (timeSinceCall < 5000) {
-    //         // Clear existing timeout before handling conflict
-    //         if (existingCall.cleanupTimeout) {
-    //           clearTimeout(existingCall.cleanupTimeout);
-    //         }
-
-    //         logger.warn(`[CALL_CONFLICT] Call conflict detected for ${pendingCallKey}`);
-    //         socket.emit('callConflict', {
-    //           message: 'Call already in progress',
-    //           existingCallerId: existingCall.callerId
-    //         });
-
-    //         // Don't proceed with call initialization
-    //         return;
-    //       }
-
-    //       // Clear stale call and its timeout
-    //       cleanupStaleCall(pendingCallKey, existingCall);
-    //     }
-
-    //     // Fetch user details before proceeding with call initialization
-    //     const [receiver, caller] = await Promise.all([
-    //       User.findById(receiverId),
-    //       User.findById(callerId),
-    //     ]).catch(error => {
-    //       logger.error(`[DB_ERROR] Failed to fetch users: ${error.message}`);
-    //       throw new Error('Failed to fetch user details');
-    //     });
-
-    //     if (!receiver || !caller) {
-    //       handleMissingUser(socket, pendingCallKey, receiver, caller, receiverId, callerId);
-    //       return;
-    //     }
-
-    //     // Store new call attempt ONLY if no conflict exists
-    //     if (!pendingCalls[pendingCallKey]) {
-    //       pendingCalls[pendingCallKey] = {
-    //         callerId,
-    //         receiverId,
-    //         timestamp: Date.now(),
-    //         socketId: socket.id,
-    //         conflict: false,
-    //         status: 'initializing'
-    //       };
-
-    //       // Set cleanup timeout
-    //       cleanupTimeout = setTimeout(() => {
-    //         if (pendingCalls[pendingCallKey] && !pendingCalls[pendingCallKey].conflict) {
-    //           logger.info(`[CALL_TIMEOUT] Cleaning up ${pendingCallKey}`);
-    //           cleanupCallResources(pendingCallKey, callerId, receiverId, socket);
-    //           socket.emit('callTimeout', {
-    //             receiverId,
-    //             message: 'Call request timed out'
-    //           });
-
-    //           socket.emit('userBusy', {
-    //             receiverId,
-    //             message: 'user is Busy Another Call Wait Some Time '
-    //           });
-    //         }
-    //       }, 30000);
-
-    //       pendingCalls[pendingCallKey].cleanupTimeout = cleanupTimeout;
-
-    //       // Initialize socket arrays and register caller ONLY if no conflict
-    //       users[callerId] = users[callerId] || [];
-    //       users[receiverId] = users[receiverId] || [];
-
-    //       if (!users[callerId].includes(socket.id)) {
-    //         users[callerId].push(socket.id);
-    //       }
-
-    //       // Set active call status ONLY if no conflict
-    //       activeCalls[callerId] = receiverId;
-    //       activeCalls[receiverId] = callerId;
-
-    //       // Handle socket notifications ONLY if no conflict
-    //       if (users[receiverId].length > 0) {
-    //         users[receiverId].forEach((socketId) => {
-    //           socket.to(socketId).emit('incomingCall', {
-    //             callerId,
-    //             callerSocketId: socket.id,
-    //             callerName: caller.username || 'Unknown Caller',
-    //             timestamp: Date.now()
-    //           });
-    //           logger.info(`[SOCKET_NOTIFY] Sent to ${receiverId} via socket ${socketId}`);
-    //         });
-
-    //         socket.emit('playCallerTune', { callerId });
-    //       }
-
-    //       // Handle push notification ONLY if no conflict
-    //       if (receiver.deviceToken) {
-    //         await sendPushNotification(receiver, caller, receiverId, callerId);
-    //       }
-
-    //       // Update call status ONLY if no conflict
-    //       pendingCalls[pendingCallKey].status = 'active';
-    //     } else {
-    //       logger.warn(`[CALL_BLOCKED] Call initialization blocked due to existing call: ${pendingCallKey}`);
-    //       socket.emit('callBlocked', {
-    //         message: 'Cannot initialize call due to existing call'
-    //       });
-    //       return;
-    //     }
-
-    //   } catch (error) {
-    //     // Clean up resources in case of error
-    //     if (cleanupTimeout) {
-    //       clearTimeout(cleanupTimeout);
-    //     }
-    //     const pendingCallKey = [callerId, receiverId].sort().join('_');
-    //     cleanupCallResources(pendingCallKey, callerId, receiverId, socket);
-    //     handleError(socket, error);
-    //   }
-    // });
-
-
     socket.on('call', async ({ callerId, receiverId }) => {
       let cleanupTimeout;
       try {
-        logger.info(`[CALL_START] User ${callerId} is calling User ${receiverId}`, {
-          callerId,
-          receiverId,
-          socketId: socket.id,
-          timestamp: Date.now()
-        });
+        logger.info(`[CALL_START] User ${callerId} is calling User ${receiverId}`);
 
         // Input validation
         if (!callerId || !receiverId) {
-          logger.error('[VALIDATION_ERROR] Invalid caller or receiver ID', {
-            callerId,
-            receiverId,
-            socketId: socket.id,
-            timestamp: Date.now()
-          });
+          logger.error('[VALIDATION_ERROR] Invalid caller or receiver ID');
           socket.emit('callError', { message: 'Invalid user IDs' });
           return;
         }
 
         // Important: Check if either user is in an active call
         const isUserBusy = (userId) => {
-          logger.debug('[USER_BUSY_CHECK_START]', {
-            userId,
-            socketId: socket.id,
-            timestamp: Date.now(),
-            activeCallsState: JSON.stringify(activeCalls),
-            pendingCallsState: JSON.stringify(pendingCalls)
-          });
-
           // Check active calls
           const isInActiveCall = Object.entries(activeCalls).some(([key, value]) =>
             key === userId || value === userId
           );
 
-          logger.debug('[ACTIVE_CALL_CHECK_RESULT]', {
-            userId,
-            isInActiveCall,
-            activeCallsFound: Object.entries(activeCalls).filter(([key, value]) =>
-              key === userId || value === userId
-            ),
-            timestamp: Date.now()
-          });
-
           // Check pending calls
           const isInPendingCall = Object.values(pendingCalls).some(call =>
-            !call.conflict &&
+            !call.conflict && // Ignore conflicted calls
             (call.callerId === userId || call.receiverId === userId) &&
             call.status === 'active'
           );
 
-          logger.debug('[PENDING_CALL_CHECK_RESULT]', {
-            userId,
-            isInPendingCall,
-            pendingCallsFound: Object.values(pendingCalls).filter(call =>
-              !call.conflict &&
-              (call.callerId === userId || call.receiverId === userId) &&
-              call.status === 'active'
-            ),
-            timestamp: Date.now()
-          });
-
-          const isBusy = isInActiveCall || isInPendingCall;
-          logger.debug('[USER_BUSY_CHECK_RESULT]', {
-            userId,
-            isBusy,
-            reason: isInActiveCall ? 'active_call' : isInPendingCall ? 'pending_call' : 'not_busy',
-            timestamp: Date.now()
-          });
-
-          return isBusy;
+          return isInActiveCall || isInPendingCall;
         };
 
         // Check if receiver is busy
         if (isUserBusy(receiverId)) {
-          logger.warn(`[CALL_BUSY] Receiver ${receiverId} is in active call`, {
-            receiverId,
-            socketId: socket.id,
-            activeCallsState: JSON.stringify(activeCalls),
-            pendingCallsState: JSON.stringify(pendingCalls),
-            timestamp: Date.now(),
-            emittedEvent: 'userBusy'
-          });
+          logger.warn(`[CALL_BUSY] Receiver ${receiverId} is in active call`);
           socket.emit('userBusy', {
             receiverId,
             message: 'User is in another call'
@@ -597,14 +368,7 @@ export const setupWebRTC = (io) => {
 
         // Check if caller is busy
         if (isUserBusy(callerId)) {
-          logger.warn(`[CALL_BUSY] Caller ${callerId} is in active call`, {
-            callerId,
-            socketId: socket.id,
-            activeCallsState: JSON.stringify(activeCalls),
-            pendingCallsState: JSON.stringify(pendingCalls),
-            timestamp: Date.now(),
-            emittedEvent: 'userBusy'
-          });
+          logger.warn(`[CALL_BUSY] Caller ${callerId} is in active call`);
           socket.emit('userBusy', {
             receiverId: callerId,
             message: 'You are in another call'
@@ -614,107 +378,49 @@ export const setupWebRTC = (io) => {
 
         // Generate call key using string comparison
         const pendingCallKey = [callerId, receiverId].sort().join('_');
-        logger.debug(`[CALL_KEY] Generated key: ${pendingCallKey}`, {
-          callerId,
-          receiverId,
-          pendingCallKey,
-          timestamp: Date.now()
-        });
+        logger.debug(`[CALL_KEY] Generated key: ${pendingCallKey}`);
 
         // Check for existing pending calls
         if (pendingCalls[pendingCallKey]) {
           const existingCall = pendingCalls[pendingCallKey];
           const timeSinceCall = Date.now() - existingCall.timestamp;
 
-          logger.debug('[EXISTING_CALL_CHECK]', {
-            pendingCallKey,
-            existingCall: JSON.stringify(existingCall),
-            timeSinceCall,
-            socketId: socket.id,
-            timestamp: Date.now()
-          });
-
           if (timeSinceCall < 5000) {
+            // Clear existing timeout before handling conflict
             if (existingCall.cleanupTimeout) {
               clearTimeout(existingCall.cleanupTimeout);
-              logger.debug('[CLEANUP_TIMEOUT_CLEARED]', {
-                pendingCallKey,
-                existingCallTimestamp: existingCall.timestamp,
-                socketId: socket.id,
-                timestamp: Date.now()
-              });
             }
 
-            logger.warn(`[CALL_CONFLICT] Call conflict detected for ${pendingCallKey}`, {
-              existingCall: JSON.stringify(existingCall),
-              timeSinceCall,
-              socketId: socket.id,
-              timestamp: Date.now(),
-              emittedEvent: 'callConflict'
-            });
+            logger.warn(`[CALL_CONFLICT] Call conflict detected for ${pendingCallKey}`);
             socket.emit('callConflict', {
               message: 'Call already in progress',
               existingCallerId: existingCall.callerId
             });
+
+            // Don't proceed with call initialization
             return;
           }
 
           // Clear stale call and its timeout
-          logger.debug('[CLEARING_STALE_CALL]', {
-            pendingCallKey,
-            existingCall: JSON.stringify(existingCall),
-            timeSinceCall,
-            socketId: socket.id,
-            timestamp: Date.now()
-          });
           cleanupStaleCall(pendingCallKey, existingCall);
         }
 
         // Fetch user details before proceeding with call initialization
-        logger.debug('[FETCHING_USER_DETAILS]', {
-          callerId,
-          receiverId,
-          socketId: socket.id,
-          timestamp: Date.now()
-        });
-
         const [receiver, caller] = await Promise.all([
           User.findById(receiverId),
           User.findById(callerId),
         ]).catch(error => {
-          logger.error(`[DB_ERROR] Failed to fetch users: ${error.message}`, {
-            error: error.stack,
-            callerId,
-            receiverId,
-            socketId: socket.id,
-            timestamp: Date.now()
-          });
+          logger.error(`[DB_ERROR] Failed to fetch users: ${error.message}`);
           throw new Error('Failed to fetch user details');
         });
 
         if (!receiver || !caller) {
-          logger.error('[MISSING_USER]', {
-            receiverFound: !!receiver,
-            callerFound: !!caller,
-            callerId,
-            receiverId,
-            socketId: socket.id,
-            timestamp: Date.now()
-          });
           handleMissingUser(socket, pendingCallKey, receiver, caller, receiverId, callerId);
           return;
         }
 
         // Store new call attempt ONLY if no conflict exists
         if (!pendingCalls[pendingCallKey]) {
-          logger.debug('[INITIALIZING_NEW_CALL]', {
-            pendingCallKey,
-            callerId,
-            receiverId,
-            socketId: socket.id,
-            timestamp: Date.now()
-          });
-
           pendingCalls[pendingCallKey] = {
             callerId,
             receiverId,
@@ -727,12 +433,7 @@ export const setupWebRTC = (io) => {
           // Set cleanup timeout
           cleanupTimeout = setTimeout(() => {
             if (pendingCalls[pendingCallKey] && !pendingCalls[pendingCallKey].conflict) {
-              logger.info(`[CALL_TIMEOUT] Cleaning up ${pendingCallKey}`, {
-                pendingCallKey,
-                callState: JSON.stringify(pendingCalls[pendingCallKey]),
-                socketId: socket.id,
-                timestamp: Date.now()
-              });
+              logger.info(`[CALL_TIMEOUT] Cleaning up ${pendingCallKey}`);
               cleanupCallResources(pendingCallKey, callerId, receiverId, socket);
               socket.emit('callTimeout', {
                 receiverId,
@@ -741,53 +442,27 @@ export const setupWebRTC = (io) => {
 
               socket.emit('userBusy', {
                 receiverId,
-                message: 'user is Busy Another Call Wait Some Time'
+                message: 'user is Busy Another Call Wait Some Time '
               });
             }
           }, 30000);
 
           pendingCalls[pendingCallKey].cleanupTimeout = cleanupTimeout;
 
-          // Initialize socket arrays and register caller
-          logger.debug('[INITIALIZING_SOCKET_ARRAYS]', {
-            callerId,
-            receiverId,
-            currentUsers: JSON.stringify(users),
-            socketId: socket.id,
-            timestamp: Date.now()
-          });
-
+          // Initialize socket arrays and register caller ONLY if no conflict
           users[callerId] = users[callerId] || [];
           users[receiverId] = users[receiverId] || [];
 
           if (!users[callerId].includes(socket.id)) {
             users[callerId].push(socket.id);
-            logger.debug('[SOCKET_REGISTERED]', {
-              callerId,
-              socketId: socket.id,
-              timestamp: Date.now()
-            });
           }
 
-          // Set active call status
+          // Set active call status ONLY if no conflict
           activeCalls[callerId] = receiverId;
           activeCalls[receiverId] = callerId;
 
-          logger.debug('[ACTIVE_CALL_STATUS_SET]', {
-            callerId,
-            receiverId,
-            activeCallsState: JSON.stringify(activeCalls),
-            timestamp: Date.now()
-          });
-
-          // Handle socket notifications
+          // Handle socket notifications ONLY if no conflict
           if (users[receiverId].length > 0) {
-            logger.debug('[SENDING_SOCKET_NOTIFICATIONS]', {
-              receiverId,
-              receiverSockets: users[receiverId],
-              timestamp: Date.now()
-            });
-
             users[receiverId].forEach((socketId) => {
               socket.to(socketId).emit('incomingCall', {
                 callerId,
@@ -795,49 +470,21 @@ export const setupWebRTC = (io) => {
                 callerName: caller.username || 'Unknown Caller',
                 timestamp: Date.now()
               });
-              logger.info(`[SOCKET_NOTIFY] Sent to ${receiverId} via socket ${socketId}`, {
-                receiverId,
-                socketId,
-                callerId,
-                timestamp: Date.now()
-              });
+              logger.info(`[SOCKET_NOTIFY] Sent to ${receiverId} via socket ${socketId}`);
             });
 
             socket.emit('playCallerTune', { callerId });
-            logger.debug('[CALLER_TUNE_TRIGGERED]', {
-              callerId,
-              socketId: socket.id,
-              timestamp: Date.now()
-            });
           }
 
-          // Handle push notification
+          // Handle push notification ONLY if no conflict
           if (receiver.deviceToken) {
-            logger.debug('[SENDING_PUSH_NOTIFICATION]', {
-              receiverId,
-              deviceToken: receiver.deviceToken,
-              timestamp: Date.now()
-            });
             await sendPushNotification(receiver, caller, receiverId, callerId);
           }
 
-          // Update call status
+          // Update call status ONLY if no conflict
           pendingCalls[pendingCallKey].status = 'active';
-          logger.debug('[CALL_STATUS_UPDATED]', {
-            pendingCallKey,
-            newStatus: 'active',
-            callState: JSON.stringify(pendingCalls[pendingCallKey]),
-            timestamp: Date.now()
-          });
-
         } else {
-          logger.warn(`[CALL_BLOCKED] Call initialization blocked due to existing call: ${pendingCallKey}`, {
-            pendingCallKey,
-            existingCall: JSON.stringify(pendingCalls[pendingCallKey]),
-            socketId: socket.id,
-            timestamp: Date.now(),
-            emittedEvent: 'callBlocked'
-          });
+          logger.warn(`[CALL_BLOCKED] Call initialization blocked due to existing call: ${pendingCallKey}`);
           socket.emit('callBlocked', {
             message: 'Cannot initialize call due to existing call'
           });
@@ -845,30 +492,18 @@ export const setupWebRTC = (io) => {
         }
 
       } catch (error) {
-        logger.error('[CALL_ERROR]', {
-          error: error.message,
-          stack: error.stack,
-          callerId,
-          receiverId,
-          socketId: socket.id,
-          timestamp: Date.now()
-        });
-
+        // Clean up resources in case of error
         if (cleanupTimeout) {
           clearTimeout(cleanupTimeout);
-          logger.debug('[CLEANUP_TIMEOUT_CLEARED_ON_ERROR]', {
-            callerId,
-            receiverId,
-            socketId: socket.id,
-            timestamp: Date.now()
-          });
         }
-
         const pendingCallKey = [callerId, receiverId].sort().join('_');
         cleanupCallResources(pendingCallKey, callerId, receiverId, socket);
         handleError(socket, error);
       }
     });
+
+
+   
 
     function cleanupCallResources(pendingCallKey, callerId, receiverId, socket) {
       // Clean up pending calls
