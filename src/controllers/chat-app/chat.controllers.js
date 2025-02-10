@@ -367,6 +367,66 @@ const getAllChats = asyncHandler(async (req, res) => {
 
 
 
+export const getUnreadMessagesCount = asyncHandler(async (req, res) => {
+  // Get all chats that the user is part of
+  const userChats = await Chat.find({
+    participants: { $elemMatch: { $eq: req.user._id } }
+  });
+
+  // Get the chat IDs
+  const chatIds = userChats.map(chat => chat._id);
+
+  // Count unread messages across all user's chats
+  const unreadCount = await ChatMessage.countDocuments({
+    chat: { $in: chatIds },
+    seenBy: { 
+      $not: { 
+        $elemMatch: { 
+          $eq: req.user._id 
+        } 
+      }
+    },
+    sender: { $ne: req.user._id } // Don't count user's own messages
+  });
+
+  // Optional: Get unread count per chat
+  const unreadCountByChat = await ChatMessage.aggregate([
+    {
+      $match: {
+        chat: { $in: chatIds },
+        seenBy: { 
+          $not: { 
+            $elemMatch: { 
+              $eq: req.user._id 
+            } 
+          }
+        },
+        sender: { $ne: req.user._id }
+      }
+    },
+    {
+      $group: {
+        _id: "$chat",
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+
+  return res.status(200).json(
+    new ApiResponse(
+      200, 
+      {
+        totalUnread: unreadCount,
+        unreadByChat: unreadCountByChat
+      },
+      "Unread messages count retrieved successfully"
+    )
+  );
+});
+
+// Add to your routes file
+
+
 
 
 

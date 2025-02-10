@@ -4,7 +4,8 @@ import {
   deleteOneOnOneChat,
   getAllChats,
   searchAvailableUsers,
-  markMessageAsRead
+  markMessageAsRead,
+  getUnreadMessagesCount
 } from "../../controllers/chat-app/chat.controllers.js";
 import { protect } from "../../middlewares/auth/authMiddleware.js";
 import { mongoIdPathVariableValidator } from "../../validators/common/mongodb.validators.js";
@@ -35,4 +36,8 @@ router
 router
   .route("/messageread/:messageId/read")
   .put(mongoIdPathVariableValidator("messageId"), validate, markMessageAsRead);
+
+
+router.get("/messages/unread/count", protect, getUnreadMessagesCount);
+
 export default router;
