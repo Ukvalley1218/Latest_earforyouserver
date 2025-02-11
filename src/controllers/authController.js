@@ -1588,7 +1588,6 @@ export const getUserById = async (req, res) => {
 export const getAllUsers1 = async (req, res) => {
   try {
     const genderFilter = req.query.gender?.toLowerCase();
-    const statusFilter = req.query.status?.toLowerCase() || 'Online'; // Default to Online users
     const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
     const searchQuery = req.query.search?.trim() || "";
     const page = Math.max(parseInt(req.query.page) || 1, 1);
@@ -1599,13 +1598,6 @@ export const getAllUsers1 = async (req, res) => {
     if (genderFilter && !["male", "female"].includes(genderFilter)) {
       return res.status(400).json({
         message: "Invalid gender parameter. Must be 'male' or 'female'",
-      });
-    }
-
-    // Validate status parameter
-    if (statusFilter && !["Online", "offline", "away"].includes(statusFilter)) {
-      return res.status(400).json({
-        message: "Invalid status parameter. Must be 'Online', 'offline', or 'away'",
       });
     }
 
@@ -1623,22 +1615,12 @@ export const getAllUsers1 = async (req, res) => {
       matchConditions.username = { $regex: searchQuery, $options: "i" };
     }
 
-    // Add status filter conditions (now with Online as default)
-    if (statusFilter === "Online") {
-      matchConditions.status = "Online";
-    } else if (statusFilter === "offline") {
-      matchConditions.status = { $ne: "Online" };
-    } else if (statusFilter === "all") {
-      // Don't apply any status filter
-    }
-
     // Get total count separately for better performance
     const totalUsers = await User.countDocuments(matchConditions);
 
     if (totalUsers === 0) {
       let message = "No users found";
       if (genderFilter) message = `No ${genderFilter} users found`;
-      if (statusFilter) message += ` with ${statusFilter} status`;
       return res.status(404).json({ message });
     }
 
@@ -1650,11 +1632,24 @@ export const getAllUsers1 = async (req, res) => {
       // Match stage first to reduce documents early
       { $match: matchConditions },
 
-      // Sort early to utilize indexes
+      // Add a field to help with sorting
+      {
+        $addFields: {
+          sortOrder: {
+            $cond: {
+              if: { $eq: ["$status", "Online"] },
+              then: 1,
+              else: 0
+            }
+          }
+        }
+      },
+
+      // Sort by online status first, then by last seen
       {
         $sort: {
-          status: -1,  // Online status first
-          lastSeen: -1 // Then by last seen
+          sortOrder: -1,  // Online users first
+          lastSeen: -1    // Then by most recently seen
         }
       },
 
@@ -1662,7 +1657,7 @@ export const getAllUsers1 = async (req, res) => {
       { $skip: skip },
       { $limit: limit },
 
-      // Rest of the pipeline remains the same...
+      // Lookups for additional data
       {
         $lookup: {
           from: "reviews",
@@ -1773,14 +1768,10 @@ export const getAllUsers1 = async (req, res) => {
       }
     ]).exec();
 
-    // Send response with updated message
+    // Send response
     let message = "Users fetched successfully";
     if (genderFilter) {
-      message = `${genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)} users`;
-      if (statusFilter) message += ` with ${statusFilter} status`;
-      message += " fetched successfully";
-    } else if (statusFilter) {
-      message = `${statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)} users fetched successfully`;
+      message = `${genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)} users fetched successfully`;
     }
 
     res.status(200).json({
