@@ -904,50 +904,87 @@ export const setupWebRTC = (io) => {
       }
     });
 
-
     socket.on('rejectCall', async ({ receiverId, callerId }) => {
       try {
-        logger.info(`User ${receiverId} rejected call from User ${callerId}`);
+        // Validate input
+        if (!receiverId || !callerId) {
+          return socket.emit('callError', { message: 'Invalid call parameters' });
+        }
 
-        // First: Immediately notify caller about rejection
-        if (users[callerId]) {
-          users[callerId].forEach((socketId) => {
-            socket.to(socketId).emit('callRejected', { receiverId });
+        // Fetch user details
+        const caller = await User.findById(callerId).select('username name profilePicture');
+        const receiver = await User.findById(receiverId).select('username deviceToken notificationSettings -_id');
+
+        if (!caller || !receiver) {
+          return socket.emit('callError', { message: 'Caller or receiver not found' });
+        }
+
+        const callerName = caller.name || caller.username;
+
+        // Notify receiver via socket
+        const receiverSockets = users[receiverId];
+        if (receiverSockets?.length) {
+          // Send socket notification to all connected sockets for the receiver
+          receiverSockets.forEach((socketId) => {
+            socket.to(socketId).emit('callRejected', {
+              callerId,
+              callerName,
+              callerPicture: caller.profilePicture,
+              timestamp: new Date(),
+            });
           });
         }
 
-        // Second: Stop caller tune
-        socket.emit('stopCallerTune', { callerId });
+        const callerCallKey = `${callerId}_${receiverId}`;
+        const receiverCallKey = `${receiverId}_${callerId}`;
 
-        // Third: Immediate cleanup of all resources
-        const pendingCallKey = `${callerId}-${receiverId}`;
-        delete activeCalls[callerId];
-        delete activeCalls[receiverId];
-        if (pendingCalls[pendingCallKey]) {
-          delete pendingCalls[pendingCallKey];
-        }
 
-        // Fourth: Notify about missed call
-        socket.emit('callMissed', {
-          receiverId,
-          message: 'User is busy with another call. Please wait some time.'
-        });
+        // Send push notification (only once)
+      
 
-        // Finally: Create call log
-        await CallLog.create({
+        // Log missed call for caller
+        const logForCaller = await CallLog.create({
           caller: new mongoose.Types.ObjectId(callerId),
           receiver: new mongoose.Types.ObjectId(receiverId),
           startTime: new Date(),
           endTime: new Date(),
           duration: 0,
-          status: 'rejected'
+          status: 'rejected',
         });
 
+        // Log missed call for receiver
+        const logForReceiver = await CallLog.create({
+          caller: new mongoose.Types.ObjectId(receiverId),
+          receiver: new mongoose.Types.ObjectId(callerId),
+          startTime: new Date(),
+          endTime: new Date(),
+          duration: 0,
+          status: 'missed',
+        });
+
+        logger.info('Cleaning up call data...');
+
+        for (const key in pendingCalls) {
+          if (pendingCalls[key].socketId === socket.id) {
+            logger.info(`Cleaning up pending call: ${key}`);
+            delete pendingCalls[key];
+          }
+        }
+
+        delete activeCalls[callerId];
+        delete activeCalls[receiverId];
+        delete callTimings[callerCallKey];
+        delete callTimings[receiverCallKey];
+
+        console.log('Missed call logs created:', { logForCaller, logForReceiver });
       } catch (error) {
-        logger.error(`Error in rejectCall handler: ${error.message}`);
-        socket.emit('callError', { message: 'Failed to reject call' });
+        console.error('Error processing missed call:', error);
+        socket.emit('callError', { message: 'Failed to process missed call' });
       }
     });
+
+
+   
 
 
     socket.on('endCall', async ({ receiverId, callerId }) => {
