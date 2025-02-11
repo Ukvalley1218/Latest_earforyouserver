@@ -948,6 +948,12 @@ export const setupWebRTC = (io) => {
                 callTimings: !callTimings[callerCallKey] && !callTimings[receiverCallKey]
               };
 
+
+              if (users[callerId]) {
+                users[callerId].forEach((socketId) => {
+                  socket.to(socketId).emit('callRejected', { receiverId });
+                });
+              }
               const isCleanupComplete = Object.values(cleanupVerification).every(v => v === true);
 
               if (isCleanupComplete) {
