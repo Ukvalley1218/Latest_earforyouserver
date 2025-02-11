@@ -1033,7 +1033,7 @@ export const UserCategoryData = async (req, res) => {
       },
       {
         $sort: {
-          isOnline: -1, // Sort online users first
+          isOnline: -1, // Sort Online users first
           createdAt: -1 // Then by creation date
         }
       },
@@ -1363,15 +1363,15 @@ export const getUserById = async (req, res) => {
 //         $addFields: {
 //           avgRating: { $avg: "$ratings.rating" },
 //           reviewCount: { $size: "$ratings" },
-//           isOnline: {
-//             $cond: { if: { $eq: ["$status", "Online"] }, then: 1, else: 0 },
-//           },
+// isOnline: {
+//   $cond: { if: { $eq: ["$status", "Online"] }, then: 1, else: 0 },
+// },
 //           lastSeenStatus: {
 //             $switch: {
 //               branches: [
 //                 {
 //                   case: { $eq: ["$status", "Online"] },
-//                   then: "online"
+//                   then: "Online"
 //                 },
 //                 {
 //                   case: { $gte: ["$lastSeen", twentyFourHoursAgo] },
@@ -1588,6 +1588,7 @@ export const getUserById = async (req, res) => {
 export const getAllUsers1 = async (req, res) => {
   try {
     const genderFilter = req.query.gender?.toLowerCase();
+    const statusFilter = req.query.status?.toLowerCase() || 'Online'; // Default to Online users
     const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
     const searchQuery = req.query.search?.trim() || "";
     const page = Math.max(parseInt(req.query.page) || 1, 1);
@@ -1598,6 +1599,13 @@ export const getAllUsers1 = async (req, res) => {
     if (genderFilter && !["male", "female"].includes(genderFilter)) {
       return res.status(400).json({
         message: "Invalid gender parameter. Must be 'male' or 'female'",
+      });
+    }
+
+    // Validate status parameter
+    if (statusFilter && !["Online", "offline", "away"].includes(statusFilter)) {
+      return res.status(400).json({
+        message: "Invalid status parameter. Must be 'Online', 'offline', or 'away'",
       });
     }
 
@@ -1615,15 +1623,23 @@ export const getAllUsers1 = async (req, res) => {
       matchConditions.username = { $regex: searchQuery, $options: "i" };
     }
 
+    // Add status filter conditions (now with Online as default)
+    if (statusFilter === "Online") {
+      matchConditions.status = "Online";
+    } else if (statusFilter === "offline") {
+      matchConditions.status = { $ne: "Online" };
+    } else if (statusFilter === "all") {
+      // Don't apply any status filter
+    }
+
     // Get total count separately for better performance
     const totalUsers = await User.countDocuments(matchConditions);
 
     if (totalUsers === 0) {
-      return res.status(404).json({
-        message: genderFilter
-          ? `No ${genderFilter} users found`
-          : "No users found",
-      });
+      let message = "No users found";
+      if (genderFilter) message = `No ${genderFilter} users found`;
+      if (statusFilter) message += ` with ${statusFilter} status`;
+      return res.status(404).json({ message });
     }
 
     const currentTime = new Date();
@@ -1633,7 +1649,7 @@ export const getAllUsers1 = async (req, res) => {
     const users = await User.aggregate([
       // Match stage first to reduce documents early
       { $match: matchConditions },
-      
+
       // Sort early to utilize indexes
       {
         $sort: {
@@ -1646,7 +1662,7 @@ export const getAllUsers1 = async (req, res) => {
       { $skip: skip },
       { $limit: limit },
 
-      // Optimized review stats lookup
+      // Rest of the pipeline remains the same...
       {
         $lookup: {
           from: "reviews",
@@ -1669,7 +1685,6 @@ export const getAllUsers1 = async (req, res) => {
         }
       },
 
-      // Optimized chat lookup with specific fields
       {
         $lookup: {
           from: "chats",
@@ -1692,7 +1707,6 @@ export const getAllUsers1 = async (req, res) => {
         }
       },
 
-      // Optimized unread messages count
       {
         $lookup: {
           from: "chatmessages",
@@ -1743,7 +1757,7 @@ export const getAllUsers1 = async (req, res) => {
           lastSeenStatus: {
             $switch: {
               branches: [
-                { case: { $eq: ["$status", "Online"] }, then: "online" },
+                { case: { $eq: ["$status", "Online"] }, then: "Online" },
                 { case: { $gte: ["$lastSeen", twentyFourHoursAgo] }, then: "recently" }
               ],
               default: "away"
@@ -1759,11 +1773,18 @@ export const getAllUsers1 = async (req, res) => {
       }
     ]).exec();
 
-    // Send response
+    // Send response with updated message
+    let message = "Users fetched successfully";
+    if (genderFilter) {
+      message = `${genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)} users`;
+      if (statusFilter) message += ` with ${statusFilter} status`;
+      message += " fetched successfully";
+    } else if (statusFilter) {
+      message = `${statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)} users fetched successfully`;
+    }
+
     res.status(200).json({
-      message: genderFilter
-        ? `${genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)} users fetched successfully`
-        : "Users fetched successfully",
+      message,
       users,
       pagination: {
         totalUsers,
@@ -2214,7 +2235,7 @@ export const getChatsWithLatestMessages = async (req, res) => {
       return acc;
     }, new Set());
 
-    // Step 3: Fetch participants with search and online status
+    // Step 3: Fetch participants with search and Online status
     const participants = await User.aggregate([
       {
         $match: {
@@ -2279,7 +2300,7 @@ export const getChatsWithLatestMessages = async (req, res) => {
       avgRatings[userId] = (ratingData.sum || 0) / (ratingData.count || 1);
     }
 
-    // Step 7: Format chat data with online status and search results
+    // Step 7: Format chat data with Online status and search results
     const uniqueUsersMap = new Map();
 
     for (const chat of chats) {
@@ -2319,7 +2340,7 @@ export const getChatsWithLatestMessages = async (req, res) => {
       };
     });
 
-    // Sort formatted chats by online status and then by updatedAt
+    // Sort formatted chats by Online status and then by updatedAt
     formattedChats.sort((a, b) => {
       if (a.participants[0].isOnline !== b.participants[0].isOnline) {
         return b.participants[0].isOnline ? 1 : -1;
