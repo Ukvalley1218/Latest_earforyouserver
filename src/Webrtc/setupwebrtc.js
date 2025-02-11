@@ -907,17 +907,27 @@ export const setupWebRTC = (io) => {
 
     socket.on('rejectCall', async ({ receiverId, callerId }) => {
       try {
-        // Input validation
-        if (!receiverId || !callerId) {
-          logger.warn('Missing caller or receiver ID');
+        // Input validation with type checking
+        if (!receiverId || !callerId || typeof receiverId !== 'string' || typeof callerId !== 'string') {
+          logger.warn('Invalid or missing caller/receiver ID', { receiverId, callerId });
           return socket.emit('callError', { message: 'Invalid call parameters' });
         }
 
         logger.info(`User ${receiverId} rejected call from User ${callerId}`);
 
-        // Validate active call state
-        if (!activeCalls[callerId] || activeCalls[callerId] !== receiverId) {
-          logger.warn(`No active call found between Caller ${callerId} and Receiver ${receiverId}`);
+        // Validate active call state with detailed checks
+        const isValidActiveCall = activeCalls[callerId] === receiverId &&
+          activeCalls[receiverId] === callerId;
+
+        if (!isValidActiveCall) {
+          logger.warn('No valid active call found', {
+            expectedReceiver: activeCalls[callerId],
+            actualReceiver: receiverId,
+            callState: {
+              callerState: activeCalls[callerId],
+              receiverState: activeCalls[receiverId]
+            }
+          });
           return socket.emit('callError', { message: 'No active call found' });
         }
 
@@ -925,37 +935,83 @@ export const setupWebRTC = (io) => {
         const callerCallKey = `${callerId}_${receiverId}`;
         const receiverCallKey = `${receiverId}_${callerId}`;
 
-        // Debugging logs
-        logger.info('Active calls before cleanup:', activeCalls);
-        logger.info('Call timings before cleanup:', callTimings);
+        // Capture state before cleanup for logging
+        const preCleanupState = {
+          activeCalls: { ...activeCalls },
+          pendingCalls: { ...pendingCalls },
+          callTimings: { ...callTimings }
+        };
 
-        // Stop caller tune
+        // Stop caller tune with error boundary
         try {
           socket.emit('stopCallerTune', { callerId });
         } catch (tuneError) {
           logger.error('Error stopping caller tune:', tuneError);
+          // Continue execution despite tune error
         }
 
-        // **CLEANUP PROCESS**
-        logger.info(`Cleaning up call records for Caller: ${callerId} and Receiver: ${receiverId}`);
+        // Comprehensive cleanup with verification
+        const cleanup = {
+          pendingCalls: false,
+          activeCalls: false,
+          callTimings: false
+        };
 
-        // Clean up pending calls if any exist
-        for (const key in pendingCalls) {
-          if (pendingCalls[key]?.socketId === socket.id) {
-            logger.info(`Deleting pending call: ${key}`);
-            delete pendingCalls[key];
+        // Clear pending calls with verification
+        if (pendingCalls[callerId]) {
+          delete pendingCalls[callerId];
+          cleanup.pendingCalls = !pendingCalls[callerId];
+        }
+        if (pendingCalls[receiverId]) {
+          delete pendingCalls[receiverId];
+          cleanup.pendingCalls = !pendingCalls[receiverId];
+        }
+
+        // Clear active calls with verification
+        if (activeCalls[callerId]) {
+          delete activeCalls[callerId];
+          cleanup.activeCalls = !activeCalls[callerId];
+        }
+        if (activeCalls[receiverId]) {
+          delete activeCalls[receiverId];
+          cleanup.activeCalls = !activeCalls[receiverId];
+        }
+
+        // Clear call timings with verification
+        if (callTimings[callerCallKey]) {
+          delete callTimings[callerCallKey];
+          cleanup.callTimings = !callTimings[callerCallKey];
+        }
+        if (callTimings[receiverCallKey]) {
+          delete callTimings[receiverCallKey];
+          cleanup.callTimings = !callTimings[receiverCallKey];
+        }
+
+        // Verify cleanup success
+        const cleanupSuccess = Object.values(cleanup).every(status => status !== false);
+
+        if (!cleanupSuccess) {
+          logger.warn('Incomplete cleanup detected', {
+            cleanup,
+            remainingState: {
+              activeCalls: { ...activeCalls },
+              pendingCalls: { ...pendingCalls },
+              callTimings: { ...callTimings }
+            }
+          });
+        }
+
+        logger.info('Call cleanup completed', {
+          success: cleanupSuccess,
+          preCleanupState,
+          currentState: {
+            activeCalls: { ...activeCalls },
+            pendingCalls: { ...pendingCalls },
+            callTimings: { ...callTimings }
           }
-        }
+        });
 
-        delete activeCalls[callerId];
-        delete activeCalls[receiverId];
-        delete callTimings[callerCallKey];
-        delete callTimings[receiverCallKey];
-
-
-        logger.info('Call cleanup completed successfully.');
-
-        // **LOG REJECTED CALL IN DATABASE**
+        // Log rejected call in database with error handling
         try {
           await CallLog.create({
             caller: new mongoose.Types.ObjectId(callerId),
@@ -963,28 +1019,42 @@ export const setupWebRTC = (io) => {
             startTime: new Date(),
             endTime: new Date(),
             duration: 0,
-            status: 'rejected'
+            status: 'rejected',
+            cleanupSuccess // Add cleanup status to log
           });
           logger.info('Call log created successfully');
         } catch (dbError) {
           logger.error('Failed to create call log:', dbError);
+          // Continue execution despite logging error
         }
 
-        // **NOTIFY CALLER ABOUT REJECTION**
-        if (users[callerId]) {
-          users[callerId].forEach((socketId) => {
-            try {
-              socket.to(socketId).emit('callRejected', {
-                receiverId,
-                timestamp: Date.now()
-              });
-              logger.info(`Rejection notification sent to Caller: ${callerId}`);
-            } catch (socketError) {
-              logger.error(`Error emitting callRejected to Caller ${callerId}:`, socketError);
-            }
+        // Notify caller about rejection with improved error handling
+        if (users[callerId]?.length > 0) {
+          const notificationPromises = users[callerId].map(socketId =>
+            new Promise((resolve) => {
+              try {
+                socket.to(socketId).emit('callRejected', {
+                  receiverId,
+                  timestamp: Date.now(),
+                  cleanupSuccess
+                });
+                resolve(true);
+              } catch (socketError) {
+                logger.error(`Error emitting callRejected to socket ${socketId}:`, socketError);
+                resolve(false);
+              }
+            })
+          );
+
+          const notificationResults = await Promise.all(notificationPromises);
+          const successfulNotifications = notificationResults.filter(result => result).length;
+
+          logger.info(`Rejection notifications sent`, {
+            total: users[callerId].length,
+            successful: successfulNotifications
           });
         } else {
-          logger.warn(`Caller ${callerId} is no longer connected.`);
+          logger.warn(`Caller ${callerId} has no active connections`);
         }
 
       } catch (error) {
