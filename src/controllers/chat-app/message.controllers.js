@@ -281,11 +281,15 @@ async function sendNotification(userId, title, message, chatId, messageId, sende
   }
 
   const payload = {
+    android: {
+      priority: 'high',
+    
     notification: {
       title: title,
       body: message,
 
     },
+  },
     data: {
       screen: 'Chat', // The screen name you want to navigate to
       params: JSON.stringify({

@@ -85,7 +85,7 @@ router.get('/getBankDetails', protect, getBankDetails);
 
 router.post('/initiate/registration', initiateRegistration);
 
-// Initiate login by sending OTP to email
+
 
 // Verify the login OTP
 router.post('/login/verify', verifyLoginOtp);

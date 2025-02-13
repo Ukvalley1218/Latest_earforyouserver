@@ -6,7 +6,9 @@ const router = express.Router();
 
 
 router.get('/recent-calls/', protect, getRecentCalls);
+
 // Route to initiate a call
+
 router.post('/initiate', initiateCall);
 
 // Route to accept a call

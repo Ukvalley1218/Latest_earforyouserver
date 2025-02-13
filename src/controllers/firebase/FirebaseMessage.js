@@ -1,7 +1,10 @@
 // controllers/notificationController.js
+// import { Console } from 'winston/lib/winston/transports/index.js';
 import firebaseConfig from '../../config/firebaseConfig.js';
 import User from '../../models/Users.js';
 import admin from 'firebase-admin';
+import { getMessaging } from 'firebase-admin/messaging';
+
 
 // Function to send notification to a single user
 const sendSingleNotification = async (deviceToken, title, body) => {
@@ -22,6 +25,7 @@ const sendSingleNotification = async (deviceToken, title, body) => {
 };
 
 // Function to send notification to multiple users
+
 // export const sendBulkNotification = async (req, res) => {
 //   const { title, body } = req.body;
 
@@ -72,11 +76,37 @@ const sendSingleNotification = async (deviceToken, title, body) => {
 
 
 
+
+const BATCH_SIZE = 450;
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const sendNotificationWithRetry = async (message, maxRetries = MAX_RETRIES) => {
+  let lastError;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const result = await getMessaging().sendEachForMulticast(message);
+      return result;
+    } catch (error) {
+      lastError = error;
+      console.log(`Retry attempt ${attempt + 1} failed:`, error.message);
+
+      if (attempt < maxRetries - 1) {
+        await sleep(RETRY_DELAY * (attempt + 1)); // Exponential backoff
+      }
+    }
+  }
+
+  throw lastError;
+};
+
 export const sendBulkNotification = async (req, res) => {
   const { title, body } = req.body;
-  
+
   try {
-    // Input validation
     if (!title || !body) {
       return res.status(400).json({
         success: false,
@@ -84,71 +114,134 @@ export const sendBulkNotification = async (req, res) => {
       });
     }
 
-    // Get all device tokens
     const users = await User.find(
       { deviceToken: { $exists: true, $ne: null } },
       { deviceToken: 1 }
     ).lean();
 
-    if (!users || users.length === 0) {
+    if (!users.length) {
       return res.status(404).json({
         success: false,
         message: 'No device tokens found'
       });
     }
 
-    // Extract tokens and create batches
-    const registrationTokens = users.map(user => user.deviceToken);
-    const BATCH_SIZE = 500;
-    const batches = [];
-    
-    for (let i = 0; i < registrationTokens.length; i += BATCH_SIZE) {
-      batches.push(registrationTokens.slice(i, i + BATCH_SIZE));
-    }
-
-    const results = await Promise.all(
-      batches.map(async (tokenBatch) => {
-        const message = {
-          data: {
-            title,
-            body,
-          },
-          tokens: tokenBatch
-        };
-
-        try {
-          return await admin.messaging().sendEachForMulticast(message);
-        } catch (error) {
-          console.error('Batch error:', error);
-          return {
-            successCount: 0,
-            failureCount: tokenBatch.length,
-            responses: tokenBatch.map(() => ({ success: false }))
-          };
-        }
-      })
+    const tokens = users.map(({ deviceToken }) => deviceToken);
+    const batches = Array.from(
+      { length: Math.ceil(tokens.length / BATCH_SIZE) },
+      (_, i) => tokens.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
-    // Aggregate results
-    const totalResults = {
-      successCount: 0,
-      failureCount: 0,
-      responses: []
-    };
+    let totalSuccessful = 0;
+    let totalFailed = 0;
+    const allInvalidTokens = [];
+    const failedTokens = [];
 
-    results.forEach(result => {
-      totalResults.successCount += result.successCount;
-      totalResults.failureCount += result.failureCount;
-      totalResults.responses.push(...result.responses);
-    });
+    for (const batchTokens of batches) {
+      const message = {
+        tokens: batchTokens,
+        notification: {
+          title,
+          body
+        },
+        android: {
+          priority: 'high',
+          notification: {
+            priority: 'high'
+          }
+        },
+        apns: {
+          payload: {
+            aps: {
+              priority: 10,
+              contentAvailable: true
+            }
+          },
+          headers: {
+            'apns-priority': '10',
+            'apns-push-type': 'alert'
+          }
+        },
+        webpush: {
+          headers: {
+            Urgency: 'high'
+          }
+        }
+
+      };
+
+      try {
+        const result = await sendNotificationWithRetry(message);
+
+        totalSuccessful += result.successCount;
+        totalFailed += result.failureCount;
+
+        // Process failures and collect invalid tokens
+        if (result.failureCount > 0) {
+          result.responses.forEach((resp, idx) => {
+            if (!resp.success) {
+              const token = batchTokens[idx];
+
+              if (resp.error?.code === 'messaging/invalid-registration-token' ||
+                resp.error?.code === 'messaging/registration-token-not-registered') {
+                allInvalidTokens.push(token);
+              } else {
+                // Store tokens that failed for other reasons
+                failedTokens.push({
+                  token,
+                  error: resp.error?.message || 'Unknown error'
+                });
+              }
+            }
+          });
+        }
+      } catch (error) {
+        console.error(`Batch failed after all retries:`, error);
+        totalFailed += batchTokens.length;
+        failedTokens.push(...batchTokens.map(token => ({
+          token,
+          error: error.message
+        })));
+      }
+    }
+
+    // Clean up invalid tokens
+    if (allInvalidTokens.length > 0) {
+      await User.updateMany(
+        { deviceToken: { $in: allInvalidTokens } },
+        { $unset: { deviceToken: "" } }
+      );
+    }
+
+    // Try to resend to failed tokens one last time
+    if (failedTokens.length > 0) {
+      const retryTokens = failedTokens.map(ft => ft.token);
+      try {
+        const retryMessage = {
+          tokens: retryTokens,
+          notification: {
+            title,
+            body
+          }
+        };
+
+        const retryResult = await sendNotificationWithRetry(retryMessage, 1);
+        totalSuccessful += retryResult.successCount;
+        totalFailed -= retryResult.successCount;
+      } catch (error) {
+        console.error('Final retry batch failed:', error);
+      }
+    }
 
     return res.status(200).json({
       success: true,
       message: 'Notifications sent',
       summary: {
-        total: registrationTokens.length,
-        successful: totalResults.successCount,
-        failed: totalResults.failureCount
+        successful: totalSuccessful,
+        failed: totalFailed,
+        total: tokens.length,
+        invalidTokensRemoved: allInvalidTokens.length,
+        failedTokens: failedTokens.length
       }
     });
 
@@ -164,20 +257,31 @@ export const sendBulkNotification = async (req, res) => {
 
 
 
-
 // Original single user notification function (kept for backward compatibility)
+
+
 export const sendPushNotification = async (req, res) => {
-  const { userId, title, body } = req.body;
+  const loginuserid = req.user.id || req.user._id;
+  const { userId } = req.body
 
   try {
     const user = await User.findById(userId);
+    const loginuser = await User.findById(loginuserid);
+
+    console.log("user", user);
+    console.log("user", user.deviceToken);
 
     if (!user || !user.deviceToken) {
+      console.log()
       return res.status(404).json({
         success: false,
         message: 'User or device token not found'
       });
     }
+    const capitalize = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1) : 'Unknown Person';
+    // Create body text with user's name
+    const body = `Your True Listener ${capitalize(loginuser.username) || capitalize(user.name) || 'Unknown Person'}`;
+    const title = `Are you free now, ${capitalize(user.username) || capitalize(user.name) || 'Unknown Person'}? If Yes, Let's Connect Over A Call`;
 
     const response = await sendSingleNotification(user.deviceToken, title, body);
 
@@ -190,13 +294,40 @@ export const sendPushNotification = async (req, res) => {
       message: 'Notification sent!',
       response
     });
-
   } catch (error) {
     console.error('Error sending notification:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to send notification',
       error: error.message
+    });
+  }
+};
+
+
+export const getValidTokenCount = async (req, res) => {
+  try {
+    const count = await User.countDocuments({
+      deviceToken: { $exists: true, $ne: null }
+    });
+
+    const usersWithTokens = await User.find(
+      { deviceToken: { $exists: true, $ne: null } },
+      { username: 1, deviceToken: 1, _id: 0 }
+    ).lean();
+
+    return res.status(200).json({
+      success: true,
+      totalCount: count,
+      users: usersWithTokens,
+      message: `Found ${count} users with valid device tokens`
+    });
+
+  } catch (error) {
+    console.error('Error counting valid tokens:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to count valid device tokens'
     });
   }
 };

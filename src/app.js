@@ -107,9 +107,9 @@ import RechargeRoute from './routes/Recharge/RechargeRoute.js'
 import msg91Routes from './routes/OTP/msg91Routes.js'
 import appRatingRoutes from './routes/LeaderBoard/apprateRoute.js'
 // import { watchUserChanges } from "./servises/Stream.js";
- import { checkUserStatus } from "./middlewares/auth/CheckBlock.js";
+import { checkUserStatus } from "./middlewares/auth/CheckBlock.js";
 import { protect } from "./middlewares/auth/authMiddleware.js";
-
+import ZohoRoute from './routes/ZohoRoute/ZohoRoute.js'
 
 app.get("/", (req, res) => {
   try {
@@ -121,10 +121,13 @@ app.get("/", (req, res) => {
 });
 // watchUserChanges()
 
-// Apply global middlewares
 
 
-+app.use("/api/", apiLimiter);
+
+  // Apply global middlewares
+
+
+  + app.use("/api/", apiLimiter);
 
 app.use('/api/v1/msg91', msg91Routes);
 
@@ -144,11 +147,11 @@ app.use("/api/v1/messages", messageRouter);
 app.use('/api/v1', reviewRoutes); // Prefix all review routes with /api
 app.use('/api/v1', userRoutes);
 app.use('/api/v1', RechargeRoute);
-  
 
+app.use('/api/zoho',ZohoRoute);
 // FairBaseNotification
 
-app.use('/api/notify', SendNotificationRoute)
+app.use('/api/v1/notify', SendNotificationRoute)
 //common error handling middleware
 
 app.use(protect); // First protect middleware to authenticate users

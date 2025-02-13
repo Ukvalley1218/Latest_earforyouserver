@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { type } from "os";
 
 const bankDetailsSchema = new mongoose.Schema({
   bankName: {
@@ -59,7 +60,7 @@ const userSchema = new mongoose.Schema(
     gender: {
       type: String,
       enum: ['male', 'female', 'other'], // Enum for gender values
-      index:true,
+      index: true,
 
     },
     Language: {
@@ -70,7 +71,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["Therapist", "Psychologist", "Profisnal_listner", 'User'],
       default: 'User',
-      index:true,
+      index: true,
     },
     email: {
       type: String,
@@ -80,7 +81,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ['CALLER', 'RECEIVER'], // Define the enum values
       default: 'CALLER', // Set default value
-      index:true,
+      index: true,
+    },
+    decs: {
+      type: String,
+      require: true
     },
     Bio: {
       type: [String],
@@ -89,7 +94,9 @@ const userSchema = new mongoose.Schema(
     report: {
       type: [String],
     },
-
+    shortDecs: {
+      type: String
+    },
     password: {
       type: String,
       required: false,
@@ -114,20 +121,25 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ['Active', 'inActive', 'InActive', 'Blocked'],
       default: 'inActive',
-      index:true,
+      index: true,
     },
 
     status: {
       type: String,
       enum: ["Online", "offline", "Busy"], // Allow only specific status values
       default: "offline", // Default t
-      index:true
+      index: true
+    },
+
+    
+    lastSeen: {
+      type: Date, // Store the timestamp of the last seen activity
     },
     bankDetails: {
       type: [bankDetailsSchema], // Array of bank details
       default: [], // Default to an empty array
     },
-  
+
   },
   { timestamps: true }
 );
@@ -197,6 +209,15 @@ userSchema.methods.generateRefreshToken = function () {
   );
 };
 
+// lastSeen
+userSchema.pre("save", function (next) {
+  // Check if the status is being modified and changed to "offline"
+  if (this.isModified("status") && this.status === "offline") {
+    this.lastSeen = new Date(); // Set the lastSeen field to the current timestamp
+    console.log("Updated lastSeen for user:", this._id);
+  }
+  next();
+});
 
 
 // Exporting the User model
