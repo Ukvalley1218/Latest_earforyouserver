@@ -15,6 +15,7 @@ export const setupWebRTC = (io) => {
   const onlineUsers = new Map(); // Map to track user IDs and their socket IDs
   const CALL_TIMEOUT = 60000; // 1 minute in milliseconds
   const pendingCalls = {}; // Track pending calls between users
+
   // Queue to store connected users
   const userQueue = [];
 
@@ -325,7 +326,81 @@ export const setupWebRTC = (io) => {
       }
     });
 
+    // socket.on('call', async ({ callerId, receiverId }) => {
+    //   try {
+    //     logger.info(`User ${callerId} is calling User ${receiverId}`);
 
+    //     // Check if either user is already in a call
+    //     if (activeCalls[receiverId] || activeCalls[callerId]) {
+    //       socket.emit('userBusy', { receiverId });
+    //       logger.warn(`User ${receiverId} or ${callerId} is already in a call`);
+    //       return;
+    //     }
+
+    //     // Fetch user details
+    //     const [receiver, caller] = await Promise.all([
+    //       User.findById(receiverId),
+    //       User.findById(callerId),
+    //     ]);
+
+    //     if (!receiver) {
+    //       socket.emit('receiverUnavailable', { receiverId });
+    //       logger.warn(`Receiver user ${receiverId} not found`);
+    //       return;
+    //     }
+
+    //     if (!caller) {
+    //       socket.emit('callerUnavailable', { callerId });
+    //       logger.warn(`Caller user ${callerId} not found`);
+    //       return;
+    //     }
+
+    //     // Initialize socket arrays if needed
+    //     users[callerId] = users[callerId] || [];
+    //     users[receiverId] = users[receiverId] || [];
+
+    //     // Add current socket to caller's list if not already present
+    //     if (!users[callerId].includes(socket.id)) {
+    //       users[callerId].push(socket.id);
+    //     }
+
+    //     if (users[receiverId].length > 0) {
+    //       // Notify all receiver's sockets about the incoming call
+    //       users[receiverId].forEach((socketId) => {
+    //         socket.to(socketId).emit('incomingCall', {
+    //           callerId,
+    //           callerSocketId: socket.id, // Provide caller's socket ID
+    //         });
+    //       });
+
+    //       // Notify the caller to play caller tune
+    //       socket.emit('playCallerTune', { callerId });
+
+    //       // Send push notification if the receiver has a device token
+    //       if (receiver.deviceToken) {
+    //         const title = 'Incoming Call';
+    //         const message = `${caller.username || 'Unknown Caller'} is calling you!`;
+    //         const type = 'incoming_Call';
+    //         const senderName = caller.username || 'Unknown Caller';
+    //         const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
+
+    //         await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
+    //         logger.info(`Push notification sent to User ${receiverId}`);
+    //       }
+
+    //     } else {
+    //       // Handle case where receiver is offline or unavailable
+
+    //     }
+    //   } catch (error) {
+    //     logger.error(`Error in call handler: ${error.message}`);
+    //     socket.emit('callError', { message: 'Failed to initiate call' });
+    //   }
+    // });
+
+
+
+    // Handle WebRTC offer
 
     socket.on('call', async ({ callerId, receiverId }) => {
       let cleanupTimeout;
@@ -345,6 +420,55 @@ export const setupWebRTC = (io) => {
           const isInActiveCall = Object.entries(activeCalls).some(([key, value]) =>
             key === userId || value === userId
           );
+
+        // Check for simultaneous calls between the same users
+        const pendingCallKey = `${Math.min(callerId, receiverId)}_${Math.max(callerId, receiverId)}`;
+        if (pendingCalls[pendingCallKey]) {
+          const existingCall = pendingCalls[pendingCallKey];
+
+          // If the existing caller is the current receiver, handle the cross-call
+          if (existingCall.callerId === receiverId) {
+            // Clear the pending call
+            delete pendingCalls[pendingCallKey];
+
+            // Notify both users about the conflict
+            socket.emit('callConflict', {
+              message: 'Simultaneous call detected',
+              otherUserId: receiverId
+            });
+
+            users[receiverId]?.forEach(socketId => {
+              socket.to(socketId).emit('callConflict', {
+                message: 'Simultaneous call detected',
+                otherUserId: callerId
+              });
+            });
+
+            logger.warn(`Simultaneous call detected between users ${callerId} and ${receiverId}`);
+            return;
+          }
+        }
+
+        // Store the current call attempt
+        pendingCalls[pendingCallKey] = {
+          callerId,
+          receiverId,
+          timestamp: Date.now(),
+          socketId: socket.id
+        };
+
+        // Clear pending call after timeout (e.g., 30 seconds)
+        setTimeout(() => {
+          if (pendingCalls[pendingCallKey]) {
+            delete pendingCalls[pendingCallKey];
+          }
+        }, 30000);
+
+        // Fetch user details
+        const [receiver, caller] = await Promise.all([
+          User.findById(receiverId),
+          User.findById(callerId),
+        ]);
 
           // Check pending calls
           const isInPendingCall = Object.values(pendingCalls).some(call =>
@@ -395,6 +519,13 @@ export const setupWebRTC = (io) => {
             socket.emit('callConflict', {
               message: 'Call already in progress',
               existingCallerId: existingCall.callerId
+
+        if (users[receiverId].length > 0) {
+          // Notify all receiver's sockets about the incoming call
+          users[receiverId].forEach((socketId) => {
+            socket.to(socketId).emit('incomingCall', {
+              callerId,
+              callerSocketId: socket.id,
             });
 
             // Don't proceed with call initialization
@@ -489,6 +620,21 @@ export const setupWebRTC = (io) => {
             message: 'Cannot initialize call due to existing call'
           });
           return;
+          socket.emit('playCallerTune', { callerId });
+
+          if (receiver.deviceToken) {
+            const title = 'Incoming Call';
+            const message = `${caller.username || 'Unknown Caller'} is calling you!`;
+            const type = 'incoming_Call';
+            const senderName = caller.username || 'Unknown Caller';
+            const senderAvatar = caller.avatarUrl || 'https://investogram.ukvalley.com/avatars/default.png';
+
+            await sendNotification(receiverId, title, message, type, callerId, senderName, senderAvatar);
+            logger.info(`Push notification sent to User ${receiverId}`);
+          }
+        } else {
+          socket.emit('userBusy', { receiverId });
+          logger.warn(`Receiver ${receiverId} is offline or unavailable`);
         }
 
       } catch (error) {
@@ -691,6 +837,71 @@ export const setupWebRTC = (io) => {
       } catch (error) {
         logger.error(`Error in answer handler: ${error.message}`);
         socket.emit('callError', { message: 'Failed to process answer' });
+      }
+    });
+
+
+
+    socket.on('iceCandidate', ({ candidate, callerId, receiverId }) => {
+      try {
+        // Log incoming ICE candidate
+        logger.info('ICE candidate received', { callerId, receiverId });
+
+        // Check if candidate exists
+        if (!candidate) {
+          logger.warn('Invalid ICE candidate received');
+          socket.emit('error', {
+            type: 'ICE_CANDIDATE_ERROR',
+            message: 'Invalid ICE candidate'
+          });
+          return;
+        }
+
+        // Check if receiver exists in users
+        if (!users[receiverId]) {
+          logger.warn(`Receiver ${receiverId} not found in users`);
+          socket.emit('error', {
+            type: 'ICE_CANDIDATE_ERROR',
+            message: 'Receiver not found'
+          });
+          return;
+        }
+
+        // Check if receiver has any socket connections
+        if (!Array.isArray(users[receiverId]) || users[receiverId].length === 0) {
+          logger.warn(`No active sockets for receiver ${receiverId}`);
+          socket.emit('error', {
+            type: 'ICE_CANDIDATE_ERROR',
+            message: 'Receiver not connected'
+          });
+          return;
+        }
+
+        // Forward ICE candidate to all receiver's sockets
+        users[receiverId].forEach((socketId) => {
+          socket.to(socketId).emit('iceCandidate', {
+            candidate,
+            callerId,
+            timestamp: Date.now()
+          });
+          logger.info(`ICE candidate forwarded`, {
+            from: callerId,
+            to: receiverId,
+            socketId
+          });
+        });
+
+      } catch (error) {
+        logger.error('Error in iceCandidate handler:', {
+          error: error.message,
+          callerId,
+          receiverId
+        });
+
+        socket.emit('error', {
+          type: 'ICE_CANDIDATE_ERROR',
+          message: 'Failed to process ICE candidate'
+        });
       }
     });
 
@@ -1054,7 +1265,6 @@ export const setupWebRTC = (io) => {
                 delete pendingCalls[key];
               }
             }
-
             logger.info('Call log saved successfully');
           } catch (dbError) {
             logger.error('Failed to save call log:', dbError);
@@ -1067,6 +1277,7 @@ export const setupWebRTC = (io) => {
           delete callTimings[callerCallKey];
           delete callTimings[receiverCallKey];
 
+          logger.info('Call cleanup completed');
 
         } else {
           // No active call found - log detailed state
@@ -1075,7 +1286,6 @@ export const setupWebRTC = (io) => {
             activeCallsState: JSON.stringify(activeCalls),
             callTimingsState: JSON.stringify(callTimings)
           });
-
 
           socket.emit('error', {
             type: 'END_CALL_ERROR',
