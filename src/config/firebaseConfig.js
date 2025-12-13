@@ -22,8 +22,10 @@ if (!serviceAccount) {
 }
 
 // Initialize Firebase Admin SDK
-admin.initializeApp({
+const data = admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
+
+console.log("Firebase Admin Initialized",data);
 
 export default admin;
