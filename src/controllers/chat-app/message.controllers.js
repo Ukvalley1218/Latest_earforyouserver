@@ -7,7 +7,7 @@ import { ApiError } from "../../utils/ApiError.js";
 import { ApiResponse } from "../../utils/ApiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import User from "../../models/Users.js";
-import admin from "../../config/firebaseConfig.js";
+import admin from 'firebase-admin';
 import {
   getLocalPath,
   getStaticFilePath,
