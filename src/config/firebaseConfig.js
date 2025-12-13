@@ -1,26 +1,10 @@
 import admin from 'firebase-admin';
 import dotenv from 'dotenv';
-
+import { serviceAccount } from './service_accountkey.js';
 dotenv.config();
 
-// Parse the service account JSON safely
-const serviceAccount = JSON.parse(process.env.serviceAccount || process.env.serviceAccount1 || 'null');
-console.log("Firebase service account loaded.",serviceAccount);
-// try {
-//   if (process.env.serviceAccount) {
-//     console.log(process.env.serviceAccount);
-//     serviceAccount = JSON.parse(process.env.serviceAccount);
-//   } else if (process.env.serviceAccount1) {
-//     serviceAccount = JSON.parse(process.env.serviceAccount1);
-//   }
-// } catch (error) {
-//   console.error("Error parsing Firebase service account JSON:", error);
-//   process.exit(1); // Exit if there's an issue with the credentials
-// }
-
-if (!serviceAccount) {
-  throw new Error("No valid Firebase service account found.");
-}
+// Parse the service account JSON from environment variable
+// const serviceAccount1 = JSON.parse(serviceAccount);
 
 // Initialize Firebase Admin SDK
 admin.initializeApp({
