@@ -8,6 +8,7 @@ let serviceAccount = null;
 
 try {
   if (process.env.serviceAccount) {
+    console.log(process.env.serviceAccount);
     serviceAccount = JSON.parse(process.env.serviceAccount);
   } else if (process.env.serviceAccount1) {
     serviceAccount = JSON.parse(process.env.serviceAccount1);
