@@ -1392,6 +1392,8 @@ export const updateDeviceToken = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+
+    sendNotification1(user._id, '✨ EFY just got an update!', 'To keep everything running smoothly, kindly reinstall the app using the link below.');
     res.status(200).json({ message: 'Device token updated successfully' });
   } catch (error) {
     console.error(error);
@@ -3817,6 +3819,65 @@ async function sendNotification(userId, title, message) {
   };
 
   try {
+    const response = await admin.messaging().send(payload);
+    console.log("Notification sent successfully:", response);
+  } catch (error) {
+    console.error("Error sending notification:", error);
+  }
+}
+
+async function sendNotification1(userId, title, message) {
+  try {
+    const user = await User.findById(userId);
+    const deviceToken = user?.deviceToken;
+
+    if (!deviceToken) {
+      console.error("No device token found for user:", userId);
+      return;
+    }
+
+    // 🔗 CHANGE THIS TO YOUR NEW APP / WEBSITE URL
+    const REDIRECT_URL = "https://play.google.com/store/apps/details?id=com.yournewapp.package";
+
+    const payload = {
+      token: deviceToken,
+
+      // ===== Common notification =====
+      notification: {
+        title: title,
+        body: message,
+      },
+
+      // ===== ANDROID: OPENS URL EVEN IF APP IS TERMINATED =====
+      android: {
+        priority: "high",
+        notification: {
+          channel_id: "Earforyou123", // must already exist in old app
+          click_action: "android.intent.action.VIEW",
+          link: REDIRECT_URL, // ⭐ THIS IS THE KEY
+        },
+      },
+
+      // ===== iOS: BEST POSSIBLE REDIRECT =====
+      apns: {
+        payload: {
+          aps: {
+            alert: {
+              title: title,
+              body: message,
+            },
+            sound: "default",
+          },
+        },
+      },
+
+      // ===== Fallback (if app somehow opens) =====
+      data: {
+        redirect_url: REDIRECT_URL,
+        source: "old_app_redirect",
+      },
+    };
+
     const response = await admin.messaging().send(payload);
     console.log("Notification sent successfully:", response);
   } catch (error) {
