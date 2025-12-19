@@ -3,22 +3,26 @@ import { addToMailingList } from "../servises/ZohoServices.js";
 import jwt from "jsonwebtoken";
 import ROLES_LIST from "../config/Roles_list.js";
 import crypto from "crypto";
-import { generateOtp, sendOtpEmail, SendTemplate } from "../utils/generateOtp.js";
+import {
+  generateOtp,
+  sendOtpEmail,
+  SendTemplate,
+} from "../utils/generateOtp.js";
 import bcrypt from "bcrypt";
 import multer from "multer";
 import unirest from "unirest";
-import otpGenerator from 'otp-generator';
-import dotenv from 'dotenv';
-import mongoose from 'mongoose'
-import admin from '../config/firebaseConfig.js';
+import otpGenerator from "otp-generator";
+import dotenv from "dotenv";
+import mongoose from "mongoose";
+import admin from "../config/firebaseConfig.js";
 import Wallet from "../models/Wallet/Wallet.js";
-import { CallRate } from '../models/Wallet/AdminCharges.js'
-import emailValidator from 'email-validator';
+import { CallRate } from "../models/Wallet/AdminCharges.js";
+import emailValidator from "email-validator";
 import Review from "../models/LeaderBoard/Review.js";
 import { title } from "process";
 import EarningWallet from "../models/Wallet/EarningWallet.js";
 import { ChatMessage } from "../models/message.models.js";
-import callLog from '.././models/Talk-to-friend/callLogModel.js'
+import callLog from ".././models/Talk-to-friend/callLogModel.js";
 import { Chat } from "../models/chat.modal.js";
 import Zhohocampain from "../models/ZohoCampainFrom.js";
 import PlatformCharges from "../models/Wallet/PlatfromCharges/Platfrom.js";
@@ -28,13 +32,11 @@ import { ChatEventEnum } from "../constants.js";
 
 export const generateTransactionId = async () => {
   const timestamp = Date.now().toString(36); // Convert timestamp to base36
-  const randomString = await crypto.randomBytes(8).toString('hex'); // Generate a random 16-character hex string
+  const randomString = await crypto.randomBytes(8).toString("hex"); // Generate a random 16-character hex string
   return `TXN-${timestamp}-${randomString}`; // Format the transaction ID
 };
 
-
 // Example usage
-
 
 const generateAccessAndRefreshTokens = async (userId) => {
   try {
@@ -60,7 +62,6 @@ const generateAccessAndRefreshTokens = async (userId) => {
     throw new Error("Error while generating tokens");
   }
 };
-
 
 // export const getTopListenersByRating = async (req, res) => {
 //   try {
@@ -192,125 +193,139 @@ export const getTopListenersByDuration = async (req, res) => {
   try {
     const startTime = process.hrtime();
 
-    const topListeners = await callLog.aggregate([
-      {
-        $match: {
-          status: "completed",
-          duration: { $gt: 0 } // Only count calls with positive duration
-        }
-      },
-      {
-        $lookup: {
-          from: "users",
-          let: { receiverId: "$receiver" },
-          pipeline: [
-            {
-              $match: {
-                $expr: { $eq: ["$_id", "$$receiverId"] },
-                userType: "RECEIVER",
-                UserStatus: "Active"
-              }
-            },
-            {
-              $project: {
-                username: 1,
-                userCategory: 1,
-                status: 1,
-                avatarUrl: 1,
-                shortDecs: 1,
-                Bio: 1,
-                CallStatus: 1,
-                createdAt: 1
-              }
-            }
-          ],
-          as: "userData"
-        }
-      },
-      { $match: { userData: { $ne: [] } } }, // Only include listeners with valid user data
-      { $unwind: "$userData" },
-      {
-        $group: {
-          _id: "$receiver",
-          totalDuration: { $sum: "$duration" },
-          callCount: { $sum: 1 },
-          averageDuration: { $avg: "$duration" },
-          username: { $first: "$userData.username" },
-          userCategory: { $first: "$userData.userCategory" },
-          status: { $first: "$userData.status" },
-          avatarUrl: { $first: "$userData.avatarUrl" },
-          shortBio: { $first: "$userData.shortDecs" },
-          bio: { $first: "$userData.Bio" },
-          callStatus: { $first: "$userData.CallStatus" },
-          createdAt: { $first: "$userData.createdAt" }
-        }
-      },
-      {
-        $match: {
-          callCount: { $gte: 1 },
-          totalDuration: { $gte: 60 } // At least 1 minute total duration
-        }
-      },
-      {
-        $sort: {
-          totalDuration: -1, // Primary sort by total duration (descending)
-          callCount: -1,    // Secondary sort by call count
-          averageDuration: -1 // Tertiary sort by average duration
-        }
-      },
-      { $limit: 50 },
-      {
-        $project: {
-          userId: "$_id",
-          username: 1,
-          userCategory: 1,
-          status: 1,
-          callStatus: 1,
-          avatarUrl: 1,
-          shortBio: 1,
-          bio: 1,
-          reviewCount: "$callCount",
-          averageRating: { $round: [{ $divide: ["$averageDuration", 60] }, 2] }, // in minutes
-          totalDuration: { $round: [{ $divide: ["$totalDuration", 60] }, 2] }, // in minutes
-          totalCalls: "$callCount"
-        }
-      }
-    ]).allowDiskUse(true);
+    const topListeners = await callLog
+      .aggregate([
+        {
+          $match: {
+            status: "completed",
+            duration: { $gt: 0 }, // Only count calls with positive duration
+          },
+        },
+        {
+          $lookup: {
+            from: "users",
+            let: { receiverId: "$receiver" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ["$_id", "$$receiverId"] },
+                  userType: "RECEIVER",
+                  UserStatus: "Active",
+                },
+              },
+              {
+                $project: {
+                  username: 1,
+                  userCategory: 1,
+                  status: 1,
+                  avatarUrl: 1,
+                  shortDecs: 1,
+                  Bio: 1,
+                  CallStatus: 1,
+                  createdAt: 1,
+                },
+              },
+            ],
+            as: "userData",
+          },
+        },
+        { $match: { userData: { $ne: [] } } }, // Only include listeners with valid user data
+        { $unwind: "$userData" },
+        {
+          $group: {
+            _id: "$receiver",
+            totalDuration: { $sum: "$duration" },
+            callCount: { $sum: 1 },
+            averageDuration: { $avg: "$duration" },
+            username: { $first: "$userData.username" },
+            userCategory: { $first: "$userData.userCategory" },
+            status: { $first: "$userData.status" },
+            avatarUrl: { $first: "$userData.avatarUrl" },
+            shortBio: { $first: "$userData.shortDecs" },
+            bio: { $first: "$userData.Bio" },
+            callStatus: { $first: "$userData.CallStatus" },
+            createdAt: { $first: "$userData.createdAt" },
+          },
+        },
+        {
+          $match: {
+            callCount: { $gte: 1 },
+            totalDuration: { $gte: 60 }, // At least 1 minute total duration
+          },
+        },
+        {
+          $sort: {
+            totalDuration: -1, // Primary sort by total duration (descending)
+            callCount: -1, // Secondary sort by call count
+            averageDuration: -1, // Tertiary sort by average duration
+          },
+        },
+        { $limit: 50 },
+        {
+          $project: {
+            userId: "$_id",
+            username: 1,
+            userCategory: 1,
+            status: 1,
+            callStatus: 1,
+            avatarUrl: 1,
+            shortBio: 1,
+            bio: 1,
+            reviewCount: "$callCount",
+            averageRating: {
+              $round: [{ $divide: ["$averageDuration", 60] }, 2],
+            }, // in minutes
+            totalDuration: { $round: [{ $divide: ["$totalDuration", 60] }, 2] }, // in minutes
+            totalCalls: "$callCount",
+          },
+        },
+      ])
+      .allowDiskUse(true);
 
-    const executionTime = ((process.hrtime(startTime)[0] * 1000 +
-      process.hrtime(startTime)[1] / 1e6).toFixed(2));
+    const executionTime = (
+      process.hrtime(startTime)[0] * 1000 +
+      process.hrtime(startTime)[1] / 1e6
+    ).toFixed(2);
 
     // Ensure we get at least 10 results if available
     const minResultsNeeded = 10;
-    const rankedListeners = topListeners.map((listener, index) => {
-      if (!listener.userId || !listener.username) {
-        console.warn('Invalid listener data:', listener);
-        return null;
-      }
-      return {
-        rank: index + 1,
-        ...listener
-      };
-    }).filter(listener => listener !== null);
+    const rankedListeners = topListeners
+      .map((listener, index) => {
+        if (!listener.userId || !listener.username) {
+          console.warn("Invalid listener data:", listener);
+          return null;
+        }
+        return {
+          rank: index + 1,
+          ...listener,
+        };
+      })
+      .filter((listener) => listener !== null);
 
-    const finalResults = rankedListeners.slice(0, Math.max(minResultsNeeded, rankedListeners.length));
+    const finalResults = rankedListeners.slice(
+      0,
+      Math.max(minResultsNeeded, rankedListeners.length)
+    );
 
     res.status(200).json({
       success: true,
       executionTime: `${executionTime}ms`,
       timePeriod: "all_time", // Indicates this is all-time data
       data: finalResults,
-      message: finalResults.length > 0
-        ? `Found ${finalResults.length} top listeners of all time`
-        : "No listeners found with the specified criteria"
+      message:
+        finalResults.length > 0
+          ? `Found ${finalResults.length} top listeners of all time`
+          : "No listeners found with the specified criteria",
     });
-
   } catch (error) {
-    console.error('Error fetching all-time top listeners by duration:', error);
+    console.error("Error fetching all-time top listeners by duration:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch all-time top listeners',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      message: "Failed to fetch all-time top listeners",
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Internal server error",
     });
   }
 };
@@ -328,7 +343,7 @@ export const registerUser = async (req, res) => {
     if (missingFields.length > 0) {
       return res.status(400).json({
         success: false,
-        message: `The following are required: ${missingFields.join(', ')}`,
+        message: `The following are required: ${missingFields.join(", ")}`,
       });
     }
 
@@ -337,7 +352,7 @@ export const registerUser = async (req, res) => {
     if (userExists) {
       return res.status(400).json({
         success: false,
-        message: "User with this  email  already exists"
+        message: "User with this  email  already exists",
       });
     }
 
@@ -348,7 +363,8 @@ export const registerUser = async (req, res) => {
     });
 
     if (user) {
-      const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
+      const { accessToken, refreshToken } =
+        await generateAccessAndRefreshTokens(user._id);
 
       res.status(201).json({
         _id: user._id,
@@ -381,7 +397,8 @@ export const authUser = async (req, res) => {
     const user = await User.findOne({ phone });
 
     if (user && (await user.matchPassword(password))) {
-      const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
+      const { accessToken, refreshToken } =
+        await generateAccessAndRefreshTokens(user._id);
 
       // Update device token if provided
       if (deviceToken) {
@@ -408,16 +425,14 @@ export const authUser = async (req, res) => {
 
 //DeleteUser
 
-
-
 export const logoutUser = async (req, res) => {
   try {
     await User.findByIdAndUpdate(
       req.user._id,
       {
         $set: {
-          refreshToken: '',
-          deviceToken: ''
+          refreshToken: "",
+          deviceToken: "",
         },
       },
       { new: true }
@@ -487,13 +502,7 @@ export const verifyOtp = async (req, res) => {
   }
 };
 
-
-
-
-
 //-----------------initiateRegistration-------------------
-
-
 
 export const initiateRegistration = async (req, res) => {
   const { email } = req.body;
@@ -502,7 +511,7 @@ export const initiateRegistration = async (req, res) => {
 
   try {
     // Check if it's a playstore verification request
-    const isPlaystoreVerification = email === 'playtest@gmail.com';
+    const isPlaystoreVerification = email === "playtest@gmail.com";
 
     const isValidEmail = emailValidator.validate(email);
     if (!isValidEmail) {
@@ -517,8 +526,8 @@ export const initiateRegistration = async (req, res) => {
       // If it's a playstore verification, generate tokens
       if (isPlaystoreVerification) {
         // Generate access token
-        const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(existingUser._id);
-
+        const { accessToken, refreshToken } =
+          await generateAccessAndRefreshTokens(existingUser._id);
 
         // Save refresh token to user document
         existingUser.refreshToken = refreshToken;
@@ -530,7 +539,7 @@ export const initiateRegistration = async (req, res) => {
           refreshToken,
           userId: existingUser._id,
           email: existingUser.email,
-          username: existingUser.username
+          username: existingUser.username,
         });
       }
       return await initiateLogin(req, res);
@@ -543,7 +552,7 @@ export const initiateRegistration = async (req, res) => {
         email,
         username,
         isVerified: true, // Auto verify for playstore
-        verificationSource: 'playstore'
+        verificationSource: "playstore",
       });
 
       // Start a transaction
@@ -558,44 +567,54 @@ export const initiateRegistration = async (req, res) => {
           await session.abortTransaction();
           return res.status(500).json({
             success: false,
-            message: 'Call rate configuration not found',
+            message: "Call rate configuration not found",
           });
         }
 
         const { free } = callRateData;
 
         // Create wallet with transaction
-        const wallet = await Wallet.create([{
-          userId: newUser._id,
-          balance: free,
-          currency: 'inr',
-          recharges: [],
-          deductions: [],
-          lastUpdated: new Date()
-        }], { session });
+        const wallet = await Wallet.create(
+          [
+            {
+              userId: newUser._id,
+              balance: free,
+              currency: "inr",
+              recharges: [],
+              deductions: [],
+              lastUpdated: new Date(),
+            },
+          ],
+          { session }
+        );
 
         // Create wallet with transaction
-        const EarningWallet2 = await EarningWallet.create([{
-          userId: newUser._id,
-          balance: 0,
-          currency: 'inr',
-          earnings: [],
-          deductions: [],
-          lastUpdated: new Date()
-        }], { session });
+        const EarningWallet2 = await EarningWallet.create(
+          [
+            {
+              userId: newUser._id,
+              balance: 0,
+              currency: "inr",
+              earnings: [],
+              deductions: [],
+              lastUpdated: new Date(),
+            },
+          ],
+          { session }
+        );
 
         // Generate access token
         const authToken = jwt.sign(
           { userId: newUser._id },
           process.env.JWT_SECRET,
-          { expiresIn: '1h' }
+          { expiresIn: "1h" }
         );
 
         // Generate refresh token
         const refreshToken = jwt.sign(
           { userId: newUser._id },
           process.env.REFRESH_TOKEN_SECRET,
-          { expiresIn: '30d' }
+          { expiresIn: "30d" }
         );
 
         // Save refresh token to user document
@@ -610,7 +629,7 @@ export const initiateRegistration = async (req, res) => {
           refreshToken,
           userId: newUser._id,
           email: newUser.email,
-          username: newUser.username
+          username: newUser.username,
         });
       } catch (error) {
         await session.abortTransaction();
@@ -649,70 +668,92 @@ export const initiateRegistration = async (req, res) => {
     try {
       await newUser.save({ session });
 
-      const platform = await PlatformCharges.findOne({ userId: newUser._id }).session(session);
+      const platform = await PlatformCharges.findOne({
+        userId: newUser._id,
+      }).session(session);
 
       const plan = await MyPlan.findOne().sort({ createdAt: -1 });
 
       const token = await generateTransactionId();
 
       if (!platform) {
-        const data = await PlatformCharges.create([{
-          userId: newUser._id,
-          status: 'expired',
-          transactionId: token,
-          planId: plan._id
-        }], { session });
-
+        const data = await PlatformCharges.create(
+          [
+            {
+              userId: newUser._id,
+              status: "expired",
+              transactionId: token,
+              planId: plan._id,
+            },
+          ],
+          { session }
+        );
       }
-
 
       const callRateData = await CallRate.findOne().session(session);
       if (!callRateData) {
         await session.abortTransaction();
         return res.status(500).json({
           success: false,
-          message: 'Call rate configuration not found',
+          message: "Call rate configuration not found",
         });
       }
 
       const { free } = callRateData;
 
-      const wallet = await Wallet.create([{
-        userId: newUser._id,
-        balance: free,
-        currency: 'inr',
-        recharges: [],
-        deductions: [],
-        lastUpdated: new Date()
-      }], { session });
+      const wallet = await Wallet.create(
+        [
+          {
+            userId: newUser._id,
+            balance: free,
+            currency: "inr",
+            recharges: [],
+            deductions: [],
+            lastUpdated: new Date(),
+          },
+        ],
+        { session }
+      );
 
-      await EarningWallet.create([{
-        userId: newUser._id,
-        balance: 0,
-        currency: 'inr',
-        earnings: [],
-        deductions: [],
-        lastUpdated: new Date()
-      }], { session });
+      await EarningWallet.create(
+        [
+          {
+            userId: newUser._id,
+            balance: 0,
+            currency: "inr",
+            earnings: [],
+            deductions: [],
+            lastUpdated: new Date(),
+          },
+        ],
+        { session }
+      );
 
-      console.log("Wallet created with initial balance for user:", newUser._id, wallet);
+      console.log(
+        "Wallet created with initial balance for user:",
+        newUser._id,
+        wallet
+      );
 
       await session.commitTransaction();
       try {
         const mailingListResult = await addToMailingList(email);
         if (!mailingListResult.success) {
-          console.error('Failed to add to mailing list:', mailingListResult.message);
+          console.error(
+            "Failed to add to mailing list:",
+            mailingListResult.message
+          );
           // Optional: Handle the failure (e.g., retry later, notify admin)
         }
       } catch (error) {
-        console.error('Mailing list error:', error);
+        console.error("Mailing list error:", error);
         // Continue with registration despite mailing list failure
       }
       res.status(200).json({
         message: "OTP sent to email for registration",
         userId: newUser._id,
         email: newUser.email,
-        username: newUser.username
+        username: newUser.username,
       });
     } catch (error) {
       await session.abortTransaction();
@@ -725,9 +766,6 @@ export const initiateRegistration = async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 };
-
-
-
 
 export const initiateLogin = async (req, res) => {
   const { email } = req.body;
@@ -742,7 +780,9 @@ export const initiateLogin = async (req, res) => {
 
     // Check if the user is blocked
     if (user.UserStatus === "Blocked") {
-      return res.status(403).json({ message: `You are blocked, ${user.username}` });
+      return res
+        .status(403)
+        .json({ message: `You are blocked, ${user.username}` });
     }
 
     // Generate OTP and set expiry
@@ -759,14 +799,15 @@ export const initiateLogin = async (req, res) => {
     await sendOtpEmail(email, otp);
 
     // Generate tokens
-    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
+    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
+      user._id
+    );
 
     res.status(200).json({
       message: "OTP sent to email",
       accessToken,
       refreshToken,
     });
-
   } catch (error) {
     console.error("Error in initiateLogin:", error);
     res.status(500).json({ message: "Server error", error });
@@ -779,7 +820,7 @@ export const initiateLogin = async (req, res) => {
 
 export const verifyLoginOtp = async (req, res) => {
   const { email, otp, deviceToken, platform } = req.body;
-  console.log({ email, otp, deviceToken, platform })
+  console.log({ email, otp, deviceToken, platform });
   try {
     // Find user by email
     const user = await User.findOne({ email });
@@ -801,7 +842,9 @@ export const verifyLoginOtp = async (req, res) => {
     await user.save();
 
     // Generate JWT or session token for authenticated user
-    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
+    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
+      user._id
+    );
 
     // Update device token if provided
     if (deviceToken) {
@@ -841,7 +884,7 @@ export const resetPassword = async (req, res) => {
     // Hash the new password
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(newPassword, salt);
-    console.log(user.password)
+    console.log(user.password);
     // Clear OTP and its expiration
     user.otp = undefined;
     user.otpExpires = undefined;
@@ -854,33 +897,40 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-
-// Delete User 
+// Delete User
 export const deleteUser = async (req, res) => {
   try {
-    const userId = req.user._id; 
+    const userId = req.user._id;
 
     // Check if the user exists
     const userToDelete = await User.findById(userId);
     if (!userToDelete) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     // Delete the user
     await User.findByIdAndDelete(userId);
 
-    res.status(200).json({ success: true, message: 'User deleted successfully' });
+    res
+      .status(200)
+      .json({ success: true, message: "User deleted successfully" });
   } catch (error) {
-    console.error('Error deleting user:', error);
-    res.status(500).json({ success: false, message: 'Error deleting user', error: error.message });
+    console.error("Error deleting user:", error);
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: "Error deleting user",
+        error: error.message,
+      });
   }
 };
-
 
 // ---------------Update User Profile -------------------------
 
 // Add validation utilities if needed
-
 
 // ------------------------Update User CategoryController.js---------------------------------------
 
@@ -891,19 +941,30 @@ export const updateOrCreateUserCategory = async (req, res) => {
 
     // Input validation
     if (!userId) {
-      return res.status(400).json({ success: false, message: 'userId is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "userId is required" });
     }
 
     if (!userCategory) {
-      return res.status(400).json({ success: false, message: 'userCategory is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "userCategory is required" });
     }
 
     // Validate userCategory (adjust the valid categories as needed)
-    const validUserCategories = ["Doctor", "Therapist", "Healer", "Psychologist"]; // Replace with your actual categories
+    const validUserCategories = [
+      "Doctor",
+      "Therapist",
+      "Healer",
+      "Psychologist",
+    ]; // Replace with your actual categories
     if (!validUserCategories.includes(userCategory)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid userCategory. Must be one of: ' + validUserCategories.join(', ')
+        message:
+          "Invalid userCategory. Must be one of: " +
+          validUserCategories.join(", "),
       });
     }
 
@@ -917,8 +978,8 @@ export const updateOrCreateUserCategory = async (req, res) => {
 
       return res.status(200).json({
         success: true,
-        message: 'User category updated successfully',
-        data: existingUser // Return the updated user object
+        message: "User category updated successfully",
+        data: existingUser, // Return the updated user object
       });
     } else {
       // Create a new user if the user does not exist
@@ -932,17 +993,16 @@ export const updateOrCreateUserCategory = async (req, res) => {
 
       return res.status(201).json({
         success: true,
-        message: 'New user created successfully',
-        data: newUser // Return the newly created user object
+        message: "New user created successfully",
+        data: newUser, // Return the newly created user object
       });
     }
-
   } catch (error) {
-    console.error('Error updating or creating user category:', error);
+    console.error("Error updating or creating user category:", error);
     return res.status(500).json({
       success: false,
-      message: 'Error updating or creating user category',
-      error: error.message
+      message: "Error updating or creating user category",
+      error: error.message,
     });
   }
 };
@@ -962,7 +1022,7 @@ export const updateProfile = async (req, res) => {
       avatarUrl,
       decs,
       Bio,
-      shortDecs
+      shortDecs,
     } = req.body;
 
     // Input validation
@@ -971,57 +1031,58 @@ export const updateProfile = async (req, res) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: 'User ID is required',
+        message: "User ID is required",
       });
     }
 
     if (username !== undefined) {
-      if (typeof username !== 'string' || username.trim().length === 0) {
-        validationErrors.push('Username must be a non-empty string');
+      if (typeof username !== "string" || username.trim().length === 0) {
+        validationErrors.push("Username must be a non-empty string");
       }
     }
 
-
     if (gender !== undefined) {
-      if (!['male', 'female', 'other'].includes(gender.toLowerCase())) {
-        validationErrors.push('Gender must be either "male", "female", or "other"');
+      if (!["male", "female", "other"].includes(gender.toLowerCase())) {
+        validationErrors.push(
+          'Gender must be either "male", "female", or "other"'
+        );
       }
     }
 
     if (phone !== undefined) {
       const phoneRegex = /^\+?[\d\s-]{10,}$/; // Basic regex for phone validation
       if (!phoneRegex.test(phone.trim())) {
-        validationErrors.push('Invalid phone number format');
+        validationErrors.push("Invalid phone number format");
       }
     }
 
-    if (Language !== undefined && typeof Language !== 'string') {
-      validationErrors.push('Language must be a string');
+    if (Language !== undefined && typeof Language !== "string") {
+      validationErrors.push("Language must be a string");
     }
 
     if (decs !== undefined) {
-      if (typeof decs !== 'string') {
-        validationErrors.push('Description must be a string');
+      if (typeof decs !== "string") {
+        validationErrors.push("Description must be a string");
       } else {
         const wordCount = decs.trim().split(/\s+/).length;
         if (wordCount > 200) {
-          validationErrors.push('Description must not exceed 100 words');
+          validationErrors.push("Description must not exceed 100 words");
         }
       }
     }
 
-    if (userCategory !== undefined && typeof userCategory !== 'string') {
-      validationErrors.push('User category must be a string');
+    if (userCategory !== undefined && typeof userCategory !== "string") {
+      validationErrors.push("User category must be a string");
     }
 
     // Add shortDecs validation
     if (shortDecs !== undefined) {
-      if (typeof shortDecs !== 'string') {
-        validationErrors.push('Short description must be a string');
+      if (typeof shortDecs !== "string") {
+        validationErrors.push("Short description must be a string");
       } else {
         const wordCount = shortDecs.trim().split(/\s+/).length;
         if (wordCount > 20) {
-          validationErrors.push('Short description must not exceed 20 words');
+          validationErrors.push("Short description must not exceed 20 words");
         }
       }
     }
@@ -1029,11 +1090,11 @@ export const updateProfile = async (req, res) => {
     // Add bio validation
     if (Bio !== undefined) {
       if (!Array.isArray(Bio)) {
-        validationErrors.push('Bio must be an array of strings');
+        validationErrors.push("Bio must be an array of strings");
       } else {
         // Validate each element in the bio array
         for (let i = 0; i < Bio.length; i++) {
-          if (typeof Bio[i] !== 'string') {
+          if (typeof Bio[i] !== "string") {
             validationErrors.push(`Bio element at index ${i} must be a string`);
           }
         }
@@ -1054,7 +1115,7 @@ export const updateProfile = async (req, res) => {
     if (!existingUser) {
       return res.status(404).json({
         success: false,
-        message: 'User not found',
+        message: "User not found",
       });
     }
 
@@ -1070,8 +1131,8 @@ export const updateProfile = async (req, res) => {
       ...(avatarUrl !== undefined && { avatarUrl }),
       ...(Bio !== undefined && { Bio }),
       ...(shortDecs !== undefined && { shortDecs: shortDecs.trim() }),
-      status: 'Online',
-      UserStatus: 'Active',
+      status: "Online",
+      UserStatus: "Active",
       updatedAt: new Date(),
     };
 
@@ -1087,28 +1148,27 @@ export const updateProfile = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Profile updated successfully',
+      message: "Profile updated successfully",
       user: updatedUser,
     });
   } catch (error) {
-    console.error('Profile update error:', error);
+    console.error("Profile update error:", error);
 
-    if (error.name === 'ValidationError') {
+    if (error.name === "ValidationError") {
       return res.status(400).json({
         success: false,
-        message: 'Validation error',
+        message: "Validation error",
         errors: Object.values(error.errors).map((err) => err.message),
       });
     }
 
     return res.status(500).json({
       success: false,
-      message: 'An error occurred while updating the profile',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      message: "An error occurred while updating the profile",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
-
 
 // -------------------------- Update Status --------------------------
 
@@ -1123,18 +1183,17 @@ export const updateStatus = async (req, res) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: 'User ID is required'
+        message: "User ID is required",
       });
     }
 
     // Validate individual fields if they are provided
 
-
     if (validationErrors.length > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Validation failed',
-        errors: validationErrors
+        message: "Validation failed",
+        errors: validationErrors,
       });
     }
 
@@ -1144,14 +1203,14 @@ export const updateStatus = async (req, res) => {
     if (!existingUser) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
 
     // Prepare update data with only provided fields
     const updateData = {
       ...(status !== undefined && { status }),
-      updatedAt: new Date()
+      updatedAt: new Date(),
     };
 
     // Update user profile
@@ -1160,37 +1219,34 @@ export const updateStatus = async (req, res) => {
       { $set: updateData },
       {
         new: true,
-        runValidators: true
+        runValidators: true,
       }
     );
 
     return res.status(200).json({
       success: true,
-      message: 'Status updated successfully',
-      user: updatedUser
+      message: "Status updated successfully",
+      user: updatedUser,
     });
-
   } catch (error) {
-    console.error('Profile update error:', error);
+    console.error("Profile update error:", error);
 
     // Handle mongoose validation errors
-    if (error.name === 'ValidationError') {
+    if (error.name === "ValidationError") {
       return res.status(400).json({
         success: false,
-        message: 'Validation error',
-        errors: Object.values(error.errors).map(err => err.message)
+        message: "Validation error",
+        errors: Object.values(error.errors).map((err) => err.message),
       });
     }
 
     return res.status(500).json({
       success: false,
-      message: 'An error occurred while updating the profile',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "An error occurred while updating the profile",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
-
-
 
 //--------------------------Get  User Listener-----------------------------------------
 
@@ -1201,14 +1257,14 @@ export const listener = async (req, res) => {
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: 'Unauthorized: userId is required',
+        message: "Unauthorized: userId is required",
       });
     }
 
     const {
       page = 1,
       limit = 50,
-      search = "" // Search parameter for username
+      search = "", // Search parameter for username
     } = req.query;
 
     const pageNumber = parseInt(page, 10);
@@ -1216,37 +1272,37 @@ export const listener = async (req, res) => {
 
     // Base query to exclude the current user and inactive/blocked users
     const query = {
-      userType: 'RECEIVER',
+      userType: "RECEIVER",
       _id: { $ne: userId },
-      UserStatus: { $nin: ['inActive', 'Blocked', 'InActive'] },
+      UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
     };
 
     // Add username search condition if search parameter exists
     if (search.trim()) {
-      query.username = { $regex: search, $options: 'i' };
+      query.username = { $regex: search, $options: "i" };
     }
 
     const users = await User.aggregate([
       { $match: query },
       {
         $addFields: {
-          isOnline: { $cond: [{ $eq: ['$status', 'Online'] }, 1, 0] }
-        }
+          isOnline: { $cond: [{ $eq: ["$status", "Online"] }, 1, 0] },
+        },
       },
       {
         $sort: {
           isOnline: -1,
-          createdAt: -1
-        }
+          createdAt: -1,
+        },
       },
       { $skip: (pageNumber - 1) * limitNumber },
       { $limit: limitNumber },
       {
         $project: {
           password: 0,
-          refreshToken: 0
-        }
-      }
+          refreshToken: 0,
+        },
+      },
     ]);
 
     const totalUsers = await User.countDocuments(query);
@@ -1261,21 +1317,22 @@ export const listener = async (req, res) => {
         currentPage: pageNumber,
         limit: limitNumber,
       },
-      searchQuery: search ? {
-        term: search,
-        resultsCount: users.length
-      } : null
+      searchQuery: search
+        ? {
+            term: search,
+            resultsCount: users.length,
+          }
+        : null,
     });
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error("Error fetching users:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch users',
+      message: "Failed to fetch users",
       error: error.message,
     });
   }
 };
-
 
 export const UserCategoryData = async (req, res) => {
   try {
@@ -1284,16 +1341,12 @@ export const UserCategoryData = async (req, res) => {
     if (!userId) {
       return res.status(401).json({
         success: false,
-        message: 'Unauthorized: userId is required',
+        message: "Unauthorized: userId is required",
       });
     }
 
     const { Category } = req.body;
-    const {
-      page = 1,
-      limit = 20,
-      search = ""
-    } = req.query;
+    const { page = 1, limit = 20, search = "" } = req.query;
 
     const pageNumber = parseInt(page, 10);
     const limitNumber = parseInt(limit, 10);
@@ -1307,39 +1360,35 @@ export const UserCategoryData = async (req, res) => {
           UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
           // Add username search if provided
           ...(search.trim() && {
-            username: { $regex: search, $options: 'i' }
-          })
-        }
+            username: { $regex: search, $options: "i" },
+          }),
+        },
       },
       {
         $addFields: {
           isOnline: {
-            $cond: [
-              { $eq: ['$status', 'Online'] },
-              1,
-              0
-            ]
-          }
-        }
+            $cond: [{ $eq: ["$status", "Online"] }, 1, 0],
+          },
+        },
       },
       {
         $sort: {
           isOnline: -1, // Sort Online users first
-          createdAt: -1 // Then by creation date
-        }
+          createdAt: -1, // Then by creation date
+        },
       },
       {
-        $skip: (pageNumber - 1) * limitNumber
+        $skip: (pageNumber - 1) * limitNumber,
       },
       {
-        $limit: limitNumber
+        $limit: limitNumber,
       },
       {
         $project: {
           password: 0,
-          refreshToken: 0
-        }
-      }
+          refreshToken: 0,
+        },
+      },
     ]);
 
     // Count total documents matching the criteria
@@ -1348,8 +1397,8 @@ export const UserCategoryData = async (req, res) => {
       _id: { $ne: userId },
       UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
       ...(search.trim() && {
-        username: { $regex: search, $options: 'i' }
-      })
+        username: { $regex: search, $options: "i" },
+      }),
     });
 
     const totalPages = Math.ceil(totalUsers / limitNumber);
@@ -1363,21 +1412,22 @@ export const UserCategoryData = async (req, res) => {
         currentPage: pageNumber,
         limit: limitNumber,
       },
-      searchQuery: search ? {
-        term: search,
-        resultsCount: users.length
-      } : null
+      searchQuery: search
+        ? {
+            term: search,
+            resultsCount: users.length,
+          }
+        : null,
     });
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error("Error fetching users:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch users',
+      message: "Failed to fetch users",
       error: error.message,
     });
   }
 };
-
 
 // ------------------------userController.js---------------------------------------
 
@@ -1386,25 +1436,33 @@ export const updateDeviceToken = async (req, res) => {
 
   try {
     const userId = req.user._id; // Assuming you get the user ID from JWT or session
-    const user = await User.findByIdAndUpdate(userId, { deviceToken }, { new: true });
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { deviceToken },
+      { new: true }
+    );
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: "User not found" });
     }
 
-
-    sendNotification1(user._id, '✨ EFY just got an update!', 'To keep everything running smoothly, kindly reinstall the app using the link below.');
-    res.status(200).json({ message: 'Device token updated successfully' });
+    sendNotification1(
+      user._id,
+      "✨ EFY just got an update!",
+      "To keep everything running smoothly, kindly reinstall the app using the link below."
+    );
+    res.status(200).json({ message: "Device token updated successfully" });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Failed to update device token' });
+    res.status(500).json({ message: "Failed to update device token" });
   }
 };
 
 //reuest  OTP with Firebase Authentication
 const generateRandomUsername = (length = 8) => {
-  const characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
+  const characters =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let result = "";
   for (let i = 0; i < length; i++) {
     result += characters.charAt(Math.floor(Math.random() * characters.length));
   }
@@ -1424,9 +1482,9 @@ export const requestOTP = async (req, res) => {
 
     // Check if user exists by phone number
     let user = await User.findOne({ phone: phoneStr });
-    console.log(user)
+    console.log(user);
     if (!user) {
-      console.log('user creation');
+      console.log("user creation");
 
       // Generate a random username
       const username = generateRandomUsername();
@@ -1440,24 +1498,23 @@ export const requestOTP = async (req, res) => {
       });
     }
 
-
     // Use Firebase's phoneAuth flow to send an OTP
     const sessionInfo = await admin.auth().createCustomToken(phoneStr);
-    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
+    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
+      user._id
+    );
     return res.status(200).json({
       message: "OTP sent successfully",
       _id: user._id,
       sessionInfo: sessionInfo,
       accessToken,
-      refreshToken
-
+      refreshToken,
     });
-
   } catch (error) {
     console.error("Error sending OTP:", error);
     return res.status(500).json({
       message: "Failed to send OTP. Please try again later.",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -1468,7 +1525,7 @@ export const verifyOTP = async (req, res) => {
 
   if (!phone || !otp || !sessionInfo) {
     return res.status(400).json({
-      message: "Phone, OTP, and session info are required."
+      message: "Phone, OTP, and session info are required.",
     });
   }
 
@@ -1478,7 +1535,7 @@ export const verifyOTP = async (req, res) => {
 
     // Ensure the decoded token contains the correct phone number
     if (!decodedToken || decodedToken.phone_number !== `${phone}`) {
-      return res.status(401).json({ message: 'Invalid or expired OTP.' });
+      return res.status(401).json({ message: "Invalid or expired OTP." });
     }
 
     // Check if the user exists
@@ -1495,7 +1552,9 @@ export const verifyOTP = async (req, res) => {
     }
 
     // Generate tokens (assuming generateAccessAndRefreshTokens is defined elsewhere)
-    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
+    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
+      user._id
+    );
 
     return res.status(200).json({
       message: "OTP verified successfully",
@@ -1503,16 +1562,14 @@ export const verifyOTP = async (req, res) => {
       accessToken,
       refreshToken,
     });
-
   } catch (error) {
-    console.error('Error verifying OTP:', error);
+    console.error("Error verifying OTP:", error);
     return res.status(401).json({
-      message: 'Invalid or expired OTP.',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Invalid or expired OTP.",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
-
 
 // update User Type Controller Function
 export const changeUserType = async (req, res) => {
@@ -1522,19 +1579,23 @@ export const changeUserType = async (req, res) => {
 
     // Input validation
     if (!userId) {
-      return res.status(400).json({ success: false, message: 'userId is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "userId is required" });
     }
 
     if (!userType) {
-      return res.status(400).json({ success: false, message: 'userType is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "userType is required" });
     }
 
     // Validate userType (must be either 'CALLER' or 'RECEIVER')
-    const validUserTypes = ['CALLER', 'RECEIVER'];
+    const validUserTypes = ["CALLER", "RECEIVER"];
     if (!validUserTypes.includes(userType)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid userType. Must be either CALLER or RECEIVER'
+        message: "Invalid userType. Must be either CALLER or RECEIVER",
       });
     }
 
@@ -1548,22 +1609,21 @@ export const changeUserType = async (req, res) => {
     if (!updatedUser) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: 'User type updated successfully',
-      data: updatedUser // Return the full updated user object
+      message: "User type updated successfully",
+      data: updatedUser, // Return the full updated user object
     });
-
   } catch (error) {
-    console.error('Error updating user type:', error);
+    console.error("Error updating user type:", error);
     return res.status(500).json({
       success: false,
-      message: 'Error updating user type',
-      error: error.message
+      message: "Error updating user type",
+      error: error.message,
     });
   }
 };
@@ -1571,35 +1631,33 @@ export const changeUserType = async (req, res) => {
 // get userby id
 export const getUserById = async (req, res) => {
   try {
-    const { userId } = req.params;  // Extract userId from the request URL parameters
+    const { userId } = req.params; // Extract userId from the request URL parameters
 
     // Find the user by ID
     const user = await User.findById(userId);
 
     // If the user doesn't exist, return a 404 error
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: "User not found" });
     }
 
     // If found, return the user object (excluding password for security reasons)
     res.status(200).json({
-      message: 'User found successfully',
+      message: "User found successfully",
       user: {
         ...user.toObject(),
         password: undefined, // Hide sensitive fields like password
-        refreshToken: undefined // Optionally hide refreshToken as well
-      }
+        refreshToken: undefined, // Optionally hide refreshToken as well
+      },
     });
   } catch (error) {
     // Handle any other errors
-    console.error('Error fetching user:', error);
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    console.error("Error fetching user:", error);
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
   }
 };
-
-
-
-
 
 export const getAllUsers1 = async (req, res) => {
   try {
@@ -1620,7 +1678,7 @@ export const getAllUsers1 = async (req, res) => {
     // Build base match conditions
     const matchConditions = {
       _id: { $ne: loggedInUserId },
-      UserStatus: { $nin: ["inActive", "Blocked", "InActive"] }
+      UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
     };
 
     if (genderFilter) {
@@ -1655,18 +1713,18 @@ export const getAllUsers1 = async (req, res) => {
             $cond: {
               if: { $eq: ["$status", "Online"] },
               then: 1,
-              else: 0
-            }
-          }
-        }
+              else: 0,
+            },
+          },
+        },
       },
 
       // Sort by online status first, then by last seen
       {
         $sort: {
-          sortOrder: -1,  // Online users first
-          lastSeen: -1    // Then by most recently seen
-        }
+          sortOrder: -1, // Online users first
+          lastSeen: -1, // Then by most recently seen
+        },
       },
 
       // Paginate before heavy operations
@@ -1680,19 +1738,19 @@ export const getAllUsers1 = async (req, res) => {
           pipeline: [
             {
               $match: {
-                $expr: { $eq: ["$user", "$$userId"] }
-              }
+                $expr: { $eq: ["$user", "$$userId"] },
+              },
             },
             {
               $group: {
                 _id: null,
                 avgRating: { $avg: "$rating" },
-                count: { $sum: 1 }
-              }
-            }
+                count: { $sum: 1 },
+              },
+            },
           ],
-          as: "reviewStats"
-        }
+          as: "reviewStats",
+        },
       },
       {
         $lookup: {
@@ -1728,16 +1786,21 @@ export const getAllUsers1 = async (req, res) => {
                 $expr: {
                   $and: [
                     { $eq: [{ $size: "$participants" }, 2] },
-                    { $setIsSubset: [[loggedInUserId, "$$userId"], "$participants"] }
-                  ]
-                }
-              }
+                    {
+                      $setIsSubset: [
+                        [loggedInUserId, "$$userId"],
+                        "$participants",
+                      ],
+                    },
+                  ],
+                },
+              },
             },
             { $project: { _id: 1 } },
-            { $limit: 1 }
+            { $limit: 1 },
           ],
-          as: "chat"
-        }
+          as: "chat",
+        },
       },
 
       {
@@ -1745,7 +1808,7 @@ export const getAllUsers1 = async (req, res) => {
           from: "chatmessages",
           let: {
             chatId: { $arrayElemAt: ["$chat._id", 0] },
-            userId: "$_id"
+            userId: "$_id",
           },
           pipeline: [
             {
@@ -1754,15 +1817,19 @@ export const getAllUsers1 = async (req, res) => {
                   $and: [
                     { $eq: ["$chat", "$$chatId"] },
                     { $eq: ["$sender", "$$userId"] },
-                    { $not: { $in: [loggedInUserId, { $ifNull: ["$seenBy", []] }] } }
-                  ]
-                }
-              }
+                    {
+                      $not: {
+                        $in: [loggedInUserId, { $ifNull: ["$seenBy", []] }],
+                      },
+                    },
+                  ],
+                },
+              },
             },
-            { $count: "unreadCount" }
+            { $count: "unreadCount" },
           ],
-          as: "unreadMessages"
-        }
+          as: "unreadMessages",
+        },
       },
 
       // Final projection with computed fields
@@ -1792,25 +1859,30 @@ export const getAllUsers1 = async (req, res) => {
             $switch: {
               branches: [
                 { case: { $eq: ["$status", "Online"] }, then: "Online" },
-                { case: { $gte: ["$lastSeen", twentyFourHoursAgo] }, then: "recently" }
+                {
+                  case: { $gte: ["$lastSeen", twentyFourHoursAgo] },
+                  then: "recently",
+                },
               ],
-              default: "away"
-            }
+              default: "away",
+            },
           },
           unreadMessageCount: {
-            $ifNull: [{ $arrayElemAt: ["$unreadMessages.unreadCount", 0] }, 0]
+            $ifNull: [{ $arrayElemAt: ["$unreadMessages.unreadCount", 0] }, 0],
           },
           chatId: {
-            $ifNull: [{ $arrayElemAt: ["$chat._id", 0] }, null]
-          }
-        }
-      }
+            $ifNull: [{ $arrayElemAt: ["$chat._id", 0] }, null],
+          },
+        },
+      },
     ]).exec();
 
     // Send response
     let message = "Users fetched successfully";
     if (genderFilter) {
-      message = `${genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)} users fetched successfully`;
+      message = `${
+        genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)
+      } users fetched successfully`;
     }
 
     res.status(200).json({
@@ -1852,7 +1924,7 @@ export const getHealer = async (req, res) => {
     const matchConditions = {
       _id: { $ne: loggedInUserId },
       UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
-      userCategory: "Counsellor" // Add this condition to only get Healers
+      userCategory: "Counsellor", // Add this condition to only get Healers
     };
 
     if (genderFilter) {
@@ -1887,18 +1959,18 @@ export const getHealer = async (req, res) => {
             $cond: {
               if: { $eq: ["$status", "Online"] },
               then: 1,
-              else: 0
-            }
-          }
-        }
+              else: 0,
+            },
+          },
+        },
       },
 
       // Sort by online status first, then by last seen
       {
         $sort: {
-          sortOrder: -1,  // Online users first
-          lastSeen: -1    // Then by most recently seen
-        }
+          sortOrder: -1, // Online users first
+          lastSeen: -1, // Then by most recently seen
+        },
       },
 
       // Paginate before heavy operations
@@ -1912,19 +1984,19 @@ export const getHealer = async (req, res) => {
           pipeline: [
             {
               $match: {
-                $expr: { $eq: ["$user", "$$userId"] }
-              }
+                $expr: { $eq: ["$user", "$$userId"] },
+              },
             },
             {
               $group: {
                 _id: null,
                 avgRating: { $avg: "$rating" },
-                count: { $sum: 1 }
-              }
-            }
+                count: { $sum: 1 },
+              },
+            },
           ],
-          as: "reviewStats"
-        }
+          as: "reviewStats",
+        },
       },
       {
         $lookup: {
@@ -1960,16 +2032,21 @@ export const getHealer = async (req, res) => {
                 $expr: {
                   $and: [
                     { $eq: [{ $size: "$participants" }, 2] },
-                    { $setIsSubset: [[loggedInUserId, "$$userId"], "$participants"] }
-                  ]
-                }
-              }
+                    {
+                      $setIsSubset: [
+                        [loggedInUserId, "$$userId"],
+                        "$participants",
+                      ],
+                    },
+                  ],
+                },
+              },
             },
             { $project: { _id: 1 } },
-            { $limit: 1 }
+            { $limit: 1 },
           ],
-          as: "chat"
-        }
+          as: "chat",
+        },
       },
 
       {
@@ -1977,7 +2054,7 @@ export const getHealer = async (req, res) => {
           from: "chatmessages",
           let: {
             chatId: { $arrayElemAt: ["$chat._id", 0] },
-            userId: "$_id"
+            userId: "$_id",
           },
           pipeline: [
             {
@@ -1986,15 +2063,19 @@ export const getHealer = async (req, res) => {
                   $and: [
                     { $eq: ["$chat", "$$chatId"] },
                     { $eq: ["$sender", "$$userId"] },
-                    { $not: { $in: [loggedInUserId, { $ifNull: ["$seenBy", []] }] } }
-                  ]
-                }
-              }
+                    {
+                      $not: {
+                        $in: [loggedInUserId, { $ifNull: ["$seenBy", []] }],
+                      },
+                    },
+                  ],
+                },
+              },
             },
-            { $count: "unreadCount" }
+            { $count: "unreadCount" },
           ],
-          as: "unreadMessages"
-        }
+          as: "unreadMessages",
+        },
       },
 
       // Final projection with computed fields
@@ -2024,25 +2105,30 @@ export const getHealer = async (req, res) => {
             $switch: {
               branches: [
                 { case: { $eq: ["$status", "Online"] }, then: "Online" },
-                { case: { $gte: ["$lastSeen", twentyFourHoursAgo] }, then: "recently" }
+                {
+                  case: { $gte: ["$lastSeen", twentyFourHoursAgo] },
+                  then: "recently",
+                },
               ],
-              default: "away"
-            }
+              default: "away",
+            },
           },
           unreadMessageCount: {
-            $ifNull: [{ $arrayElemAt: ["$unreadMessages.unreadCount", 0] }, 0]
+            $ifNull: [{ $arrayElemAt: ["$unreadMessages.unreadCount", 0] }, 0],
           },
           chatId: {
-            $ifNull: [{ $arrayElemAt: ["$chat._id", 0] }, null]
-          }
-        }
-      }
+            $ifNull: [{ $arrayElemAt: ["$chat._id", 0] }, null],
+          },
+        },
+      },
     ]).exec();
 
     // Send response
     let message = "Users fetched successfully";
     if (genderFilter) {
-      message = `${genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)} users fetched successfully`;
+      message = `${
+        genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)
+      } users fetched successfully`;
     }
 
     res.status(200).json({
@@ -2158,7 +2244,12 @@ export const getAllForChatStatus = async (req, res) => {
                 $expr: {
                   $and: [
                     { $eq: [{ $size: "$participants" }, 2] },
-                    { $setIsSubset: [[loggedInUserId, "$$userId"], "$participants"] },
+                    {
+                      $setIsSubset: [
+                        [loggedInUserId, "$$userId"],
+                        "$participants",
+                      ],
+                    },
                   ],
                 },
               },
@@ -2183,7 +2274,11 @@ export const getAllForChatStatus = async (req, res) => {
                   $and: [
                     { $eq: ["$chat", "$$chatId"] },
                     { $eq: ["$sender", "$$userId"] },
-                    { $not: { $in: [loggedInUserId, { $ifNull: ["$seenBy", []] }] } },
+                    {
+                      $not: {
+                        $in: [loggedInUserId, { $ifNull: ["$seenBy", []] }],
+                      },
+                    },
                   ],
                 },
               },
@@ -2216,7 +2311,10 @@ export const getAllForChatStatus = async (req, res) => {
             $switch: {
               branches: [
                 { case: { $eq: ["$status", "Online"] }, then: "Online" },
-                { case: { $gte: ["$lastSeen", twentyFourHoursAgo] }, then: "recently" },
+                {
+                  case: { $gte: ["$lastSeen", twentyFourHoursAgo] },
+                  then: "recently",
+                },
               ],
               default: "away",
             },
@@ -2232,7 +2330,9 @@ export const getAllForChatStatus = async (req, res) => {
     // Send response
     let message = "Active call users fetched successfully";
     if (genderFilter) {
-      message = `Active call ${genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)} users fetched successfully`;
+      message = `Active call ${
+        genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)
+      } users fetched successfully`;
     }
 
     res.status(200).json({
@@ -2348,7 +2448,12 @@ export const getAllForCallUser = async (req, res) => {
                 $expr: {
                   $and: [
                     { $eq: [{ $size: "$participants" }, 2] },
-                    { $setIsSubset: [[loggedInUserId, "$$userId"], "$participants"] },
+                    {
+                      $setIsSubset: [
+                        [loggedInUserId, "$$userId"],
+                        "$participants",
+                      ],
+                    },
                   ],
                 },
               },
@@ -2373,7 +2478,11 @@ export const getAllForCallUser = async (req, res) => {
                   $and: [
                     { $eq: ["$chat", "$$chatId"] },
                     { $eq: ["$sender", "$$userId"] },
-                    { $not: { $in: [loggedInUserId, { $ifNull: ["$seenBy", []] }] } },
+                    {
+                      $not: {
+                        $in: [loggedInUserId, { $ifNull: ["$seenBy", []] }],
+                      },
+                    },
                   ],
                 },
               },
@@ -2406,7 +2515,10 @@ export const getAllForCallUser = async (req, res) => {
             $switch: {
               branches: [
                 { case: { $eq: ["$status", "Online"] }, then: "Online" },
-                { case: { $gte: ["$lastSeen", twentyFourHoursAgo] }, then: "recently" },
+                {
+                  case: { $gte: ["$lastSeen", twentyFourHoursAgo] },
+                  then: "recently",
+                },
               ],
               default: "away",
             },
@@ -2422,7 +2534,9 @@ export const getAllForCallUser = async (req, res) => {
     // Send response
     let message = "Active call users fetched successfully";
     if (genderFilter) {
-      message = `Active call ${genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)} users fetched successfully`;
+      message = `Active call ${
+        genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)
+      } users fetched successfully`;
     }
 
     res.status(200).json({
@@ -2464,7 +2578,7 @@ export const getAllUserCategory = async (req, res) => {
     // Build base match conditions
     const matchConditions = {
       _id: { $ne: loggedInUserId },
-      UserStatus: { $nin: ["inActive", "Blocked", "InActive"] }
+      UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
     };
 
     if (genderFilter) {
@@ -2508,18 +2622,18 @@ export const getAllUserCategory = async (req, res) => {
             $cond: {
               if: { $eq: ["$status", "Online"] },
               then: 1,
-              else: 0
-            }
-          }
-        }
+              else: 0,
+            },
+          },
+        },
       },
 
       // Sort by online status first, then by last seen
       {
         $sort: {
-          sortOrder: -1,  // Online users first
-          lastSeen: -1    // Then by most recently seen
-        }
+          sortOrder: -1, // Online users first
+          lastSeen: -1, // Then by most recently seen
+        },
       },
 
       // Paginate before heavy operations
@@ -2533,19 +2647,19 @@ export const getAllUserCategory = async (req, res) => {
           pipeline: [
             {
               $match: {
-                $expr: { $eq: ["$user", "$$userId"] }
-              }
+                $expr: { $eq: ["$user", "$$userId"] },
+              },
             },
             {
               $group: {
                 _id: null,
                 avgRating: { $avg: "$rating" },
-                count: { $sum: 1 }
-              }
-            }
+                count: { $sum: 1 },
+              },
+            },
           ],
-          as: "reviewStats"
-        }
+          as: "reviewStats",
+        },
       },
       {
         $lookup: {
@@ -2581,16 +2695,21 @@ export const getAllUserCategory = async (req, res) => {
                 $expr: {
                   $and: [
                     { $eq: [{ $size: "$participants" }, 2] },
-                    { $setIsSubset: [[loggedInUserId, "$$userId"], "$participants"] }
-                  ]
-                }
-              }
+                    {
+                      $setIsSubset: [
+                        [loggedInUserId, "$$userId"],
+                        "$participants",
+                      ],
+                    },
+                  ],
+                },
+              },
             },
             { $project: { _id: 1 } },
-            { $limit: 1 }
+            { $limit: 1 },
           ],
-          as: "chat"
-        }
+          as: "chat",
+        },
       },
 
       {
@@ -2598,7 +2717,7 @@ export const getAllUserCategory = async (req, res) => {
           from: "chatmessages",
           let: {
             chatId: { $arrayElemAt: ["$chat._id", 0] },
-            userId: "$_id"
+            userId: "$_id",
           },
           pipeline: [
             {
@@ -2607,15 +2726,19 @@ export const getAllUserCategory = async (req, res) => {
                   $and: [
                     { $eq: ["$chat", "$$chatId"] },
                     { $eq: ["$sender", "$$userId"] },
-                    { $not: { $in: [loggedInUserId, { $ifNull: ["$seenBy", []] }] } }
-                  ]
-                }
-              }
+                    {
+                      $not: {
+                        $in: [loggedInUserId, { $ifNull: ["$seenBy", []] }],
+                      },
+                    },
+                  ],
+                },
+              },
             },
-            { $count: "unreadCount" }
+            { $count: "unreadCount" },
           ],
-          as: "unreadMessages"
-        }
+          as: "unreadMessages",
+        },
       },
 
       // Final projection with computed fields
@@ -2639,34 +2762,41 @@ export const getAllUserCategory = async (req, res) => {
           userType: 1,
           report: 1,
           avgRating: { $arrayElemAt: ["$reviewStats.avgRating", 0] },
-          reviews: 1, // Include the full reviews array          
+          reviews: 1, // Include the full reviews array
           reviewCount: { $arrayElemAt: ["$reviewStats.count", 0] },
           isOnline: { $eq: ["$status", "Online"] },
           lastSeenStatus: {
             $switch: {
               branches: [
                 { case: { $eq: ["$status", "Online"] }, then: "Online" },
-                { case: { $gte: ["$lastSeen", twentyFourHoursAgo] }, then: "recently" }
+                {
+                  case: { $gte: ["$lastSeen", twentyFourHoursAgo] },
+                  then: "recently",
+                },
               ],
-              default: "away"
-            }
+              default: "away",
+            },
           },
           unreadMessageCount: {
-            $ifNull: [{ $arrayElemAt: ["$unreadMessages.unreadCount", 0] }, 0]
+            $ifNull: [{ $arrayElemAt: ["$unreadMessages.unreadCount", 0] }, 0],
           },
           chatId: {
-            $ifNull: [{ $arrayElemAt: ["$chat._id", 0] }, null]
-          }
-        }
-      }
+            $ifNull: [{ $arrayElemAt: ["$chat._id", 0] }, null],
+          },
+        },
+      },
     ]).exec();
 
     // Send response
     let message = "Users fetched successfully";
     if (genderFilter && categoryFilter) {
-      message = `${genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)} users in category '${categoryFilter}' fetched successfully`;
+      message = `${
+        genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)
+      } users in category '${categoryFilter}' fetched successfully`;
     } else if (genderFilter) {
-      message = `${genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)} users fetched successfully`;
+      message = `${
+        genderFilter.charAt(0).toUpperCase() + genderFilter.slice(1)
+      } users fetched successfully`;
     } else if (categoryFilter) {
       message = `Users in category '${categoryFilter}' fetched successfully`;
     }
@@ -2690,7 +2820,6 @@ export const getAllUserCategory = async (req, res) => {
   }
 };
 
-
 export const getAllUsers2 = async (req, res) => {
   try {
     const loggedInUserId = new mongoose.Types.ObjectId(req.user.id);
@@ -2706,8 +2835,8 @@ export const getAllUsers2 = async (req, res) => {
         {
           $match: {
             _id: { $ne: loggedInUserId },
-            UserStatus: { $nin: ["inActive", "Blocked", "InActive"] }
-          }
+            UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
+          },
         },
         // Optimize lookup by only getting necessary fields
         {
@@ -2717,17 +2846,17 @@ export const getAllUsers2 = async (req, res) => {
             pipeline: [
               {
                 $match: {
-                  $expr: { $eq: ["$user", "$$userId"] }
-                }
+                  $expr: { $eq: ["$user", "$$userId"] },
+                },
               },
               {
                 $project: {
-                  rating: 1
-                }
-              }
+                  rating: 1,
+                },
+              },
             ],
-            as: "ratings"
-          }
+            as: "ratings",
+          },
         },
         // Compute fields efficiently
         {
@@ -2736,31 +2865,31 @@ export const getAllUsers2 = async (req, res) => {
               $cond: {
                 if: { $eq: [{ $size: "$ratings" }, 0] },
                 then: 0,
-                else: { $avg: "$ratings.rating" }
-              }
+                else: { $avg: "$ratings.rating" },
+              },
             },
             reviewCount: { $size: "$ratings" },
             sortScore: {
               $add: [
                 { $cond: [{ $eq: ["$status", "Online"] }, 100000, 0] },
                 { $cond: [{ $ne: ["$gender", loggedInUserGender] }, 10000, 0] },
-                { $multiply: [{ $avg: "$ratings.rating" }, 100] }
-              ]
-            }
-          }
+                { $multiply: [{ $avg: "$ratings.rating" }, 100] },
+              ],
+            },
+          },
         },
         // Sort using computed sortScore
         {
           $sort: {
-            sortScore: -1
-          }
+            sortScore: -1,
+          },
         },
         // Skip and limit for pagination
         {
-          $skip: skip
+          $skip: skip,
         },
         {
-          $limit: limit
+          $limit: limit,
         },
         // Project only needed fields
         {
@@ -2772,17 +2901,16 @@ export const getAllUsers2 = async (req, res) => {
             UserStatus: 1,
             avatar: 1,
             avgRating: 1,
-            reviewCount: 1
-          }
-        }
-
+            reviewCount: 1,
+          },
+        },
       ]),
 
       // Separate count query for better performance
       User.countDocuments({
         _id: { $ne: loggedInUserId },
-        UserStatus: { $nin: ["inActive", "Blocked", "InActive"] }
-      })
+        UserStatus: { $nin: ["inActive", "Blocked", "InActive"] },
+      }),
     ]);
 
     if (!users.length) {
@@ -2796,17 +2924,16 @@ export const getAllUsers2 = async (req, res) => {
         totalUsers: totalCount,
         currentPage: page,
         totalPages: Math.ceil(totalCount / limit),
-        limit
-      }
+        limit,
+      },
     });
-
   } catch (error) {
     console.error("Error fetching users:", error);
-    res.status(500).json({ message: "Internal server error", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
   }
 };
-
-
 
 export const addBio = async (req, res) => {
   try {
@@ -2814,7 +2941,9 @@ export const addBio = async (req, res) => {
     const { bio } = req.body; // Bio data is passed in the request body
 
     if (!bio || !Array.isArray(bio)) {
-      return res.status(400).json({ message: "Invalid bio data. Must be an array of strings." });
+      return res
+        .status(400)
+        .json({ message: "Invalid bio data. Must be an array of strings." });
     }
 
     // Find the user by ID and add new bio entries
@@ -2835,10 +2964,11 @@ export const addBio = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "An error occurred while updating the bio.", error });
+    res
+      .status(500)
+      .json({ message: "An error occurred while updating the bio.", error });
   }
 };
-
 
 // Edit a bio entry
 export const editBio = async (req, res) => {
@@ -2847,7 +2977,9 @@ export const editBio = async (req, res) => {
     const { index, newBio } = req.body; // Pass index and new bio data in the request body
 
     if (typeof index !== "number" || !newBio) {
-      return res.status(400).json({ message: "Invalid input. Provide index and newBio." });
+      return res
+        .status(400)
+        .json({ message: "Invalid input. Provide index and newBio." });
     }
 
     const user = await User.findById(userId);
@@ -2863,10 +2995,14 @@ export const editBio = async (req, res) => {
     user.Bio[index] = newBio;
     await user.save();
 
-    res.status(200).json({ message: "Bio updated successfully.", bio: user.Bio });
+    res
+      .status(200)
+      .json({ message: "Bio updated successfully.", bio: user.Bio });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "An error occurred while editing the bio.", error });
+    res
+      .status(500)
+      .json({ message: "An error occurred while editing the bio.", error });
   }
 };
 
@@ -2893,10 +3029,14 @@ export const deleteBio = async (req, res) => {
     user.Bio.splice(index, 1);
     await user.save();
 
-    res.status(200).json({ message: "Bio deleted successfully.", bio: user.Bio });
+    res
+      .status(200)
+      .json({ message: "Bio deleted successfully.", bio: user.Bio });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "An error occurred while deleting the bio.", error });
+    res
+      .status(500)
+      .json({ message: "An error occurred while deleting the bio.", error });
   }
 };
 
@@ -2908,7 +3048,8 @@ export const Reporte_User = async (req, res) => {
   if (!reporterId || !reportedUserId || !reportType) {
     return res.status(400).json({
       success: false,
-      message: 'Missing required fields: reporterId, reportedUserId, or reportType.',
+      message:
+        "Missing required fields: reporterId, reportedUserId, or reportType.",
     });
   }
 
@@ -2923,7 +3064,7 @@ export const Reporte_User = async (req, res) => {
     if (!reporter || !reportedUser) {
       return res.status(404).json({
         success: false,
-        message: 'Reporter or reported user not found.',
+        message: "Reporter or reported user not found.",
       });
     }
 
@@ -2931,15 +3072,15 @@ export const Reporte_User = async (req, res) => {
     if (reporterId === reportedUserId) {
       return res.status(400).json({
         success: false,
-        message: 'You cannot report yourself.',
+        message: "You cannot report yourself.",
       });
     }
 
     // Check if the reported user is already blocked
-    if (reportedUser.UserStatus === 'Blocked') {
+    if (reportedUser.UserStatus === "Blocked") {
       return res.status(400).json({
         success: false,
-        message: 'User is already blocked.',
+        message: "User is already blocked.",
       });
     }
 
@@ -2969,12 +3110,13 @@ export const Reporte_User = async (req, res) => {
 
     sendNotification(reportedUser, title, message);
 
-
     // If reports reach 3 or more, block the user
     if (reportedUser.report.length >= 3) {
-      reportedUser.UserStatus = 'Blocked';
+      reportedUser.UserStatus = "Blocked";
       console.log(
-        `User ${reportedUser.username || reportedUserId} has been blocked due to excessive reports.`
+        `User ${
+          reportedUser.username || reportedUserId
+        } has been blocked due to excessive reports.`
       );
     }
 
@@ -2984,55 +3126,50 @@ export const Reporte_User = async (req, res) => {
     return res.status(200).json({
       success: true,
       message:
-        reportedUser.UserStatus === 'Blocked'
-          ? 'User has been reported and blocked due to multiple reports.'
-          : 'Report has been submitted successfully.',
+        reportedUser.UserStatus === "Blocked"
+          ? "User has been reported and blocked due to multiple reports."
+          : "Report has been submitted successfully.",
     });
   } catch (error) {
-    console.error('Error reporting user:', error);
+    console.error("Error reporting user:", error);
     return res.status(500).json({
       success: false,
-      message: 'An error occurred while reporting the account.',
+      message: "An error occurred while reporting the account.",
     });
   }
 };
 
-
-
 // Add or Update Bank Details
 export const addOrUpdateBankDetails = async (req, res) => {
   const userId = req.user._id || req.user.id;
-  const {
-    bankName,
-    accountNumber,
-    ifscCode,
-    accountHolderName,
-  } = req.body;
+  const { bankName, accountNumber, ifscCode, accountHolderName } = req.body;
 
   try {
     // Validate input
     if (!bankName || !accountNumber || !ifscCode || !accountHolderName) {
-      return res.status(400).json({ message: 'All fields are required.' });
+      return res.status(400).json({ message: "All fields are required." });
     }
 
     // Validate IFSC code format (basic check)
     if (!/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifscCode)) {
-      return res.status(400).json({ message: 'Invalid IFSC code format.' });
+      return res.status(400).json({ message: "Invalid IFSC code format." });
     }
 
     // Validate account number (basic check)
     if (!/^\d{9,18}$/.test(accountNumber)) {
-      return res.status(400).json({ message: 'Account number must be 9-18 digits.' });
+      return res
+        .status(400)
+        .json({ message: "Account number must be 9-18 digits." });
     }
 
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
+      return res.status(404).json({ message: "User not found." });
     }
 
     // Check if account number exists
     const existingIndex = user.bankDetails.findIndex(
-      detail => detail.accountNumber === accountNumber
+      (detail) => detail.accountNumber === accountNumber
     );
 
     if (existingIndex !== -1) {
@@ -3042,7 +3179,7 @@ export const addOrUpdateBankDetails = async (req, res) => {
         accountNumber,
         ifscCode,
         accountHolderName,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
     } else {
       // Add new
@@ -3052,22 +3189,22 @@ export const addOrUpdateBankDetails = async (req, res) => {
         ifscCode,
         accountHolderName,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       });
     }
 
     await user.save();
 
     return res.status(existingIndex !== -1 ? 200 : 201).json({
-      message: existingIndex !== -1
-        ? 'Bank details updated successfully.'
-        : 'Bank details added successfully.',
-      bankDetails: user.bankDetails
+      message:
+        existingIndex !== -1
+          ? "Bank details updated successfully."
+          : "Bank details added successfully.",
+      bankDetails: user.bankDetails,
     });
-
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Internal server error.' });
+    res.status(500).json({ message: "Internal server error." });
   }
 };
 
@@ -3076,17 +3213,17 @@ export const getAllBankDetails = async (req, res) => {
   const userId = req.user._id || req.user.id;
 
   try {
-    const user = await User.findById(userId).select('bankDetails');
+    const user = await User.findById(userId).select("bankDetails");
     if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
+      return res.status(404).json({ message: "User not found." });
     }
 
     res.status(200).json({
-      bankDetails: user.bankDetails
+      bankDetails: user.bankDetails,
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Internal server error.' });
+    res.status(500).json({ message: "Internal server error." });
   }
 };
 
@@ -3098,21 +3235,21 @@ export const getBankDetail = async (req, res) => {
   try {
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
+      return res.status(404).json({ message: "User not found." });
     }
 
     const detail = user.bankDetails.find(
-      d => d.accountNumber === accountNumber
+      (d) => d.accountNumber === accountNumber
     );
 
     if (!detail) {
-      return res.status(404).json({ message: 'Bank details not found.' });
+      return res.status(404).json({ message: "Bank details not found." });
     }
 
     res.status(200).json(detail);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Internal server error.' });
+    res.status(500).json({ message: "Internal server error." });
   }
 };
 
@@ -3124,26 +3261,26 @@ export const deleteBankDetail = async (req, res) => {
   try {
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
+      return res.status(404).json({ message: "User not found." });
     }
 
     const initialLength = user.bankDetails.length;
     user.bankDetails = user.bankDetails.filter(
-      d => d.accountNumber !== accountNumber
+      (d) => d.accountNumber !== accountNumber
     );
 
     if (user.bankDetails.length === initialLength) {
-      return res.status(404).json({ message: 'Bank details not found.' });
+      return res.status(404).json({ message: "Bank details not found." });
     }
 
     await user.save();
     res.status(200).json({
-      message: 'Bank details deleted successfully.',
-      bankDetails: user.bankDetails
+      message: "Bank details deleted successfully.",
+      bankDetails: user.bankDetails,
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Internal server error.' });
+    res.status(500).json({ message: "Internal server error." });
   }
 };
 
@@ -3155,36 +3292,35 @@ export const setDefaultBankAccount = async (req, res) => {
   try {
     const user = await User.findById(userId);
     if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
+      return res.status(404).json({ message: "User not found." });
     }
 
     // First reset all to non-default
-    user.bankDetails.forEach(detail => {
+    user.bankDetails.forEach((detail) => {
       detail.isDefault = false;
     });
 
     // Find and set the specified one as default
     const detail = user.bankDetails.find(
-      d => d.accountNumber === accountNumber
+      (d) => d.accountNumber === accountNumber
     );
 
     if (!detail) {
-      return res.status(404).json({ message: 'Bank details not found.' });
+      return res.status(404).json({ message: "Bank details not found." });
     }
 
     detail.isDefault = true;
     await user.save();
 
     res.status(200).json({
-      message: 'Default bank account set successfully.',
-      bankDetails: user.bankDetails
+      message: "Default bank account set successfully.",
+      bankDetails: user.bankDetails,
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Internal server error.' });
+    res.status(500).json({ message: "Internal server error." });
   }
 };
-
 
 export const getBankDetails = async (req, res) => {
   const userId = req.user._id || req.user.id; // Assuming user info is in `req.user`
@@ -3194,17 +3330,17 @@ export const getBankDetails = async (req, res) => {
     const user = await User.findById(userId);
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
+      return res.status(404).json({ message: "User not found." });
     }
 
     // Return the user's bank details
     res.status(200).json({
-      message: 'Bank details retrieved successfully.',
+      message: "Bank details retrieved successfully.",
       bankDetails: user.bankDetails,
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Internal server error.' });
+    res.status(500).json({ message: "Internal server error." });
   }
 };
 
@@ -3215,14 +3351,18 @@ export const subscribeUser = async (req, res) => {
   try {
     const response = await addToMailingList(firstName, lastName, email);
     res.status(200).json({
-      message: 'User added to mailing list successfully.',
+      message: "User added to mailing list successfully.",
       response,
     });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to add user to mailing list.', error: error.message });
+    res
+      .status(500)
+      .json({
+        message: "Failed to add user to mailing list.",
+        error: error.message,
+      });
   }
 };
-
 
 // export const getChatsWithLatestMessages = async (req, res) => {
 //   try {
@@ -3390,7 +3530,6 @@ export const subscribeUser = async (req, res) => {
 //   }
 // };
 
-
 export const getChatsWithLatestMessages = async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
@@ -3403,38 +3542,38 @@ export const getChatsWithLatestMessages = async (req, res) => {
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
     // Get current user's online status in a single query
-    const currentUser = await User.findById(userId).select('status');
-    const isCurrentUserOnline = currentUser.status === 'Online';
+    const currentUser = await User.findById(userId).select("status");
+    const isCurrentUserOnline = currentUser.status === "Online";
 
     const pipeline = [
       // Stage 1: Match chats where the current user is a participant
       {
         $match: {
-          participants: userObjectId
-        }
+          participants: userObjectId,
+        },
       },
 
       // Stage 2: Sort by most recent activity first
       {
-        $sort: { updatedAt: -1 }
+        $sort: { updatedAt: -1 },
       },
 
       // Stage 3: Skip and limit for pagination
       {
-        $skip: skip
+        $skip: skip,
       },
       {
-        $limit: limit
+        $limit: limit,
       },
 
       // Stage 4: Lookup to get participant details
       {
         $lookup: {
-          from: 'users',
-          localField: 'participants',
-          foreignField: '_id',
-          as: 'participantDetails'
-        }
+          from: "users",
+          localField: "participants",
+          foreignField: "_id",
+          as: "participantDetails",
+        },
       },
 
       // Stage 5: Filter out the current user from participants
@@ -3442,37 +3581,44 @@ export const getChatsWithLatestMessages = async (req, res) => {
         $addFields: {
           participantDetails: {
             $filter: {
-              input: '$participantDetails',
-              as: 'participant',
-              cond: { $ne: ['$$participant._id', userObjectId] }
-            }
-          }
-        }
+              input: "$participantDetails",
+              as: "participant",
+              cond: { $ne: ["$$participant._id", userObjectId] },
+            },
+          },
+        },
       },
 
       // Stage 6: Match if search term provided
-      ...(search ? [{
-        $match: {
-          'participantDetails.username': { $regex: search, $options: 'i' }
-        }
-      }] : []),
+      ...(search
+        ? [
+            {
+              $match: {
+                "participantDetails.username": {
+                  $regex: search,
+                  $options: "i",
+                },
+              },
+            },
+          ]
+        : []),
 
       // Stage 7: Lookup reviews for participants
       {
         $lookup: {
-          from: 'reviews',
-          let: { participantIds: '$participantDetails._id' },
+          from: "reviews",
+          let: { participantIds: "$participantDetails._id" },
           pipeline: [
             {
               $match: {
                 $expr: {
-                  $in: ['$user', '$$participantIds']
-                }
-              }
-            }
+                  $in: ["$user", "$$participantIds"],
+                },
+              },
+            },
           ],
-          as: 'participantReviews'
-        }
+          as: "participantReviews",
+        },
       },
 
       // Stage 8: Lookup unread messages count - FIXED
@@ -3487,91 +3633,99 @@ export const getChatsWithLatestMessages = async (req, res) => {
                   $and: [
                     { $eq: ["$chat", "$$chatId"] },
                     { $ne: ["$sender", userObjectId] },
-                    { $not: { $in: [userObjectId, { $ifNull: ["$seenBy", []] }] } }
-                  ]
-                }
-              }
+                    {
+                      $not: {
+                        $in: [userObjectId, { $ifNull: ["$seenBy", []] }],
+                      },
+                    },
+                  ],
+                },
+              },
             },
-            { $count: "unreadCount" }
+            { $count: "unreadCount" },
           ],
-          as: "unreadMessages"
-        }
+          as: "unreadMessages",
+        },
       },
 
       // Stage 9: Process and format the final output
       {
         $project: {
-          chatId: '$_id',
+          chatId: "$_id",
           lastMessage: 1,
           updatedAt: 1,
-          timestamp: { $toLong: '$updatedAt' },
-          unreadCount: { $ifNull: [{ $arrayElemAt: ["$unreadMessages.unreadCount", 0] }, 0] },
+          timestamp: { $toLong: "$updatedAt" },
+          unreadCount: {
+            $ifNull: [{ $arrayElemAt: ["$unreadMessages.unreadCount", 0] }, 0],
+          },
           participants: {
             $map: {
-              input: '$participantDetails',
-              as: 'participant',
+              input: "$participantDetails",
+              as: "participant",
               in: {
-                _id: '$$participant._id',
-                username: '$$participant.username',
-                email: '$$participant.email',
-                avatar: '$$participant.avatarUrl',
-                shortDecs: '$$participant.shortDecs',
-                userType: '$$participant.userType',
-                userCategory: '$$participant.userCategory',
-                gender: '$$participant.gender',
-                Language: '$$participant.Language',
-                lastSeen: '$$participant.lastSeen',
-                Bio: '$$participant.Bio',
-                decs: '$$participant.decs',
-                status: '$$participant.status',
-                isOnline: { $eq: ['$$participant.status', 'Online'] },
+                _id: "$$participant._id",
+                username: "$$participant.username",
+                email: "$$participant.email",
+                avatar: "$$participant.avatarUrl",
+                shortDecs: "$$participant.shortDecs",
+                userType: "$$participant.userType",
+                userCategory: "$$participant.userCategory",
+                gender: "$$participant.gender",
+                Language: "$$participant.Language",
+                lastSeen: "$$participant.lastSeen",
+                Bio: "$$participant.Bio",
+                decs: "$$participant.decs",
+                status: "$$participant.status",
+                isOnline: { $eq: ["$$participant.status", "Online"] },
                 averageRating: {
                   $let: {
                     vars: {
                       userReviews: {
                         $filter: {
-                          input: '$participantReviews',
-                          as: 'review',
-                          cond: { $eq: ['$$review.user', '$$participant._id'] }
-                        }
-                      }
+                          input: "$participantReviews",
+                          as: "review",
+                          cond: { $eq: ["$$review.user", "$$participant._id"] },
+                        },
+                      },
                     },
                     in: {
                       $cond: {
-                        if: { $gt: [{ $size: '$$userReviews' }, 0] },
+                        if: { $gt: [{ $size: "$$userReviews" }, 0] },
                         then: {
                           $divide: [
-                            { $sum: '$$userReviews.rating' },
-                            { $size: '$$userReviews' }
-                          ]
+                            { $sum: "$$userReviews.rating" },
+                            { $size: "$$userReviews" },
+                          ],
                         },
-                        else: 0
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+                        else: 0,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       },
 
       // Stage 10: Custom sort with online priority if current user is online
       {
-        $sort: isCurrentUserOnline ? {
-          'participants.isOnline': -1,
-          timestamp: -1
-        } : {
-          timestamp: -1
-        }
-      }
+        $sort: isCurrentUserOnline
+          ? {
+              "participants.isOnline": -1,
+              timestamp: -1,
+            }
+          : {
+              timestamp: -1,
+            },
+      },
     ];
 
     const chats = await Chat.aggregate(pipeline);
 
     // Format the response to match the expected structure
-    const formattedChats = chats.map(chat => ({
-      participants: chat.participants.map(p => {
+    const formattedChats = chats.map((chat) => ({
+      participants: chat.participants.map((p) => {
         return {
           _id: p._id,
           username: p.username,
@@ -3586,30 +3740,36 @@ export const getChatsWithLatestMessages = async (req, res) => {
           status: p.status,
           decs: p.decs,
           isOnline: p.isOnline,
-          averageRating: p.averageRating
+          averageRating: p.averageRating,
         };
       }),
       chatId: chat.chatId,
       lastMessage: chat.lastMessage,
       updatedAt: chat.updatedAt,
-      unreadCount: chat.unreadCount
+      unreadCount: chat.unreadCount,
     }));
 
-    emitSocketEvent(req, userId.toString(), ChatEventEnum.NEW_CHAT_EVENT, formattedChats);
+    emitSocketEvent(
+      req,
+      userId.toString(),
+      ChatEventEnum.NEW_CHAT_EVENT,
+      formattedChats
+    );
 
     res.json({
       chats: formattedChats,
       page,
       limit,
-      searchQuery: search ? {
-        term: search,
-        resultsCount: formattedChats.length
-      } : null
+      searchQuery: search
+        ? {
+            term: search,
+            resultsCount: formattedChats.length,
+          }
+        : null,
     });
-
   } catch (error) {
-    console.error('Error fetching chats with latest messages:', error);
-    res.status(500).json({ error: 'Failed to fetch chats' });
+    console.error("Error fetching chats with latest messages:", error);
+    res.status(500).json({ error: "Failed to fetch chats" });
   }
 };
 
@@ -3642,7 +3802,6 @@ export const getReviews = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
-
 
 export const UpdateCallStatus = async (req, res) => {
   const userid = req.user.id || req.user._id;
@@ -3724,10 +3883,8 @@ export const ChatStatusStatus = async (req, res) => {
   }
 };
 
-
 export const RegisterEnquiry = async (req, res) => {
   try {
-
     const { name, email, instagram } = req.body;
 
     const existingEnquiry = await Zhohocampain.findOne({ email });
@@ -3741,7 +3898,7 @@ export const RegisterEnquiry = async (req, res) => {
     // Create the enquiry in the database
     const enquiry = await Zhohocampain.create({ name, email, instagram });
     await SendTemplate(email, name);
-    addToMailingList(email)
+    addToMailingList(email);
 
     // Respond with success message
     res.status(201).json({
@@ -3799,7 +3956,6 @@ export const GetRegisterEnquiry = async (req, res) => {
   }
 };
 
-
 async function sendNotification(userId, title, message) {
   // Assuming you have the FCM device token stored in your database
   const user = await User.findById(userId);
@@ -3836,29 +3992,28 @@ async function sendNotification1(userId, title, message) {
       return;
     }
 
-    // 🔗 CHANGE THIS TO YOUR NEW APP / WEBSITE URL
-    const REDIRECT_URL = "https://play.google.com/store/apps/details?id=com.earforall.app";
+    const REDIRECT_URL =
+      "https://play.google.com/store/apps/details?id=com.earforall.app";
 
     const payload = {
       token: deviceToken,
 
-      // ===== Common notification =====
+      // ===== Notification UI =====
       notification: {
         title: title,
         body: message,
       },
 
-      // ===== ANDROID: OPENS URL EVEN IF APP IS TERMINATED =====
+      // ===== ANDROID (SYSTEM HANDLED) =====
       android: {
         priority: "high",
         notification: {
-          channel_id: "Earforyou123", // must already exist in old app
+          channel_id: "Earforyou123",
           click_action: "android.intent.action.VIEW",
-          link: REDIRECT_URL, // ⭐ THIS IS THE KEY
         },
       },
 
-      // ===== iOS: BEST POSSIBLE REDIRECT =====
+      // ===== iOS (BEST POSSIBLE) =====
       apns: {
         payload: {
           aps: {
@@ -3871,9 +4026,9 @@ async function sendNotification1(userId, title, message) {
         },
       },
 
-      // ===== Fallback (if app somehow opens) =====
+      // ===== URL PASSED TO SYSTEM =====
       data: {
-        redirect_url: REDIRECT_URL,
+        url: REDIRECT_URL,
         source: "old_app_redirect",
       },
     };
