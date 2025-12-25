@@ -33,7 +33,8 @@ import {
     getAllForCallUser,
     ChatStatusStatus,
     getAllForChatStatus,
-    updateProfileDesc
+    updateProfileDesc,
+    deleteProfileDesc
 } from '../controllers/authController.js';
 // import { validateUserSignup } from '../middlewares/auth/validators.js';
 import { protect } from '../middlewares/auth/authMiddleware.js'
@@ -102,6 +103,11 @@ router.get('/listener', protect, listener);
 router.post('/Category', protect, UserCategoryData);
 // Delete User
 router.delete('/deleteUser', protect, deleteUser);
+// delete voice record
+router.delete(
+  "/user/delete-profile-desc/:userId",
+  deleteProfileDesc
+);
 
 router.post('/addOrUpdateBankDetails', protect, addOrUpdateBankDetails);
 

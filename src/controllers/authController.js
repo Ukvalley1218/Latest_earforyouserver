@@ -1223,6 +1223,60 @@ export const updateProfileDesc = async (req, res) => {
     });
   }
 };
+// deleter voice record
+export const deleteProfileDesc = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (!user.record_desc) {
+      return res.status(400).json({
+        success: false,
+        message: "No voice record found to delete",
+      });
+    }
+
+    /**
+     * Extract public_id from Cloudinary URL
+     * Example:
+     * https://res.cloudinary.com/xxx/video/upload/v123/user_voice_records/voice_123.mp3
+     */
+    const publicId = user.record_desc
+      .split("/")
+      .slice(-1)[0]
+      .split(".")[0];
+
+    // Delete from Cloudinary
+    await cloudinary.uploader.destroy(
+      `user_voice_records/${publicId}`,
+      { resource_type: "video" } // REQUIRED for audio
+    );
+
+    // Remove from DB
+    user.record_desc = undefined;
+    user.updatedAt = new Date();
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Voice record deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete voice error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete voice record",
+    });
+  }
+};
 
 // -------------------------- Update Status --------------------------
 
