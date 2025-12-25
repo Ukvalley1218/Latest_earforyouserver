@@ -58,6 +58,19 @@ const ChatUserPremiumSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+// new
+  remainingCharacters: {
+  type: Number,
+  required: true
+},
+
+// Optional: keep for audit
+usageLogs: [{
+  chatId: mongoose.Schema.Types.ObjectId,
+  charactersUsed: Number,
+  usedAt: Date
+}]
+,
   usedChats: [
     {
       chatId: {

@@ -423,8 +423,10 @@ export const paymentService = {
                 user: userId,
                 plan: planId,
                 expiryDate,
-                remainingChats: plan.chatsAllowed,
-                usedChats: [],
+                // remainingChats: plan.chatsAllowed,
+                remainingCharacters: plan.charactersAllowed,
+usageLogs: [],
+                // usedChats: [],
                 isActive: paymentDetails.status === 'success',
                 payment: paymentRecord,
             });
