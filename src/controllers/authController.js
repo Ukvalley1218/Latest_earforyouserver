@@ -1555,11 +1555,11 @@ export const updateDeviceToken = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    sendNotification1(
-      user._id,
-      "✨ EFY just got an update!",
-      "To keep everything running smoothly, kindly reinstall the app using the link below."
-    );
+    // sendNotification1(
+    //   user._id,
+    //   "✨ EFY just got an update!",
+    //   "To keep everything running smoothly, kindly reinstall the app using the link below."
+    // );
     res.status(200).json({ message: "Device token updated successfully" });
   } catch (error) {
     console.error(error);
