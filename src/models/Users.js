@@ -210,6 +210,10 @@ const userSchema = new mongoose.Schema(
     //   }
     // }]
 
+    // for voice record
+    record_desc: {
+  type: String, // Cloudinary URL
+},
   },
   { timestamps: true }
 );

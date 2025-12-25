@@ -39,6 +39,7 @@ import { protect } from '../middlewares/auth/authMiddleware.js'
 import multer from 'multer';
 import { userStatics } from '../controllers/UserData/UserData.js';
 import { expirePlatformCharges } from '../controllers/CronJob/Expiry.js';
+import uploadVoice from '../middlewares/voiceUpload.js';
 
 
 const router = express.Router();
@@ -66,7 +67,7 @@ router.put('/category/:userId', updateOrCreateUserCategory);
 
 // updateUserDeatil
 
-router.put('/updateProfile/:userId', updateProfile);
+router.put('/updateProfile/:userId',uploadVoice.single("record_desc"), updateProfile);
 router.put('/updateStatus/:userId', updateStatus);
 router.put('/users/:userId', changeUserType);
 

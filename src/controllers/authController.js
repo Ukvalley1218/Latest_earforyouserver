@@ -30,6 +30,7 @@ import MyPlan from "../models/Wallet/PlatfromCharges/myPlanSchema.js";
 import { emitSocketEvent } from "../socket/index.js";
 import { ChatEventEnum } from "../constants.js";
 
+
 export const generateTransactionId = async () => {
   const timestamp = Date.now().toString(36); // Convert timestamp to base36
   const randomString = await crypto.randomBytes(8).toString("hex"); // Generate a random 16-character hex string
@@ -1119,6 +1120,13 @@ export const updateProfile = async (req, res) => {
       });
     }
 
+    // record upload handling 
+    let recordDescUrl;
+
+if (req.file) {
+  recordDescUrl = req.file.path; // Cloudinary secure URL
+}
+
     // Prepare update data
     const updateData = {
       ...(username !== undefined && { username: username.trim() }),
@@ -1131,6 +1139,7 @@ export const updateProfile = async (req, res) => {
       ...(avatarUrl !== undefined && { avatarUrl }),
       ...(Bio !== undefined && { Bio }),
       ...(shortDecs !== undefined && { shortDecs: shortDecs.trim() }),
+        ...(recordDescUrl && { record_desc: recordDescUrl }), // 👈 ADD THIS
       status: "Online",
       UserStatus: "Active",
       updatedAt: new Date(),
