@@ -94,16 +94,10 @@ const getAllMessages = asyncHandler(async (req, res) => {
 
 
 
-const countBillableCharacters = (text = "") => {
-  return text.replace(/\s+/g, "").length;
-};
 
 const sendMessage = asyncHandler(async (req, res) => {
   const { chatId } = req.params;
   const { content } = req.body;
-
-    const billableCharacters = countBillableCharacters(content || "");
-
 
   if (!content && !req.files?.attachments?.length) {
     throw new ApiError(400, "Message content or attachment is required");
@@ -116,42 +110,6 @@ const sendMessage = asyncHandler(async (req, res) => {
   if (!selectedChat) {
     throw new ApiError(404, "Chat does not exist");
   }
-// 🔐 CHARACTER BILLING CHECK
-if (billableCharacters > 0) {
-
-  const activeSubscription = await ChatUserPremium.findOne({
-    user: req.user._id,
-    isActive: true,
-    expiryDate: { $gt: new Date() },
-    "payment.status": { $in: ["COMPLETED", "success"] }
-  }).sort({ purchaseDate: -1 });
-
-  if (!activeSubscription) {
-    throw new ApiError(403, "No active subscription found");
-  }
-
-  if (activeSubscription.remainingCharacters < billableCharacters) {
-    throw new ApiError(402, "Insufficient character balance", {
-      required: billableCharacters,
-      available: activeSubscription.remainingCharacters
-    });
-  }
-
-  // Deduct characters
-  activeSubscription.remainingCharacters -= billableCharacters;
-
-  activeSubscription.usageLogs.push({
-    chatId,
-    charactersUsed: billableCharacters,
-    usedAt: new Date()
-  });
-
-  if (activeSubscription.remainingCharacters <= 0) {
-    activeSubscription.isActive = false;
-  }
-
-  await activeSubscription.save();
-}
 
   const messageFiles = [];
 
