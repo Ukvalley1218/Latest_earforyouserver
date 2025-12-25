@@ -29,7 +29,7 @@ import PlatformCharges from "../models/Wallet/PlatfromCharges/Platfrom.js";
 import MyPlan from "../models/Wallet/PlatfromCharges/myPlanSchema.js";
 import { emitSocketEvent } from "../socket/index.js";
 import { ChatEventEnum } from "../constants.js";
-
+import uploadVoice from "../middlewares/voiceUpload.js";
 
 export const generateTransactionId = async () => {
   const timestamp = Date.now().toString(36); // Convert timestamp to base36
@@ -1120,13 +1120,6 @@ export const updateProfile = async (req, res) => {
       });
     }
 
-    // record upload handling 
-    let recordDescUrl;
-
-if (req.file) {
-  recordDescUrl = req.file.path; // Cloudinary secure URL
-}
-
     // Prepare update data
     const updateData = {
       ...(username !== undefined && { username: username.trim() }),
@@ -1139,7 +1132,6 @@ if (req.file) {
       ...(avatarUrl !== undefined && { avatarUrl }),
       ...(Bio !== undefined && { Bio }),
       ...(shortDecs !== undefined && { shortDecs: shortDecs.trim() }),
-        ...(recordDescUrl && { record_desc: recordDescUrl }), // 👈 ADD THIS
       status: "Online",
       UserStatus: "Active",
       updatedAt: new Date(),
@@ -1175,6 +1167,59 @@ if (req.file) {
       success: false,
       message: "An error occurred while updating the profile",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+export const updateProfileDesc = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Voice file is required",
+      });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // 🔥 OPTIONAL: delete old voice from Cloudinary
+    if (user.record_desc) {
+      const publicId = user.record_desc
+        .split("/")
+        .slice(-1)[0]
+        .split(".")[0];
+
+      await cloudinary.uploader.destroy(
+        `user_voice_records/${publicId}`,
+        { resource_type: "video" }
+      );
+    }
+
+    // Save new voice URL
+    user.record_desc = req.file.path;
+    user.updatedAt = new Date();
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile voice updated successfully",
+      record_desc: user.record_desc,
+    });
+  } catch (error) {
+    console.error("Voice upload error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to upload voice",
     });
   }
 };
