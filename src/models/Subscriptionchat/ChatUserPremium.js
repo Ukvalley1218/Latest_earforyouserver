@@ -59,10 +59,10 @@ const ChatUserPremiumSchema = new mongoose.Schema({
     required: true
   },
 // new
-  remainingCharacters: {
-  type: Number,
-  required: true
-},
+//   remainingCharacters: {
+//   type: Number,
+//   required: true
+// },
 
 // Optional: keep for audit
 usageLogs: [{

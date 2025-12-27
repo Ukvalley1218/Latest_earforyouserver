@@ -17,10 +17,10 @@ const chatPremiumSchema = new mongoose.Schema(
             required: true,
             min: 1
         },
-        charactersAllowed: {
-  type: Number,
-  required: true
-},
+//         charactersAllowed: {
+//   type: Number,
+//   required: true
+// },
         validityDays: {
             type: Number,
             required: true,
