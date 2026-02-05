@@ -1029,7 +1029,9 @@ export const setupWebRTC = (io) => {
         delete callTimings[callerCallKey];
         delete callTimings[receiverCallKey];
 
-        console.log('Missed call logs created:', { logForCaller, logForReceiver });
+        // console.log('Missed call logs created:', { logForCaller, logForReceiver });
+        console.log('Missed call logs created:', { logForCaller });
+
       } catch (error) {
         console.error('Error processing missed call:', error);
         socket.emit('callError', { message: 'Failed to process missed call' });

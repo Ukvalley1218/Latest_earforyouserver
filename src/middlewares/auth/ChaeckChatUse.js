@@ -5,6 +5,10 @@ import mongoose from "mongoose";
 import User from "../../models/Users.js";
 import { Chat } from "../../models/chat.modal.js";
 
+const countBillableCharacters = (text = "") =>
+  text.replace(/\s+/g, "").length;
+
+
 export const checkChatAccess = asyncHandler(async (req, res, next) => {
     const { chatId } = req.params;
     const userId = req.user._id;
@@ -54,7 +58,7 @@ export const checkChatAccess = asyncHandler(async (req, res, next) => {
         ChatUserPremium.findOne({
             user: userId,
             "payment.status": { $in: ["COMPLETED", "success"] },
-            "usedChats.chatId": otherParticipantId
+            // "usedChats.chatId": otherParticipantId
         }).populate('plan').lean(),
 
         // Find the most recent active valid plan with remaining chats
@@ -80,23 +84,23 @@ export const checkChatAccess = asyncHandler(async (req, res, next) => {
     ]);
 
     // Case 1: Chat was previously accessed with a valid plan
-    if (existingChatUsage) {
-        req.activePlan = {
-            _id: existingChatUsage._id,
-            remainingChats: existingChatUsage.remainingChats,
-            expiryDate: existingChatUsage.expiryDate,
-            plan: existingChatUsage.plan,
-            previouslyUsed: true,
-            lastUsedAt: existingChatUsage.usedChats.find(chat => chat.chatId.equals(otherParticipantId))?.usedAt || new Date()
-        };
-        return next();
-    }
+    // if (existingChatUsage) {
+    //     req.activePlan = {
+    //         _id: existingChatUsage._id,
+    //         remainingChats: existingChatUsage.remainingChats,
+    //         expiryDate: existingChatUsage.expiryDate,
+    //         plan: existingChatUsage.plan,
+    //         previouslyUsed: true,
+    //         lastUsedAt: existingChatUsage.usedChats.find(chat => chat.chatId.equals(otherParticipantId))?.usedAt || new Date()
+    //     };
+    //     return next();
+    // }
 
     // Case 2: Active plan available
     if (activePlan) {
         // Prepare update operations
         const updateOps = {
-            $inc: { remainingChats: -1 },
+            // $inc: { remainingChats: -1 },
             $push: { usedChats: { chatId: otherParticipantId, usedAt: new Date() } }
         };
 
@@ -193,7 +197,7 @@ export const checkandcut = async (req, res) => {
             ChatUserPremium.findOne({
                 user: userId,
                 "payment.status": { $in: ["COMPLETED", "success"] },
-                "usedChats.chatId": chatObjectId
+                // "usedChats.chatId": chatObjectId
             }).populate('plan').lean(),
 
             ChatUserPremium.findOne({
@@ -216,30 +220,30 @@ export const checkandcut = async (req, res) => {
         ]);
 
         // Case 1: Chat was previously accessed with a valid plan
-        if (existingChatUsage) {
-            const usedChat = existingChatUsage.usedChats.find(chat => chat.chatId.equals(chatObjectId));
+        // if (existingChatUsage) {
+        //     const usedChat = existingChatUsage.usedChats.find(chat => chat.chatId.equals(chatObjectId));
             
-            return res.status(200).json({
-                success: true,
-                message: "Chat previously accessed with a valid plan",
-                data: {
-                    activePlan: {
-                        _id: existingChatUsage._id,
-                        remainingChats: existingChatUsage.remainingChats,
-                        expiryDate: existingChatUsage.expiryDate,
-                        plan: existingChatUsage.plan,
-                        previouslyUsed: true,
-                        lastUsedAt: usedChat?.usedAt || null
-                    }
-                }
-            });
-        }
+        //     return res.status(200).json({
+        //         success: true,
+        //         message: "Chat previously accessed with a valid plan",
+        //         data: {
+        //             activePlan: {
+        //                 _id: existingChatUsage._id,
+        //                 remainingChats: existingChatUsage.remainingChats,
+        //                 expiryDate: existingChatUsage.expiryDate,
+        //                 plan: existingChatUsage.plan,
+        //                 previouslyUsed: true,
+        //                 lastUsedAt: usedChat?.usedAt || null
+        //             }
+        //         }
+        //     });
+        // }
 
         // Case 2: Active plan available
         if (activePlan) {
             // Prepare update operations
             const updateOps = {
-                $inc: { remainingChats: -1 },
+                // $inc: { remainingChats: -1 },
                 $push: { usedChats: { chatId: chatObjectId, usedAt: new Date() } }
             };
 
@@ -301,6 +305,63 @@ export const checkandcut = async (req, res) => {
             })
         );
     }
+};
+
+
+export const checkAndCutCharacters = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { chatId } = req.params;
+    const { content } = req.body;
+
+    if (!content || !content.trim()) {
+      throw new ApiError(400, "Message cannot be empty");
+    }
+
+    const charactersUsed = countBillableCharacters(content);
+
+    const subscription = await ChatUserPremium.findOne({
+      user: userId,
+      isActive: true,
+      expiryDate: { $gt: new Date() },
+      "payment.status": { $in: ["COMPLETED", "success"] }
+    }).sort({ purchaseDate: -1 });
+
+    if (!subscription) {
+      throw new ApiError(403, "No active subscription");
+    }
+
+    if (subscription.remainingCharacters < charactersUsed) {
+      throw new ApiError(402, "Insufficient characters", {
+        required: charactersUsed,
+        available: subscription.remainingCharacters
+      });
+    }
+
+    // ✅ Deduct characters
+    subscription.remainingCharacters -= charactersUsed;
+
+    subscription.usageLogs.push({
+      chatId,
+      charactersUsed,
+      usedAt: new Date()
+    });
+
+    if (subscription.remainingCharacters <= 0) {
+      subscription.isActive = false;
+    }
+
+    await subscription.save();
+
+    return res.status(200).json({
+      success: true,
+      charactersUsed,
+      remainingCharacters: subscription.remainingCharacters
+    });
+
+  } catch (error) {
+    return res.status(error.statusCode || 500).json(error);
+  }
 };
 
 

@@ -32,13 +32,16 @@ import {
     getTopListenersByDuration,
     getAllForCallUser,
     ChatStatusStatus,
-    getAllForChatStatus
+    getAllForChatStatus,
+    updateProfileDesc,
+    deleteProfileDesc
 } from '../controllers/authController.js';
 // import { validateUserSignup } from '../middlewares/auth/validators.js';
 import { protect } from '../middlewares/auth/authMiddleware.js'
 import multer from 'multer';
 import { userStatics } from '../controllers/UserData/UserData.js';
 import { expirePlatformCharges } from '../controllers/CronJob/Expiry.js';
+import uploadVoice from '../middlewares/voiceUpload.js';
 
 
 const router = express.Router();
@@ -69,6 +72,11 @@ router.put('/category/:userId', updateOrCreateUserCategory);
 router.put('/updateProfile/:userId', updateProfile);
 router.put('/updateStatus/:userId', updateStatus);
 router.put('/users/:userId', changeUserType);
+router.put(
+  "/user/update-profile-desc/:userId",
+  uploadVoice.single("record_desc"),
+  updateProfileDesc
+);
 
 // Route to request OTP 
 router.post('/request-otp', requestOTP);
@@ -95,6 +103,11 @@ router.get('/listener', protect, listener);
 router.post('/Category', protect, UserCategoryData);
 // Delete User
 router.delete('/deleteUser', protect, deleteUser);
+// delete voice record
+router.delete(
+  "/user/delete-profile-desc/:userId",
+  deleteProfileDesc
+);
 
 router.post('/addOrUpdateBankDetails', protect, addOrUpdateBankDetails);
 
