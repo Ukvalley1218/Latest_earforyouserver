@@ -33,8 +33,6 @@ import {
     getAllForCallUser,
     ChatStatusStatus,
     getAllForChatStatus,
-    updateProfileDesc,
-    deleteProfileDesc
 } from '../controllers/authController.js';
 // import { validateUserSignup } from '../middlewares/auth/validators.js';
 import { protect } from '../middlewares/auth/authMiddleware.js'
@@ -72,13 +70,14 @@ router.put('/category/:userId', updateOrCreateUserCategory);
 router.put('/updateProfile/:userId', updateProfile);
 router.put('/updateStatus/:userId', updateStatus);
 router.put('/users/:userId', changeUserType);
-router.put(
-  "/user/update-profile-desc/:userId",
-  uploadVoice.single("record_desc"),
-  updateProfileDesc
-);
+// router.put(
+//   "/user/update-profile-desc/:userId",
+//   uploadVoice.single("record_desc"),
+//   updateProfileDesc
+// );
 
 // Route to request OTP 
+
 router.post('/request-otp', requestOTP);
 // Route to verify OTP and log in
 router.post('/verify-otp', verifyOTP);
@@ -104,10 +103,10 @@ router.post('/Category', protect, UserCategoryData);
 // Delete User
 router.delete('/deleteUser', protect, deleteUser);
 // delete voice record
-router.delete(
-  "/user/delete-profile-desc/:userId",
-  deleteProfileDesc
-);
+// router.delete(
+//   "/user/delete-profile-desc/:userId",
+//   deleteProfileDesc
+// );
 
 router.post('/addOrUpdateBankDetails', protect, addOrUpdateBankDetails);
 
