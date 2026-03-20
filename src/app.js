@@ -129,6 +129,7 @@ import RazorWallet from './routes/RazorPayRoute/WalletRazorpayRoute.js'
 import RazorPaltFrom from './routes/RazorPayRoute/PlatfromRazorpayroute.js'
 import changeGateway from './routes/getWay.js'
 import Survey from './routes/Survey/SurveyRoute.js'
+
 app.get("/", (req, res) => {
   try {
     res.send("Ear For You Server Running Smoothly");
