@@ -62,13 +62,13 @@ const ChatUserPremiumSchema = new mongoose.Schema(
       type: Number,
       required: false,
     },
-    // new
     remainingCharacters: {
       type: Number,
       required: false,
+      default: 0,
     },
 
-    // Optional: keep for audit
+    // Optional: keep for audit (legacy - for backward compatibility)
     usageLogs: [
       {
         chatId: mongoose.Schema.Types.ObjectId,
@@ -129,6 +129,7 @@ ChatUserPremiumSchema.statics.createFromPayment = async function (
     plan: planId,
     expiryDate,
     remainingChats: plan.chatsAllowed,
+    remainingCharacters: plan.charactersAllowed || 0, // Handle optional field
     isActive: paymentData.status === "success",
     payment: paymentData,
   });

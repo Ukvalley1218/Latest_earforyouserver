@@ -19,7 +19,8 @@ const chatPremiumSchema = new mongoose.Schema(
     },
     charactersAllowed: {
       type: Number,
-      required: true,
+      required: false,
+      default: 0,
     },
     validityDays: {
       type: Number,

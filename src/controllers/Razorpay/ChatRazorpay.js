@@ -466,7 +466,7 @@ export const paymentService = {
         plan: planId,
         expiryDate,
         remainingChats: plan.chatsAllowed,
-        remainingCharacters: plan.charactersAllowed,
+        remainingCharacters: plan.charactersAllowed || 0, // Handle optional field for backward compatibility
         usageLogs: [],
         // usedChats: [],
         isActive: paymentDetails.status === "success",
@@ -617,6 +617,7 @@ export const paymentService = {
         plan: planId,
         expiryDate,
         remainingChats: plan.chatsAllowed,
+        remainingCharacters: plan.charactersAllowed || 0, // Handle optional field for backward compatibility
         usedChats: [],
         isActive: true,
         payment: paymentRecord,
@@ -696,6 +697,7 @@ export const paymentService = {
               new Date().getTime() + plan.validityDays * 24 * 60 * 60 * 1000,
             ),
             remainingChats: plan.chatsAllowed,
+            remainingCharacters: plan.charactersAllowed || 0, // Handle optional field for backward compatibility
             usedChats: [],
             isActive: false,
             "payment.status": "failed",
@@ -758,6 +760,7 @@ export const paymentService = {
         plan: planId,
         expiryDate,
         remainingChats: plan.chatsAllowed,
+        remainingCharacters: plan.charactersAllowed || 0, // Handle optional field for backward compatibility
         usedChats: [],
         isActive: false,
         payment: {
