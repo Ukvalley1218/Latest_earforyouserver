@@ -50,6 +50,31 @@ export const checkChatAccess = asyncHandler(async (req, res, next) => {
         return next();
     }
 
+    // Check if this chat/person was already used in any VALID (non-expired) plan
+    const existingChatUsage = await ChatUserPremium.findOne({
+        user: userId,
+        "payment.status": { $in: ["COMPLETED", "success"] },
+        expiryDate: { $gt: new Date() }, // Plan must still be valid
+        "usedChats.chatId": otherParticipantId
+    }).populate('plan');
+
+    // If user has already chatted with this person before AND plan is still valid, allow access without deducting
+    if (existingChatUsage) {
+        const usedChat = existingChatUsage.usedChats.find(
+            chat => chat.chatId.toString() === otherParticipantId.toString()
+        );
+
+        req.activePlan = {
+            _id: existingChatUsage._id,
+            remainingChats: existingChatUsage.remainingChats,
+            expiryDate: existingChatUsage.expiryDate,
+            plan: existingChatUsage.plan,
+            previouslyUsed: true,
+            lastUsedAt: usedChat?.usedAt || new Date()
+        };
+        return next();
+    }
+
     // Parallel lookups for better performance
     const [activePlan, hasCompletedPlans, hasNonCompletedPlans] = await Promise.all([
         // Find the most recent active valid plan with remaining chats
@@ -155,6 +180,36 @@ export const checkandcut = async (req, res) => {
         }
 
         const chatObjectId = new mongoose.Types.ObjectId(chatId);
+
+        // Check if this chat/person was already used in any VALID (non-expired) plan
+        const existingChatUsage = await ChatUserPremium.findOne({
+            user: userId,
+            "payment.status": { $in: ["COMPLETED", "success"] },
+            expiryDate: { $gt: new Date() }, // Plan must still be valid
+            "usedChats.chatId": chatObjectId
+        }).populate('plan');
+
+        // If user has already chatted with this person before AND plan is still valid, allow access without deducting
+        if (existingChatUsage) {
+            const usedChat = existingChatUsage.usedChats.find(
+                chat => chat.chatId.toString() === chatObjectId.toString()
+            );
+
+            return res.status(200).json({
+                success: true,
+                message: "Chat access granted - previously used chat within valid plan",
+                data: {
+                    previouslyUsed: true,
+                    activePlan: {
+                        _id: existingChatUsage._id,
+                        remainingChats: existingChatUsage.remainingChats,
+                        expiryDate: existingChatUsage.expiryDate,
+                        plan: existingChatUsage.plan,
+                        lastUsedAt: usedChat?.usedAt || null
+                    }
+                }
+            });
+        }
 
         // Parallel lookups for better performance
         const [activePlan, hasCompletedPlans, hasNonCompletedPlans] = await Promise.all([
