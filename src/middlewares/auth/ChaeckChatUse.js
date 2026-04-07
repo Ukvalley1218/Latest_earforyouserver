@@ -183,11 +183,11 @@ export const checkChatAccess = asyncHandler(async (req, res, next) => {
 
         // Credit receiver for new chat (only when deducting, not previously used)
         // Get receiver details to check userCategory
-        const receiver = await User.findById(otherParticipantId).select('userCategory');
-        if (receiver && receiver.userCategory !== 'User') {
+        // const receiver = await User.findById(otherParticipantId).select('userCategory');
+        // if (receiver && receiver.userCategory !== 'User') {
             // This is a NEW chat being deducted, credit the receiver
-            await creditReceiverForChat(userId, otherParticipantId);
-        }
+            // await creditReceiverForChat(userId, otherParticipantId);
+        // }
 
         req.activePlan = {
             _id: activePlan._id,
@@ -324,11 +324,11 @@ export const checkandcut = async (req, res) => {
 
             // Credit receiver for new chat (only when deducting, not previously used)
             // Get receiver details to check userCategory
-            const receiver = await User.findById(chatObjectId).select('userCategory');
-            if (receiver && receiver.userCategory !== 'User') {
+            // const receiver = await User.findById(chatObjectId).select('userCategory');
+            // if (receiver && receiver.userCategory !== 'User') {
                 // This is a NEW chat being deducted, credit the receiver
-                await creditReceiverForChat(userId, chatObjectId);
-            }
+                // await creditReceiverForChat(userId, chatObjectId);
+            // }
 
             return res.status(200).json({
                 success: true,
