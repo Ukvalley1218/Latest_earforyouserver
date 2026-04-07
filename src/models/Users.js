@@ -69,7 +69,7 @@ const userSchema = new mongoose.Schema(
     },
     userCategory: {
       type: String,
-      enum: ["Therapist", "Psychologist", "Profisnal_listner", 'User','Healer','Counsellor'],
+      enum: ["Therapist", "Psychologist", "Profisnal_listner", 'User','Healer','Counsellor', 'Listener'],
       default: 'User',
       index: true,
     },
