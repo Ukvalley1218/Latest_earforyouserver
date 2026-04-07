@@ -4,6 +4,72 @@ import { ChatUserPremium } from "../../models/Subscriptionchat/ChatUserPremium.j
 import mongoose from "mongoose";
 import User from "../../models/Users.js";
 import { Chat } from "../../models/chat.modal.js";
+import EarningWallet from "../../models/Wallet/EarningWallet.js";
+import { ChatCommission } from "../../models/Chat/ChatCommission.js";
+
+/**
+ * @description Credit receiver's earning wallet when a User initiates chat with non-User
+ * @param {ObjectId} senderId - The User's ID (userCategory === "User")
+ * @param {ObjectId} receiverId - The non-User's ID (Therapist, Psychologist, etc.)
+ */
+async function creditReceiverForChat(senderId, receiverId) {
+  try {
+    // Get sender and receiver details
+    const [sender, receiver] = await Promise.all([
+      User.findById(senderId).select('userCategory'),
+      User.findById(receiverId).select('userCategory')
+    ]);
+
+    // Only credit if sender is "User" category and receiver is non-User category
+    if (sender?.userCategory !== 'User' || receiver?.userCategory === 'User') {
+      return { credited: false, reason: 'Invalid user categories' };
+    }
+
+    // Get active commission settings
+    const commissionSettings = await ChatCommission.getActiveSettings();
+
+    if (!commissionSettings) {
+      console.log("No active commission settings found");
+      return { credited: false, reason: 'No commission settings' };
+    }
+
+    // Calculate credit amount
+    const creditAmount = commissionSettings.calculateCredit();
+
+    if (creditAmount <= 0) {
+      return { credited: false, reason: 'Zero credit amount' };
+    }
+
+    // Find or create earning wallet for receiver
+    let earningWallet = await EarningWallet.findOne({ userId: receiverId });
+
+    if (!earningWallet) {
+      earningWallet = await EarningWallet.create({
+        userId: receiverId,
+        balance: 0,
+        earnings: []
+      });
+    }
+
+    // Add earning entry
+    earningWallet.earnings.push({
+      amount: creditAmount,
+      source: 'chat',
+      state: 'completed',
+      responseCode: 'CHAT_CREDIT',
+      merchantTransactionId: `CHAT_${Date.now()}_${receiverId.toString().slice(-6)}`,
+      createdAt: new Date()
+    });
+
+    await earningWallet.save();
+
+    console.log(`Credited ₹${creditAmount} to user ${receiverId} for chat from ${senderId}`);
+    return { credited: true, amount: creditAmount };
+  } catch (error) {
+    console.error("Error crediting receiver for chat:", error);
+    return { credited: false, reason: error.message };
+  }
+}
 
 
 export const checkChatAccess = asyncHandler(async (req, res, next) => {
@@ -114,6 +180,14 @@ export const checkChatAccess = asyncHandler(async (req, res, next) => {
         // Fire-and-forget the update
         ChatUserPremium.updateOne({ _id: activePlan._id }, updateOps)
             .catch(err => console.error('Error updating chat plan:', err));
+
+        // Credit receiver for new chat (only when deducting, not previously used)
+        // Get receiver details to check userCategory
+        const receiver = await User.findById(otherParticipantId).select('userCategory');
+        if (receiver && receiver.userCategory !== 'User') {
+            // This is a NEW chat being deducted, credit the receiver
+            await creditReceiverForChat(userId, otherParticipantId);
+        }
 
         req.activePlan = {
             _id: activePlan._id,
@@ -247,6 +321,14 @@ export const checkandcut = async (req, res) => {
             // Fire-and-forget the update (no need to await for response)
             ChatUserPremium.updateOne({ _id: activePlan._id }, updateOps)
                 .catch(err => console.error('Error updating chat plan:', err));
+
+            // Credit receiver for new chat (only when deducting, not previously used)
+            // Get receiver details to check userCategory
+            const receiver = await User.findById(chatObjectId).select('userCategory');
+            if (receiver && receiver.userCategory !== 'User') {
+                // This is a NEW chat being deducted, credit the receiver
+                await creditReceiverForChat(userId, chatObjectId);
+            }
 
             return res.status(200).json({
                 success: true,

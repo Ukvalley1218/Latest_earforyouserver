@@ -8,8 +8,6 @@ import { ApiResponse } from "../../utils/ApiResponse.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import User from "../../models/Users.js";
 import admin from '../../config/firebaseConfig.js';
-import EarningWallet from "../../models/Wallet/EarningWallet.js";
-import { ChatCommission } from "../../models/Chat/ChatCommission.js";
 import {
   getLocalPath,
   getStaticFilePath,
@@ -175,9 +173,6 @@ const sendMessage = asyncHandler(async (req, res) => {
 
     console.log("Participant ID:", participant._id.toString());
     console.log("Sender ID:", req.user._id.toString());
-
-    // Credit receiver for chat (only if sender is User and receiver is non-User)
-    await creditReceiverForChat(req.user._id, participant._id);
 
     // Emit socket event
     emitSocketEvent(
@@ -381,69 +376,6 @@ async function sendNotification(userId, title, message, chatId, messageId, sende
 
   } catch (error) {
     console.error("Error sending notification:", error);
-  }
-}
-
-/**
- * @description Credit receiver's earning wallet when a User sends message to non-User
- * @param {ObjectId} senderId - The sender's user ID
- * @param {ObjectId} receiverId - The receiver's user ID
- */
-async function creditReceiverForChat(senderId, receiverId) {
-  try {
-    // Get sender and receiver details
-    const [sender, receiver] = await Promise.all([
-      User.findById(senderId).select('userCategory'),
-      User.findById(receiverId).select('userCategory')
-    ]);
-
-    // Only credit if sender is "User" category and receiver is non-User category
-    if (sender?.userCategory !== 'User' || receiver?.userCategory === 'User') {
-      return; // No credit needed
-    }
-
-    // Get active commission settings
-    const commissionSettings = await ChatCommission.getActiveSettings();
-
-    if (!commissionSettings) {
-      console.log("No active commission settings found");
-      return;
-    }
-
-    // Calculate credit amount
-    const creditAmount = commissionSettings.calculateCredit();
-
-    if (creditAmount <= 0) {
-      return; // No credit to add
-    }
-
-    // Find or create earning wallet for receiver
-    let earningWallet = await EarningWallet.findOne({ userId: receiverId });
-
-    if (!earningWallet) {
-      earningWallet = await EarningWallet.create({
-        userId: receiverId,
-        balance: 0,
-        earnings: []
-      });
-    }
-
-    // Add earning entry
-    earningWallet.earnings.push({
-      amount: creditAmount,
-      source: 'chat',
-      state: 'completed',
-      responseCode: 'CHAT_CREDIT',
-      merchantTransactionId: `CHAT_${Date.now()}_${receiverId.toString().slice(-6)}`,
-      createdAt: new Date()
-    });
-
-    await earningWallet.save();
-
-    console.log(`Credited ₹${creditAmount} to user ${receiverId} for chat from ${senderId}`);
-  } catch (error) {
-    console.error("Error crediting receiver for chat:", error);
-    // Don't throw error - this should not block message sending
   }
 }
 

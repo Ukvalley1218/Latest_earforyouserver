@@ -129,6 +129,7 @@ import RazorWallet from './routes/RazorPayRoute/WalletRazorpayRoute.js'
 import RazorPaltFrom from './routes/RazorPayRoute/PlatfromRazorpayroute.js'
 import changeGateway from './routes/getWay.js'
 import Survey from './routes/Survey/SurveyRoute.js'
+import ChatCommissionRoutes from './routes/admin/chatCommissionRoutes.js'
 
 app.get("/", (req, res) => {
   try {
@@ -151,6 +152,7 @@ scheduleNextRun();
 + app.use("/api/", apiLimiter);
 
 app.use('/api/v1/msg91', msg91Routes);
+app.use('/api/v1/admin', ChatCommissionRoutes);
 
 app.use('/api/v1', CallRoute);
 
