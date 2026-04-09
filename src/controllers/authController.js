@@ -629,7 +629,7 @@ export const initiateRegistration = async (req, res) => {
 
     console.log(`Generated OTP: ${otp} for email: ${email}`);
 
-    await sendOtpEmail(email, otp);
+    // await sendOtpEmail(email, otp);
 
     console.log("otpSent =", otp);
 
