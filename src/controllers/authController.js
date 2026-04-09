@@ -759,7 +759,7 @@ export const initiateLogin = async (req, res) => {
     await user.save();
 
     // Send OTP to the user's email
-    await sendOtpEmail(email, otp);
+    // await sendOtpEmail(email, otp);
 
     // Generate tokens
     const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
